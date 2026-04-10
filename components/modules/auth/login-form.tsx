@@ -48,9 +48,6 @@ export function LoginForm() {
       <Button variant="primary" type="submit" className="w-full" disabled={pending}>
         {pending ? "Đang đăng nhập…" : "Đăng nhập"}
       </Button>
-      <p className="text-center text-xs text-[var(--on-surface-muted)]">
-        Demo: <span className="font-mono">{DEMO_LOGIN_EMAIL}</span> · mật khẩu <span className="font-mono">123456</span>
-      </p>
     </form>
   );
 }

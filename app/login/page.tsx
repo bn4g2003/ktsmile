@@ -15,7 +15,7 @@ export default async function LoginPage() {
           KT Smile Lab
         </h1>
         <p className="mt-1 text-center text-sm text-[var(--on-surface-muted)]">
-          Đăng nhập demo (phiên bản thử nghiệm)
+          Đăng nhập 
         </p>
         <LoginForm />
       </div>
