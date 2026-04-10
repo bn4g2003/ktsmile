@@ -1,0 +1,242 @@
+"use client";
+
+import { type ColumnDef } from "@tanstack/react-table";
+import * as React from "react";
+import { useRouter } from "next/navigation";
+import { ExcelDataGrid } from "@/components/shared/data-grid/excel-data-grid";
+import {
+  DataGridDeleteButton,
+  DataGridEditButton,
+} from "@/components/shared/data-grid/data-grid-action-buttons";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { DetailPreview } from "@/components/ui/detail-preview";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  createEmployee,
+  deleteEmployee,
+  listEmployees,
+  updateEmployee,
+  type EmployeeRow,
+} from "@/lib/actions/employees";
+
+export function EmployeesPage() {
+  const router = useRouter();
+  const [gridReload, setGridReload] = React.useState(0);
+  const bumpGrid = React.useCallback(() => {
+    setGridReload((n) => n + 1);
+    router.refresh();
+  }, [router]);
+  const [open, setOpen] = React.useState(false);
+  const [editing, setEditing] = React.useState<EmployeeRow | null>(null);
+  const [pending, setPending] = React.useState(false);
+  const [err, setErr] = React.useState<string | null>(null);
+  const [code, setCode] = React.useState("");
+  const [fullName, setFullName] = React.useState("");
+  const [role, setRole] = React.useState("");
+  const [salary, setSalary] = React.useState("0");
+  const [isActive, setIsActive] = React.useState(true);
+
+  const reset = () => {
+    setEditing(null);
+    setCode("");
+    setFullName("");
+    setRole("");
+    setSalary("0");
+    setIsActive(true);
+    setErr(null);
+  };
+
+  const openCreate = () => {
+    reset();
+    setOpen(true);
+  };
+
+  const openEdit = (row: EmployeeRow) => {
+    setEditing(row);
+    setCode(row.code);
+    setFullName(row.full_name);
+    setRole(row.role);
+    setSalary(String(row.base_salary));
+    setIsActive(row.is_active);
+    setErr(null);
+    setOpen(true);
+  };
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPending(true);
+    setErr(null);
+    try {
+      const payload = {
+        code: code.trim(),
+        full_name: fullName.trim(),
+        role: role.trim(),
+        base_salary: Number(salary),
+        is_active: isActive,
+      };
+      if (editing) await updateEmployee(editing.id, payload);
+      else await createEmployee(payload);
+      setOpen(false);
+      reset();
+      bumpGrid();
+    } catch (e2) {
+      setErr(e2 instanceof Error ? e2.message : "Lỗi");
+    } finally {
+      setPending(false);
+    }
+  };
+
+  const onDelete = async (row: EmployeeRow) => {
+    if (!confirm("Xóa NV " + row.code + "?")) return;
+    try {
+      await deleteEmployee(row.id);
+      bumpGrid();
+    } catch (e2) {
+      alert(e2 instanceof Error ? e2.message : "Không xóa được");
+    }
+  };
+
+  const columns = React.useMemo<ColumnDef<EmployeeRow, unknown>[]>(
+    () => [
+      { accessorKey: "code", header: "Mã NV", meta: { filterKey: "code", filterType: "text" } },
+      {
+        accessorKey: "full_name",
+        header: "Tên",
+        meta: { filterKey: "full_name", filterType: "text" },
+      },
+      { accessorKey: "role", header: "Vai trò" },
+      { accessorKey: "base_salary", header: "Lương CB" },
+      {
+        accessorKey: "auth_user_id",
+        header: "Auth user",
+        cell: ({ getValue }) => (getValue() as string | null)?.slice(0, 8) ?? "—",
+      },
+      {
+        accessorKey: "is_active",
+        header: "Hoạt động",
+        meta: {
+          filterKey: "is_active",
+          filterType: "select",
+          filterOptions: [
+            { value: "true", label: "Có" },
+            { value: "false", label: "Không" },
+          ],
+        },
+        cell: ({ getValue }) => ((getValue() as boolean) ? "Có" : "Không"),
+      },
+      {
+        id: "actions",
+        header: "Thao tác",
+        enableHiding: false,
+        meta: { filterType: "none" },
+        cell: ({ row }) => (
+          <>
+            <DataGridEditButton type="button" onClick={() => openEdit(row.original)} />
+            <DataGridDeleteButton type="button" onClick={() => void onDelete(row.original)} />
+          </>
+        ),
+      },
+    ],
+    [],
+  );
+
+  const renderEmployeeDetail = React.useCallback((row: EmployeeRow) => {
+    return (
+      <DetailPreview
+        fields={[
+          { label: "Mã NV", value: row.code },
+          { label: "Họ tên", value: row.full_name },
+          { label: "Vai trò", value: row.role },
+          { label: "Lương CB", value: row.base_salary },
+          { label: "Auth user id", value: row.auth_user_id ?? "—" },
+          { label: "Hoạt động", value: row.is_active ? "Có" : "Không" },
+          { label: "Tạo lúc", value: row.created_at },
+          { label: "Cập nhật", value: row.updated_at },
+        ]}
+      />
+    );
+  }, []);
+
+  return (
+    <>
+      <ExcelDataGrid<EmployeeRow>
+        moduleId="employees"
+        title="Nhân sự"
+        columns={columns}
+        list={listEmployees}
+        reloadSignal={gridReload}
+        renderRowDetail={renderEmployeeDetail}
+        rowDetailTitle={(r) => "NV " + r.code}
+        toolbarExtra={
+          <Button variant="primary" type="button" size="sm" onClick={openCreate}>
+            Thêm NV
+          </Button>
+        }
+        getRowId={(r) => r.id}
+      />
+      <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) reset(); }}>
+        <DialogContent size="xl" className="max-h-[90vh]">
+          <DialogHeader>
+            <DialogTitle>{editing ? "Sửa nhân viên" : "Thêm nhân viên"}</DialogTitle>
+            <DialogDescription>Liên kết Auth có thể bổ sung sau.</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={(e) => void submit(e)} className="grid gap-4 sm:grid-cols-2">
+            {err ? <p className="text-sm text-[#b91c1c] sm:col-span-2">{err}</p> : null}
+            <div className="grid gap-2">
+              <Label htmlFor="e-code">Mã NV</Label>
+              <Input id="e-code" value={code} onChange={(e) => setCode(e.target.value)} required />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="e-name">Họ tên</Label>
+              <Input id="e-name" value={fullName} onChange={(e) => setFullName(e.target.value)} required />
+            </div>
+            <div className="grid gap-2 sm:col-span-2">
+              <Label htmlFor="e-role">Vai trò</Label>
+              <Input id="e-role" value={role} onChange={(e) => setRole(e.target.value)} required />
+            </div>
+            <div className="grid gap-2 sm:col-span-2">
+              <Label htmlFor="e-sal">Lương cơ bản</Label>
+              <Input
+                id="e-sal"
+                type="number"
+                min={0}
+                step={1000}
+                value={salary}
+                onChange={(e) => setSalary(e.target.value)}
+                required
+              />
+            </div>
+            <div className="flex items-center gap-3 sm:col-span-2">
+              <input
+                type="checkbox"
+                id="e-act"
+                className="h-5 w-5 rounded-[var(--radius-sm)] border border-[var(--border-ghost)]"
+                checked={isActive}
+                onChange={(e) => setIsActive(e.target.checked)}
+              />
+              <Label htmlFor="e-act" className="normal-case tracking-normal">
+                Đang hoạt động
+              </Label>
+            </div>
+            <div className="flex justify-end gap-2 pt-2 sm:col-span-2">
+              <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
+                Hủy
+              </Button>
+              <Button variant="primary" type="submit" disabled={pending}>
+                {pending ? "Đang lưu…" : "Lưu"}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
