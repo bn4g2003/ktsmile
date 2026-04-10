@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import { fetchListWithCache, invalidateListCache } from "@/lib/cache/grid-data-cache";
 import { cn } from "@/lib/utils/cn";
 
 export type ListArgs = {
@@ -51,6 +52,10 @@ type ExcelDataGridProps<T> = {
   getRowId?: (row: T) => string;
   /** Tăng sau khi lưu/xóa để tải lại dữ liệu (router.refresh không cập nhật state client của lưới). */
   reloadSignal?: number;
+  /** TTL cache client (ms), mặc định 60s. Đặt 0 để tắt cache (luôn gọi server). */
+  listCacheTtlMs?: number;
+  /** Bỏ qua cache (luôn gọi server). */
+  disableListCache?: boolean;
   /** Nội dung modal chỉ đọc khi bấm "Xem" (mở rộng sau này). */
   renderRowDetail?: (row: T) => React.ReactNode;
   rowDetailTitle?: (row: T) => string;
@@ -66,6 +71,8 @@ export function ExcelDataGrid<T>({
   getRowId,
   prependFilters,
   reloadSignal = 0,
+  listCacheTtlMs = 60_000,
+  disableListCache = false,
   renderRowDetail,
   rowDetailTitle,
 }: ExcelDataGridProps<T>) {
@@ -105,15 +112,28 @@ export function ExcelDataGrid<T>({
     }
   }, [columnVisibility, storageKey]);
 
+  const prevReloadSignal = React.useRef(reloadSignal);
+  React.useEffect(() => {
+    if (reloadSignal !== prevReloadSignal.current) {
+      invalidateListCache(moduleId);
+      prevReloadSignal.current = reloadSignal;
+    }
+  }, [reloadSignal, moduleId]);
+
   const load = React.useCallback(async () => {
     setLoading(true);
     setError(null);
+    const listArgs = {
+      page,
+      pageSize,
+      globalSearch: debouncedSearch.trim(),
+      filters: { ...prependFilters, ...filters },
+    };
     try {
-      const res = await list({
-        page,
-        pageSize,
-        globalSearch: debouncedSearch.trim(),
-        filters: { ...prependFilters, ...filters },
+      const bypass = disableListCache || listCacheTtlMs === 0;
+      const res = await fetchListWithCache(moduleId, listArgs, undefined, (a) => list(a), {
+        ttlMs: bypass ? 60_000 : listCacheTtlMs,
+        bypassCache: bypass,
       });
       setData(res.rows);
       setTotal(res.total);
@@ -124,7 +144,18 @@ export function ExcelDataGrid<T>({
     } finally {
       setLoading(false);
     }
-  }, [list, page, pageSize, debouncedSearch, filters, prependFilters, reloadSignal]);
+  }, [
+    list,
+    moduleId,
+    page,
+    pageSize,
+    debouncedSearch,
+    filters,
+    prependFilters,
+    reloadSignal,
+    listCacheTtlMs,
+    disableListCache,
+  ]);
 
   React.useEffect(() => {
     void load();
@@ -195,12 +226,17 @@ export function ExcelDataGrid<T>({
   const exportXlsx = async () => {
     const XLSX = await import("xlsx");
     let rows: T[] = [];
+    const exportArgs = {
+      page: 1,
+      pageSize: 10000,
+      globalSearch: debouncedSearch.trim(),
+      filters: { ...prependFilters, ...filters },
+    };
     try {
-      const res = await list({
-        page: 1,
-        pageSize: 10000,
-        globalSearch: debouncedSearch.trim(),
-        filters: { ...prependFilters, ...filters },
+      const bypass = disableListCache || listCacheTtlMs === 0;
+      const res = await fetchListWithCache(moduleId, exportArgs, undefined, (a) => list(a), {
+        ttlMs: bypass ? 60_000 : listCacheTtlMs,
+        bypassCache: bypass,
       });
       rows = res.rows;
     } catch {

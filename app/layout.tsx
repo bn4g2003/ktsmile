@@ -11,7 +11,7 @@ const beVietnam = Be_Vietnam_Pro({
 
 export const metadata: Metadata = {
   title: "KT Smile Lab",
-  description: "Quản lý lab nha khoa — MVP demo",
+  description: "Quản lý lab nha khoa",
 };
 
 export default function RootLayout({
