@@ -8,6 +8,7 @@ import { getDashboardCharts } from "@/lib/actions/dashboard-stats";
 const links = [
   { href: "/master/partners", title: "Đối tác", desc: "Khách hàng & nhà cung cấp" },
   { href: "/master/products", title: "Sản phẩm", desc: "Phôi sứ & vật tư" },
+  { href: "/master/contracts", title: "Hợp đồng", desc: "Liên kết phiếu thu" },
   { href: "/orders", title: "Đơn hàng", desc: "Phục hình & theo dõi" },
   { href: "/inventory/stock", title: "Tồn kho", desc: "Xem nhanh tồn theo SP" },
   { href: "/accounting/cash", title: "Sổ quỹ", desc: "Thu / chi" },

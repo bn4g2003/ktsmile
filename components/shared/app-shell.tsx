@@ -6,6 +6,7 @@ import { demoLogout } from "@/lib/actions/demo-auth";
 import { DEMO_LOGIN_EMAIL } from "@/lib/auth/demo-session";
 import { cn } from "@/lib/utils/cn";
 import { AppHeader } from "@/components/shared/app-header";
+import { BrandLogo } from "@/components/shared/brand-logo";
 import { Button } from "@/components/ui/button";
 
 const groups: { title: string; items: { href: string; label: string }[] }[] = [
@@ -20,6 +21,7 @@ const groups: { title: string; items: { href: string; label: string }[] }[] = [
       { href: "/master/products", label: "Sản phẩm" },
       { href: "/master/employees", label: "Nhân sự" },
       { href: "/master/prices", label: "Giá theo KH" },
+      { href: "/master/contracts", label: "Hợp đồng" },
     ],
   },
   {
@@ -46,11 +48,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen">
       <aside className="fixed inset-y-0 left-0 z-50 flex w-[260px] flex-col bg-[var(--surface-sidebar)] shadow-[var(--shadow-sidebar)]">
         <div className="border-b border-[var(--border-ghost)] px-5 py-6">
-          <Link href="/" className="block">
-            <span className="text-lg font-bold tracking-tight text-[var(--primary)]">KT Smile Lab</span>
-            <span className="mt-0.5 block text-xs font-medium text-[var(--on-surface-muted)]">
-              Hệ điều hành lab
-            </span>
+          <Link href="/" className="flex items-center gap-3">
+            <BrandLogo size={44} priority />
+            <div className="min-w-0">
+              <span className="text-lg font-bold tracking-tight text-[var(--primary)]">KT Smile Lab</span>
+              <span className="mt-0.5 block text-xs font-medium text-[var(--on-surface-muted)]">
+                Hệ điều hành lab
+              </span>
+            </div>
           </Link>
         </div>
         <nav className="flex flex-1 flex-col gap-6 overflow-y-auto px-3 py-5">

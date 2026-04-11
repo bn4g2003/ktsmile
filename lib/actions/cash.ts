@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { createSupabaseAdmin } from "@/lib/supabase/server";
 import type { ListArgs, ListResult } from "@/components/shared/data-grid/excel-data-grid";
@@ -17,10 +18,13 @@ export type CashRow = {
   description: string | null;
   reference_type: string | null;
   reference_id: string | null;
+  contract_id: string | null;
   created_at: string;
   updated_at: string;
   partner_code?: string | null;
   partner_name?: string | null;
+  contract_number?: string | null;
+  contract_title?: string | null;
 };
 
 export async function listCashTransactions(
@@ -29,7 +33,7 @@ export async function listCashTransactions(
   const supabase = createSupabaseAdmin();
   const { page, pageSize, globalSearch, filters } = args;
   let q = supabase.from("cash_transactions").select(
-    "id, transaction_date, doc_number, payment_channel, direction, business_category, amount, partner_id, description, reference_type, reference_id, created_at, updated_at, partners:partner_id(code,name)",
+    "id, transaction_date, doc_number, payment_channel, direction, business_category, amount, partner_id, description, reference_type, reference_id, contract_id, created_at, updated_at, partners:partner_id(code,name), partner_contracts:contract_id(contract_number,title)",
     { count: "exact" },
   );
 
@@ -66,6 +70,7 @@ export async function listCashTransactions(
 
   const rows: CashRow[] = (data ?? []).map((r: Record<string, unknown>) => {
     const partners = r["partners"] as { code?: string; name?: string } | null;
+    const ctr = r["partner_contracts"] as { contract_number?: string; title?: string } | null;
     return {
       id: r["id"] as string,
       transaction_date: r["transaction_date"] as string,
@@ -78,10 +83,13 @@ export async function listCashTransactions(
       description: (r["description"] as string | null) ?? null,
       reference_type: (r["reference_type"] as string | null) ?? null,
       reference_id: (r["reference_id"] as string | null) ?? null,
+      contract_id: (r["contract_id"] as string | null) ?? null,
       created_at: r["created_at"] as string,
       updated_at: r["updated_at"] as string,
       partner_code: partners?.code,
       partner_name: partners?.name,
+      contract_number: ctr?.contract_number,
+      contract_title: ctr?.title,
     };
   });
 
@@ -102,11 +110,36 @@ const cashSchema = z.object({
     .union([z.string().uuid(), z.literal("")])
     .optional()
     .transform((v) => (v === "" || v === undefined ? null : v)),
+  contract_id: z
+    .union([z.string().uuid(), z.literal("")])
+    .optional()
+    .transform((v) => (v === "" || v === undefined ? null : v)),
 });
+
+async function assertContractMatchesPartner(
+  supabase: SupabaseClient,
+  contractId: string | null,
+  partnerId: string | null,
+) {
+  if (!contractId) return;
+  if (!partnerId) {
+    throw new Error("Chọn đối tượng khi gắn hợp đồng.");
+  }
+  const { data, error } = await supabase
+    .from("partner_contracts")
+    .select("partner_id")
+    .eq("id", contractId)
+    .single();
+  if (error || !data) throw new Error("Hợp đồng không tồn tại.");
+  if ((data as { partner_id: string }).partner_id !== partnerId) {
+    throw new Error("Hợp đồng không thuộc đối tượng đã chọn.");
+  }
+}
 
 export async function createCashTransaction(input: z.infer<typeof cashSchema>) {
   const supabase = createSupabaseAdmin();
   const row = cashSchema.parse(input);
+  await assertContractMatchesPartner(supabase, row.contract_id, row.partner_id);
   const { error } = await supabase.from("cash_transactions").insert(row);
   if (error) throw new Error(error.message);
   revalidatePath("/accounting/cash");
@@ -118,6 +151,7 @@ export async function updateCashTransaction(
 ) {
   const supabase = createSupabaseAdmin();
   const row = cashSchema.parse(input);
+  await assertContractMatchesPartner(supabase, row.contract_id, row.partner_id);
   const { error } = await supabase.from("cash_transactions").update(row).eq("id", id);
   if (error) throw new Error(error.message);
   revalidatePath("/accounting/cash");

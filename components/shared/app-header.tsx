@@ -7,8 +7,8 @@ import { Input } from "@/components/ui/input";
 export function AppHeader() {
   return (
     <header className="sticky top-0 z-40 border-b border-transparent bg-[color-mix(in_srgb,var(--surface-canvas)_88%,#fff)] px-6 py-4 backdrop-blur-md">
-      <div className="mx-auto flex max-w-[min(100%,112rem)] flex-wrap items-center gap-4">
-        <div className="relative min-w-[12rem] max-w-md flex-1">
+      <div className="mx-auto flex max-w-[min(100%,112rem)] flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4">
+        <div className="relative min-w-0 w-full max-w-md flex-1 sm:min-w-[12rem]">
           <span className="pointer-events-none absolute left-4 top-1/2 z-10 -translate-y-1/2 text-[var(--on-surface-faint)]">
             <svg
               className="h-4 w-4"

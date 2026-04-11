@@ -5,6 +5,7 @@ import {
   getCoreRowModel,
   useReactTable,
   type CellContext,
+  type Column,
   type ColumnDef,
   type VisibilityState,
 } from "@tanstack/react-table";
@@ -31,6 +32,12 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { fetchListWithCache, invalidateListCache } from "@/lib/cache/grid-data-cache";
 import { cn } from "@/lib/utils/cn";
+
+function dataGridColumnLabel<T>(col: Column<T, unknown>): string {
+  const h = col.columnDef.header;
+  if (typeof h === "string") return h;
+  return String(col.id);
+}
 
 export type ListArgs = {
   page: number;
@@ -205,6 +212,14 @@ export function ExcelDataGrid<T>({
     });
   }, [columns, renderRowDetail]);
 
+  const hasColumnFilters = React.useMemo(() => {
+    return columnsResolved.some((c) => {
+      const fk = c.meta?.filterKey;
+      const ft = c.meta?.filterType ?? "text";
+      return !!fk && ft !== "none";
+    });
+  }, [columnsResolved]);
+
   const table = useReactTable({
     data,
     columns: columnsResolved,
@@ -274,8 +289,8 @@ export function ExcelDataGrid<T>({
   return (
     <div className="space-y-6">
       <div className="rounded-[var(--radius-xl)] bg-[var(--surface-card)] p-6 shadow-[var(--shadow-card)]">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div className="min-w-0">
             <h1 className="text-2xl font-bold tracking-tight text-[var(--on-surface)] sm:text-3xl">
               {title}
             </h1>
@@ -283,41 +298,43 @@ export function ExcelDataGrid<T>({
               Lọc cột, tìm trong bảng, ẩn/hiện cột và xuất Excel.
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-1.5">
+          <div className="flex w-full min-w-0 flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end lg:w-auto lg:flex-nowrap">
             <Input
               placeholder="Tìm trong bảng…"
               value={globalSearch}
               onChange={(e) => setGlobalSearch(e.target.value)}
-              className="min-h-8 min-w-[10rem] max-w-xs py-1.5 text-sm"
+              className="min-h-10 w-full min-w-0 py-2 text-sm sm:min-w-[min(100%,16rem)] sm:max-w-md lg:w-64 lg:max-w-xs lg:shrink-0"
               aria-label="Tìm kiếm trong bảng"
             />
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="secondary" type="button" size="sm">
-                  Cột hiển thị
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="max-h-72 overflow-y-auto">
-                {table.getAllLeafColumns().map((col) => {
-                  if (!col.getCanHide()) return null;
-                  return (
-                    <DropdownMenuCheckboxItem
-                      key={col.id}
-                      checked={col.getIsVisible()}
-                      onCheckedChange={(v) => col.toggleVisibility(!!v)}
-                    >
-                      {typeof col.columnDef.header === "string"
-                        ? col.columnDef.header
-                        : col.id}
-                    </DropdownMenuCheckboxItem>
-                  );
-                })}
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <Button variant="secondary" type="button" size="sm" onClick={() => void exportXlsx()}>
-              Xuất Excel
-            </Button>
-            {toolbarExtra}
+            <div className="flex w-full flex-wrap items-center gap-1.5 sm:w-auto sm:flex-1 lg:flex-none">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="secondary" type="button" size="sm" className="min-h-10">
+                    Cột hiển thị
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="max-h-72 overflow-y-auto">
+                  {table.getAllLeafColumns().map((col) => {
+                    if (!col.getCanHide()) return null;
+                    return (
+                      <DropdownMenuCheckboxItem
+                        key={col.id}
+                        checked={col.getIsVisible()}
+                        onCheckedChange={(v) => col.toggleVisibility(!!v)}
+                      >
+                        {typeof col.columnDef.header === "string"
+                          ? col.columnDef.header
+                          : col.id}
+                      </DropdownMenuCheckboxItem>
+                    );
+                  })}
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <Button variant="secondary" type="button" size="sm" className="min-h-10" onClick={() => void exportXlsx()}>
+                Xuất Excel
+              </Button>
+              {toolbarExtra}
+            </div>
           </div>
         </div>
 
@@ -330,108 +347,218 @@ export function ExcelDataGrid<T>({
           </div>
         ) : null}
 
-        <div className="mt-6 overflow-x-auto rounded-[var(--radius-lg)] bg-[var(--surface-card)] p-3 sm:p-4 shadow-[inset_0_0_0_1px_var(--border-ghost)]">
-        <table className="w-full border-collapse text-sm">
-          <thead>
-            {table.getHeaderGroups().map((hg) => (
-              <tr key={hg.id} className="border-b border-[var(--border-ghost)]">
-                {hg.headers.map((h) => (
-                  <th
-                    key={h.id}
-                    className="px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--on-surface-faint)] first:pl-4 last:pr-4"
-                  >
-                    {h.isPlaceholder
-                      ? null
-                      : flexRender(h.column.columnDef.header, h.getContext())}
-                  </th>
-                ))}
-              </tr>
-            ))}
-            <tr className="border-b border-[var(--border-ghost)] bg-[var(--surface-muted)]">
+        {hasColumnFilters ? (
+          <div
+            className="mt-4 md:hidden rounded-[var(--radius-lg)] bg-[var(--surface-muted)] p-4 shadow-[inset_0_0_0_1px_var(--border-ghost)]"
+            aria-label="Bộ lọc cột"
+          >
+            <p className="mb-3 text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--on-surface-faint)]">
+              Bộ lọc
+            </p>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {table.getVisibleLeafColumns().map((col) => {
                 const fk = col.columnDef.meta?.filterKey;
                 const ft = col.columnDef.meta?.filterType ?? "text";
-                if (!fk || ft === "none") {
-                  return (
-                    <td key={col.id} className="px-3 py-2 first:pl-4 last:pr-4">
-                      <span className="sr-only">filter</span>
-                    </td>
-                  );
-                }
-                if (ft === "select") {
-                  const opts = col.columnDef.meta?.filterOptions ?? [];
-                  return (
-                    <td key={col.id} className="px-3 py-2 first:pl-4 last:pr-4">
+                if (!fk || ft === "none") return null;
+                const label = dataGridColumnLabel(col);
+                return (
+                  <div key={col.id} className="min-w-0 space-y-1.5">
+                    <label
+                      htmlFor={"dg-filter-" + String(col.id)}
+                      className="block text-xs font-semibold text-[var(--on-surface-muted)]"
+                    >
+                      {label}
+                    </label>
+                    {ft === "select" ? (
                       <Select
+                        id={"dg-filter-" + String(col.id)}
                         value={filters[fk] ?? ""}
                         onChange={(e) => setFilter(fk, e.target.value)}
                         aria-label={"Lọc " + fk}
                       >
                         <option value="">Tất cả</option>
-                        {opts.map((o) => (
+                        {(col.columnDef.meta?.filterOptions ?? []).map((o) => (
                           <option key={o.value} value={o.value}>
                             {o.label}
                           </option>
                         ))}
                       </Select>
-                    </td>
-                  );
-                }
-                return (
-                  <td key={col.id} className="px-3 py-2 first:pl-4 last:pr-4">
-                    <Input
-                      value={filters[fk] ?? ""}
-                      onChange={(e) => setFilter(fk, e.target.value)}
-                      placeholder="Lọc…"
-                      aria-label={"Lọc " + fk}
-                    />
-                  </td>
+                    ) : (
+                      <Input
+                        id={"dg-filter-" + String(col.id)}
+                        value={filters[fk] ?? ""}
+                        onChange={(e) => setFilter(fk, e.target.value)}
+                        placeholder="Lọc…"
+                        aria-label={"Lọc " + fk}
+                        className="min-h-10 w-full"
+                      />
+                    )}
+                  </div>
                 );
               })}
-            </tr>
-          </thead>
-          <tbody>
+            </div>
+          </div>
+        ) : null}
+
+        <div className="mt-6 space-y-3 md:space-y-0">
+          <div className="md:hidden">
             {loading ? (
-              <tr>
-                <td
-                  colSpan={table.getVisibleLeafColumns().length}
-                  className="px-4 py-10 text-center text-[var(--on-surface-muted)]"
-                >
-                  Đang tải…
-                </td>
-              </tr>
+              <div className="rounded-[var(--radius-lg)] bg-[var(--surface-muted)] px-4 py-10 text-center text-sm text-[var(--on-surface-muted)] shadow-[inset_0_0_0_1px_var(--border-ghost)]">
+                Đang tải…
+              </div>
             ) : data.length === 0 ? (
-              <tr>
-                <td
-                  colSpan={table.getVisibleLeafColumns().length}
-                  className="px-4 py-10 text-center text-[var(--on-surface-muted)]"
-                >
-                  Không có dữ liệu.
-                </td>
-              </tr>
+              <div className="rounded-[var(--radius-lg)] bg-[var(--surface-muted)] px-4 py-10 text-center text-sm text-[var(--on-surface-muted)] shadow-[inset_0_0_0_1px_var(--border-ghost)]">
+                Không có dữ liệu.
+              </div>
             ) : (
-              table.getRowModel().rows.map((row, i) => (
-                <tr
-                  key={getRowId ? getRowId(row.original) : row.id}
-                  className={cn(
-                    "border-b border-[var(--border-ghost)] transition-colors last:border-b-0",
-                    "hover:bg-[color-mix(in_srgb,var(--primary)_4%,var(--surface-card))]",
-                    i % 2 === 1 ? "bg-[var(--surface-row-b)]" : "bg-[var(--surface-card)]",
-                  )}
-                >
-                  {row.getVisibleCells().map((cell) => (
-                    <td
-                      key={cell.id}
-                      className="px-3 py-2 align-middle text-[var(--on-surface)] first:pl-4 last:pr-4"
+              <ul className="flex list-none flex-col gap-3 p-0">
+                {table.getRowModel().rows.map((row, i) => {
+                  const rowKey = getRowId ? getRowId(row.original) : row.id;
+                  const cells = row.getVisibleCells();
+                  const actionCells = cells.filter((c) => c.column.id === "actions");
+                  const dataCells = cells.filter((c) => c.column.id !== "actions");
+                  return (
+                    <li
+                      key={rowKey}
+                      className={cn(
+                        "rounded-[var(--radius-lg)] p-4 shadow-[inset_0_0_0_1px_var(--border-ghost)]",
+                        i % 2 === 1 ? "bg-[var(--surface-row-b)]" : "bg-[var(--surface-card)]",
+                      )}
                     >
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </td>
-                  ))}
-                </tr>
-              ))
+                      <dl className="m-0 space-y-2.5">
+                        {dataCells.map((cell) => (
+                          <div
+                            key={cell.id}
+                            className="grid grid-cols-[minmax(0,6.5rem)_1fr] gap-x-3 gap-y-0.5 text-sm sm:grid-cols-[minmax(0,8rem)_1fr]"
+                          >
+                            <dt className="break-words text-xs font-semibold uppercase tracking-wide text-[var(--on-surface-muted)]">
+                              {dataGridColumnLabel(cell.column)}
+                            </dt>
+                            <dd className="m-0 min-w-0 break-words text-[var(--on-surface)]">
+                              {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                            </dd>
+                          </div>
+                        ))}
+                      </dl>
+                      {actionCells.length > 0 ? (
+                        <div className="mt-3 flex flex-wrap gap-2 border-t border-[var(--border-ghost)] pt-3">
+                          {actionCells.map((cell) => (
+                            <div key={cell.id} className="min-w-0">
+                              {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+                    </li>
+                  );
+                })}
+              </ul>
             )}
-          </tbody>
-        </table>
+          </div>
+
+          <div className="hidden overflow-x-auto rounded-[var(--radius-lg)] bg-[var(--surface-card)] p-3 sm:p-4 shadow-[inset_0_0_0_1px_var(--border-ghost)] md:block">
+            <table className="w-full min-w-[640px] border-collapse text-sm">
+              <thead>
+                {table.getHeaderGroups().map((hg) => (
+                  <tr key={hg.id} className="border-b border-[var(--border-ghost)]">
+                    {hg.headers.map((h) => (
+                      <th
+                        key={h.id}
+                        className="px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--on-surface-faint)] first:pl-4 last:pr-4"
+                      >
+                        {h.isPlaceholder
+                          ? null
+                          : flexRender(h.column.columnDef.header, h.getContext())}
+                      </th>
+                    ))}
+                  </tr>
+                ))}
+                <tr className="border-b border-[var(--border-ghost)] bg-[var(--surface-muted)]">
+                  {table.getVisibleLeafColumns().map((col) => {
+                    const fk = col.columnDef.meta?.filterKey;
+                    const ft = col.columnDef.meta?.filterType ?? "text";
+                    if (!fk || ft === "none") {
+                      return (
+                        <td key={col.id} className="px-3 py-2 first:pl-4 last:pr-4">
+                          <span className="sr-only">filter</span>
+                        </td>
+                      );
+                    }
+                    if (ft === "select") {
+                      const opts = col.columnDef.meta?.filterOptions ?? [];
+                      return (
+                        <td key={col.id} className="px-3 py-2 first:pl-4 last:pr-4">
+                          <Select
+                            value={filters[fk] ?? ""}
+                            onChange={(e) => setFilter(fk, e.target.value)}
+                            aria-label={"Lọc " + fk}
+                          >
+                            <option value="">Tất cả</option>
+                            {opts.map((o) => (
+                              <option key={o.value} value={o.value}>
+                                {o.label}
+                              </option>
+                            ))}
+                          </Select>
+                        </td>
+                      );
+                    }
+                    return (
+                      <td key={col.id} className="px-3 py-2 first:pl-4 last:pr-4">
+                        <Input
+                          value={filters[fk] ?? ""}
+                          onChange={(e) => setFilter(fk, e.target.value)}
+                          placeholder="Lọc…"
+                          aria-label={"Lọc " + fk}
+                        />
+                      </td>
+                    );
+                  })}
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr>
+                    <td
+                      colSpan={table.getVisibleLeafColumns().length}
+                      className="px-4 py-10 text-center text-[var(--on-surface-muted)]"
+                    >
+                      Đang tải…
+                    </td>
+                  </tr>
+                ) : data.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={table.getVisibleLeafColumns().length}
+                      className="px-4 py-10 text-center text-[var(--on-surface-muted)]"
+                    >
+                      Không có dữ liệu.
+                    </td>
+                  </tr>
+                ) : (
+                  table.getRowModel().rows.map((row, i) => (
+                    <tr
+                      key={getRowId ? getRowId(row.original) : row.id}
+                      className={cn(
+                        "border-b border-[var(--border-ghost)] transition-colors last:border-b-0",
+                        "hover:bg-[color-mix(in_srgb,var(--primary)_4%,var(--surface-card))]",
+                        i % 2 === 1 ? "bg-[var(--surface-row-b)]" : "bg-[var(--surface-card)]",
+                      )}
+                    >
+                      {row.getVisibleCells().map((cell) => (
+                        <td
+                          key={cell.id}
+                          className="px-3 py-2 align-middle text-[var(--on-surface)] first:pl-4 last:pr-4"
+                        >
+                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        </td>
+                      ))}
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 
