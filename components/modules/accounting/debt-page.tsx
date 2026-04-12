@@ -2,6 +2,7 @@
 
 import { type ColumnDef } from "@tanstack/react-table";
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { ExcelDataGrid } from "@/components/shared/data-grid/excel-data-grid";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -9,13 +10,23 @@ import { DetailPreview } from "@/components/ui/detail-preview";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { DebtChartsSection } from "@/components/modules/accounting/debt-charts-section";
+import { importDebtOpeningFromExcel } from "@/lib/actions/debt-import";
 import { listDebtReport, type DebtRow } from "@/lib/actions/debt";
 
 export function DebtPage() {
+  const router = useRouter();
   const now = React.useMemo(() => new Date(), []);
   const [year, setYear] = React.useState(String(now.getFullYear()));
   const [month, setMonth] = React.useState(String(now.getMonth() + 1));
   const [showCharts, setShowCharts] = React.useState(false);
+  const [gridReload, setGridReload] = React.useState(0);
+  const fileImportRef = React.useRef<HTMLInputElement>(null);
+  const [importBusy, setImportBusy] = React.useState(false);
+
+  const bumpGrid = React.useCallback(() => {
+    setGridReload((n) => n + 1);
+    router.refresh();
+  }, [router]);
 
   const prependFilters = React.useMemo(
     () => ({ year, month }),
@@ -33,6 +44,38 @@ export function DebtPage() {
     ],
     [],
   );
+
+  const onPickExcel = () => fileImportRef.current?.click();
+
+  const onExcelSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setImportBusy(true);
+    try {
+      const fd = new FormData();
+      fd.set("file", file);
+      fd.set("year", year);
+      fd.set("month", month);
+      const res = await importDebtOpeningFromExcel(fd);
+      if (res.ok) {
+        const warn = res.errors?.length
+          ? "\n\nCảnh báo:\n" + res.errors.slice(0, 40).join("\n") + (res.errors.length > 40 ? "\n…" : "")
+          : "";
+        alert((res.message ?? "Nhập xong.") + warn);
+        bumpGrid();
+      } else {
+        const detail = res.errors?.length
+          ? "\n\n" + res.errors.slice(0, 40).join("\n") + (res.errors.length > 40 ? "\n…" : "")
+          : "";
+        alert((res.message ?? "Nhập thất bại.") + detail);
+      }
+    } catch (e2) {
+      alert(e2 instanceof Error ? e2.message : "Lỗi nhập file");
+    } finally {
+      setImportBusy(false);
+    }
+  };
 
   const years = React.useMemo(() => {
     const y = now.getFullYear();
@@ -78,6 +121,23 @@ export function DebtPage() {
             ))}
           </Select>
         </div>
+        <input
+          ref={fileImportRef}
+          type="file"
+          accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+          className="hidden"
+          onChange={(ev) => void onExcelSelected(ev)}
+        />
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          className="min-h-8 self-end"
+          disabled={importBusy}
+          onClick={onPickExcel}
+        >
+          {importBusy ? "Đang nhập…" : "Nhập Excel (nợ đầu kỳ)"}
+        </Button>
         <Button
           type="button"
           variant="secondary"
@@ -98,6 +158,7 @@ export function DebtPage() {
         getRowId={(r) => r.partner_id}
         renderRowDetail={renderDebtDetail}
         rowDetailTitle={(r) => `Công nợ ${r.partner_code} · Tháng ${month}/${year}`}
+        reloadSignal={gridReload}
       />
     </div>
   );

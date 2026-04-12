@@ -158,25 +158,142 @@ export type CashFlowTotals = {
   dateTo: string;
 };
 
+function roundMoney(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+export type CashLedgerChannelRow = {
+  channelKey: string;
+  label: string;
+  /** Cùng nguồn với tồn đầu kỳ (số dư lũy kế trước kỳ báo cáo). */
+  openingBook: number;
+  openingPeriod: number;
+  receiptInPeriod: number;
+  paymentInPeriod: number;
+  closing: number;
+};
+
+export type CashLedgerSummary = {
+  dateFrom: string;
+  dateTo: string;
+  rows: CashLedgerChannelRow[];
+  totals: {
+    openingBook: number;
+    openingPeriod: number;
+    receiptInPeriod: number;
+    paymentInPeriod: number;
+    closing: number;
+  };
+};
+
+function cashLedgerLabel(channelKey: string, displayRaw: string): string {
+  if (channelKey === "cash") return "Tất cả Tiền mặt";
+  const d = displayRaw.trim();
+  return d.length ? d : channelKey;
+}
+
+/**
+ * Bảng thu–chi–tồn theo kênh thanh toán (mẫu «THU CHI VÀ TỒN QUỸ»).
+ * Tồn đầu kỳ = thu trừ chi trước ngày `dateFrom`; trong kỳ: [dateFrom, dateTo].
+ */
+export async function getCashLedgerSummary(
+  dateFrom: string,
+  dateTo: string,
+): Promise<CashLedgerSummary> {
+  const from = dateFrom.trim();
+  const to = dateTo.trim();
+  if (!from || !to) throw new Error("Thiếu khoảng ngày.");
+  if (from > to) throw new Error("Từ ngày không được sau Đến ngày.");
+
+  const supabase = createSupabaseAdmin();
+  const { data, error } = await supabase
+    .from("cash_transactions")
+    .select("transaction_date, payment_channel, direction, amount")
+    .lte("transaction_date", to);
+  if (error) throw new Error(error.message);
+
+  type Agg = { key: string; display: string; openR: number; openP: number; inR: number; inP: number };
+  const byKey = new Map<string, Agg>();
+
+  for (const raw of data ?? []) {
+    const r = raw as {
+      transaction_date: string;
+      payment_channel: string;
+      direction: string;
+      amount: number;
+    };
+    const rawCh = String(r.payment_channel ?? "").trim();
+    const key = rawCh.toLowerCase() || "(trống)";
+    let a = byKey.get(key);
+    if (!a) {
+      a = { key, display: rawCh || key, openR: 0, openP: 0, inR: 0, inP: 0 };
+      byKey.set(key, a);
+    }
+    const amt = Number(r.amount);
+    if (!Number.isFinite(amt)) continue;
+    const d = r.transaction_date;
+    if (d < from) {
+      if (r.direction === "receipt") a.openR += amt;
+      else a.openP += amt;
+    } else {
+      if (r.direction === "receipt") a.inR += amt;
+      else a.inP += amt;
+    }
+  }
+
+  const rows: CashLedgerChannelRow[] = [];
+  for (const a of byKey.values()) {
+    const opening = roundMoney(a.openR - a.openP);
+    const receiptInPeriod = roundMoney(a.inR);
+    const paymentInPeriod = roundMoney(a.inP);
+    const closing = roundMoney(opening + receiptInPeriod - paymentInPeriod);
+    rows.push({
+      channelKey: a.key,
+      label: cashLedgerLabel(a.key, a.display),
+      openingBook: opening,
+      openingPeriod: opening,
+      receiptInPeriod,
+      paymentInPeriod,
+      closing,
+    });
+  }
+
+  rows.sort((x, y) => {
+    if (x.channelKey === "cash") return -1;
+    if (y.channelKey === "cash") return 1;
+    return x.label.localeCompare(y.label, "vi");
+  });
+
+  const totals = rows.reduce(
+    (acc, r) => ({
+      openingBook: roundMoney(acc.openingBook + r.openingBook),
+      openingPeriod: roundMoney(acc.openingPeriod + r.openingPeriod),
+      receiptInPeriod: roundMoney(acc.receiptInPeriod + r.receiptInPeriod),
+      paymentInPeriod: roundMoney(acc.paymentInPeriod + r.paymentInPeriod),
+      closing: roundMoney(acc.closing + r.closing),
+    }),
+    {
+      openingBook: 0,
+      openingPeriod: 0,
+      receiptInPeriod: 0,
+      paymentInPeriod: 0,
+      closing: 0,
+    },
+  );
+
+  return { dateFrom: from, dateTo: to, rows, totals };
+}
+
 /** Tổng thu / chi trong khoảng ngày (YYYY-MM-DD). */
 export async function getCashFlowTotalsForRange(
   dateFrom: string,
   dateTo: string,
 ): Promise<CashFlowTotals> {
-  const supabase = createSupabaseAdmin();
-  const { data, error } = await supabase
-    .from("cash_transactions")
-    .select("direction, amount")
-    .gte("transaction_date", dateFrom)
-    .lte("transaction_date", dateTo);
-  if (error) throw new Error(error.message);
-  let receipt = 0;
-  let payment = 0;
-  for (const r of data ?? []) {
-    const row = r as { direction: string; amount: number };
-    const a = Number(row.amount);
-    if (row.direction === "receipt") receipt += a;
-    else payment += a;
-  }
-  return { receipt, payment, dateFrom, dateTo };
+  const s = await getCashLedgerSummary(dateFrom, dateTo);
+  return {
+    receipt: s.totals.receiptInPeriod,
+    payment: s.totals.paymentInPeriod,
+    dateFrom: s.dateFrom,
+    dateTo: s.dateTo,
+  };
 }

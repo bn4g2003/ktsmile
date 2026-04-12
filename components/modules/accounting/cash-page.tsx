@@ -59,7 +59,7 @@ export function CashPage() {
   const [desc, setDesc] = React.useState("");
   const [refType, setRefType] = React.useState("");
   const [refId, setRefId] = React.useState("");
-  const [showCharts, setShowCharts] = React.useState(false);
+  const [showCharts, setShowCharts] = React.useState(true);
 
   React.useEffect(() => {
     void listPartnerPicker().then(setPartners).catch(() => {});
@@ -218,7 +218,7 @@ export function CashPage() {
           className="w-fit"
           onClick={() => setShowCharts((v) => !v)}
         >
-          {showCharts ? "Ẩn biểu đồ" : "Hiện biểu đồ dòng tiền"}
+          {showCharts ? "Ẩn báo cáo thu / chi / tồn" : "Hiện báo cáo thu / chi / tồn"}
         </Button>
         {showCharts ? <CashFlowChartsSection /> : null}
       </div>
