@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createSupabaseAdmin } from "@/lib/supabase/server";
+import { isSupabaseSchemaDriftError } from "@/lib/supabase/schema-drift";
 import type { ListArgs, ListResult } from "@/components/shared/data-grid/excel-data-grid";
 import { decodeMultiFilter } from "@/lib/grid/multi-filter";
 import type { LabOrderPrintLine, LabOrderPrintPayload } from "@/lib/reports/lab-order-html";
@@ -41,18 +42,6 @@ export type LabOrderRow = {
   sender_name?: string | null;
   sender_phone?: string | null;
 };
-
-/** PostgREST / Postgres: thiếu cột hoặc schema cache chưa khớp migration. */
-function isLabOrdersListSchemaDriftError(message: string): boolean {
-  const m = message.toLowerCase();
-  return (
-    m.includes("does not exist") ||
-    m.includes("schema cache") ||
-    m.includes("could not find") ||
-    m.includes("42703") ||
-    m.includes("pgrst204")
-  );
-}
 
 const LAB_ORDERS_LIST_SELECT_FULL =
   "id, order_number, received_at, partner_id, patient_name, clinic_name, status, notes, created_at, updated_at, order_category, sender_name, coord_review_status, doctor_prescription_id, billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, payment_notice_doc_number, payment_notice_issued_at, partners:partner_id(code,name), doctor_prescriptions(slip_code), lab_order_lines(line_amount)";
@@ -162,11 +151,11 @@ export async function listLabOrders(args: ListArgs): Promise<ListResult<LabOrder
       return { rows, total: count ?? 0 };
     }
     lastMessage = error.message;
-    const retry = i < tiers.length - 1 && isLabOrdersListSchemaDriftError(error.message);
+    const retry = i < tiers.length - 1 && isSupabaseSchemaDriftError(error.message);
     if (!retry) {
       throw new Error(
         error.message +
-          (isLabOrdersListSchemaDriftError(error.message)
+          (isSupabaseSchemaDriftError(error.message)
             ? " — Chạy các file SQL trong supabase/sql theo thứ tự trên project Supabase (migration đồng bộ schema)."
             : ""),
       );
@@ -716,7 +705,7 @@ export async function listLabOrdersByPartner(partnerId: string, limit = 50): Pro
       return (data ?? []).map((r) => mapLabOrderListRow(r as unknown as Record<string, unknown>));
     }
     lastMessage = error.message;
-    const retry = i < tiers.length - 1 && isLabOrdersListSchemaDriftError(error.message);
+    const retry = i < tiers.length - 1 && isSupabaseSchemaDriftError(error.message);
     if (!retry) throw new Error(error.message);
   }
   throw new Error(lastMessage || "Không tải được đơn theo đối tác.");

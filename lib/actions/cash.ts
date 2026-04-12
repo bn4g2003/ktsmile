@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createSupabaseAdmin } from "@/lib/supabase/server";
+import { isSupabaseSchemaDriftError } from "@/lib/supabase/schema-drift";
 import type { CashReceiptPrintPayload } from "@/lib/reports/cash-receipt-html";
 
 export type { CashReceiptPrintPayload };
@@ -61,78 +62,112 @@ function cashInsertPayload(row: z.infer<typeof cashSchema>) {
   };
 }
 
+/** Có `payer_name` (migration 20260419120000). */
+const CASH_LIST_SELECT_FULL =
+  "id, transaction_date, doc_number, payment_channel, direction, business_category, amount, partner_id, payer_name, description, reference_type, reference_id, created_at, updated_at, partners:partner_id(code,name)";
+
+/** Schema ban đầu, chưa có cột payer_name. */
+const CASH_LIST_SELECT_LEGACY =
+  "id, transaction_date, doc_number, payment_channel, direction, business_category, amount, partner_id, description, reference_type, reference_id, created_at, updated_at, partners:partner_id(code,name)";
+
+function mapCashListRow(r: Record<string, unknown>): CashRow {
+  const partners = r["partners"] as { code?: string; name?: string } | null;
+  return {
+    id: r["id"] as string,
+    transaction_date: r["transaction_date"] as string,
+    doc_number: r["doc_number"] as string,
+    payment_channel: r["payment_channel"] as string,
+    direction: r["direction"] as "receipt" | "payment",
+    business_category: r["business_category"] as string,
+    amount: Number(r["amount"]),
+    partner_id: (r["partner_id"] as string | null) ?? null,
+    payer_name: (r["payer_name"] as string | null) ?? null,
+    description: (r["description"] as string | null) ?? null,
+    reference_type: (r["reference_type"] as string | null) ?? null,
+    reference_id: (r["reference_id"] as string | null) ?? null,
+    created_at: r["created_at"] as string,
+    updated_at: r["updated_at"] as string,
+    partner_code: partners?.code ?? null,
+    partner_name: partners?.name ?? null,
+  };
+}
+
 export async function listCashTransactions(
   args: ListArgs,
 ): Promise<ListResult<CashRow>> {
   const supabase = createSupabaseAdmin();
   const { page, pageSize, globalSearch, filters } = args;
-  let q = supabase.from("cash_transactions").select(
-    "id, transaction_date, doc_number, payment_channel, direction, business_category, amount, partner_id, payer_name, description, reference_type, reference_id, created_at, updated_at, partners:partner_id(code,name)",
-    { count: "exact" },
-  );
-
-  const g = globalSearch.trim();
-  if (g) {
-    const p = "%" + g + "%";
-    q = q.or(
-      "doc_number.ilike." +
-        p +
-        ",business_category.ilike." +
-        p +
-        ",description.ilike." +
-        p +
-        ",payment_channel.ilike." +
-        p,
-    );
-  }
-  const dirs = decodeMultiFilter(filters.direction);
-  if (dirs.length === 1) q = q.eq("direction", dirs[0]!);
-  else if (dirs.length > 1) q = q.in("direction", dirs);
-  if (filters.payment_channel?.trim())
-    q = q.ilike("payment_channel", "%" + filters.payment_channel.trim() + "%");
-  if (filters.business_category?.trim())
-    q = q.ilike("business_category", "%" + filters.business_category.trim() + "%");
-  if (filters.transaction_date_from?.trim())
-    q = q.gte("transaction_date", filters.transaction_date_from.trim());
-  if (filters.transaction_date_to?.trim())
-    q = q.lte("transaction_date", filters.transaction_date_to.trim());
-
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
-  q = q.order("transaction_date", { ascending: false }).range(from, to);
 
-  const { data, error, count } = await q;
-  if (error) throw new Error(error.message);
+  const selects = [CASH_LIST_SELECT_FULL, CASH_LIST_SELECT_LEGACY];
+  let lastMessage = "";
+  for (let i = 0; i < selects.length; i++) {
+    const sel = selects[i]!;
+    let q = supabase.from("cash_transactions").select(sel, { count: "exact" });
 
-  const rows: CashRow[] = (data ?? []).map((r: Record<string, unknown>) => {
-    const partners = r["partners"] as { code?: string; name?: string } | null;
-    return {
-      id: r["id"] as string,
-      transaction_date: r["transaction_date"] as string,
-      doc_number: r["doc_number"] as string,
-      payment_channel: r["payment_channel"] as string,
-      direction: r["direction"] as "receipt" | "payment",
-      business_category: r["business_category"] as string,
-      amount: Number(r["amount"]),
-      partner_id: (r["partner_id"] as string | null) ?? null,
-      payer_name: (r["payer_name"] as string | null) ?? null,
-      description: (r["description"] as string | null) ?? null,
-      reference_type: (r["reference_type"] as string | null) ?? null,
-      reference_id: (r["reference_id"] as string | null) ?? null,
-      created_at: r["created_at"] as string,
-      updated_at: r["updated_at"] as string,
-      partner_code: partners?.code ?? null,
-      partner_name: partners?.name ?? null,
-    };
-  });
+    const g = globalSearch.trim();
+    if (g) {
+      const p = "%" + g + "%";
+      q = q.or(
+        "doc_number.ilike." +
+          p +
+          ",business_category.ilike." +
+          p +
+          ",description.ilike." +
+          p +
+          ",payment_channel.ilike." +
+          p,
+      );
+    }
+    const dirs = decodeMultiFilter(filters.direction);
+    if (dirs.length === 1) q = q.eq("direction", dirs[0]!);
+    else if (dirs.length > 1) q = q.in("direction", dirs);
+    if (filters.payment_channel?.trim())
+      q = q.ilike("payment_channel", "%" + filters.payment_channel.trim() + "%");
+    if (filters.business_category?.trim())
+      q = q.ilike("business_category", "%" + filters.business_category.trim() + "%");
+    if (filters.transaction_date_from?.trim())
+      q = q.gte("transaction_date", filters.transaction_date_from.trim());
+    if (filters.transaction_date_to?.trim())
+      q = q.lte("transaction_date", filters.transaction_date_to.trim());
 
-  return { rows, total: count ?? 0 };
+    q = q.order("transaction_date", { ascending: false }).range(from, to);
+    const { data, error, count } = await q;
+    if (!error) {
+      const rows: CashRow[] = (data ?? []).map((row) =>
+        mapCashListRow(row as unknown as Record<string, unknown>),
+      );
+      return { rows, total: count ?? 0 };
+    }
+    lastMessage = error.message;
+    const retry = i < selects.length - 1 && isSupabaseSchemaDriftError(error.message);
+    if (!retry) {
+      throw new Error(
+        error.message +
+          (isSupabaseSchemaDriftError(error.message)
+            ? " — Chạy migration SQL trên Supabase (ví dụ 20260419120000_coord_review_billing_receipts.sql có cột payer_name trên cash_transactions)."
+            : ""),
+      );
+    }
+  }
+  throw new Error(lastMessage || "Không tải được sổ quỹ.");
 }
 
 export async function createCashTransaction(input: z.infer<typeof cashSchema>) {
   const supabase = createSupabaseAdmin();
   const row = cashSchema.parse(input);
-  const { error } = await supabase.from("cash_transactions").insert(cashInsertPayload(row));
+  const payload = cashInsertPayload(row);
+  let { error } = await supabase.from("cash_transactions").insert(payload);
+  if (
+    error &&
+    isSupabaseSchemaDriftError(error.message) &&
+    Object.prototype.hasOwnProperty.call(payload, "payer_name")
+  ) {
+    const { payer_name: _omit, ...legacyPayload } = payload;
+    const r2 = await supabase.from("cash_transactions").insert(legacyPayload);
+    error = r2.error;
+  }
   if (error) throw new Error(error.message);
   revalidatePath("/accounting/cash");
 }
@@ -143,10 +178,17 @@ export async function updateCashTransaction(
 ) {
   const supabase = createSupabaseAdmin();
   const row = cashSchema.parse(input);
-  const { error } = await supabase
-    .from("cash_transactions")
-    .update(cashInsertPayload(row))
-    .eq("id", id);
+  const payload = cashInsertPayload(row);
+  let { error } = await supabase.from("cash_transactions").update(payload).eq("id", id);
+  if (
+    error &&
+    isSupabaseSchemaDriftError(error.message) &&
+    Object.prototype.hasOwnProperty.call(payload, "payer_name")
+  ) {
+    const { payer_name: _omit, ...legacyPayload } = payload;
+    const r2 = await supabase.from("cash_transactions").update(legacyPayload).eq("id", id);
+    error = r2.error;
+  }
   if (error) throw new Error(error.message);
   revalidatePath("/accounting/cash");
 }
@@ -305,28 +347,40 @@ export async function getCashFlowTotalsForRange(
   };
 }
 
+const CASH_RECEIPT_SELECT_FULL =
+  "doc_number, transaction_date, payment_channel, direction, business_category, amount, payer_name, description, partners:partner_id(code,name)";
+
+const CASH_RECEIPT_SELECT_LEGACY =
+  "doc_number, transaction_date, payment_channel, direction, business_category, amount, description, partners:partner_id(code,name)";
+
 export async function getCashReceiptPrintPayload(id: string): Promise<CashReceiptPrintPayload> {
   const supabase = createSupabaseAdmin();
-  const { data, error } = await supabase
-    .from("cash_transactions")
-    .select(
-      "doc_number, transaction_date, payment_channel, direction, business_category, amount, payer_name, description, partners:partner_id(code,name)",
-    )
-    .eq("id", id)
-    .single();
-  if (error || !data) throw new Error(error?.message ?? "Không tìm thấy chứng từ.");
-  const row = data as Record<string, unknown>;
-  const partners = row["partners"] as { code?: string; name?: string } | null;
-  return {
-    doc_number: row["doc_number"] as string,
-    transaction_date: row["transaction_date"] as string,
-    payment_channel: row["payment_channel"] as string,
-    direction: row["direction"] as string,
-    business_category: row["business_category"] as string,
-    amount: Number(row["amount"]),
-    payer_name: (row["payer_name"] as string | null) ?? null,
-    partner_code: partners?.code ?? null,
-    partner_name: partners?.name ?? null,
-    description: (row["description"] as string | null) ?? null,
-  };
+  for (const sel of [CASH_RECEIPT_SELECT_FULL, CASH_RECEIPT_SELECT_LEGACY]) {
+    const { data, error } = await supabase
+      .from("cash_transactions")
+      .select(sel)
+      .eq("id", id)
+      .single();
+    if (!error && data) {
+      const row = data as unknown as Record<string, unknown>;
+      const partners = row["partners"] as { code?: string; name?: string } | null;
+      return {
+        doc_number: row["doc_number"] as string,
+        transaction_date: row["transaction_date"] as string,
+        payment_channel: row["payment_channel"] as string,
+        direction: row["direction"] as string,
+        business_category: row["business_category"] as string,
+        amount: Number(row["amount"]),
+        payer_name: (row["payer_name"] as string | null) ?? null,
+        partner_code: partners?.code ?? null,
+        partner_name: partners?.name ?? null,
+        description: (row["description"] as string | null) ?? null,
+      };
+    }
+    if (error && sel === CASH_RECEIPT_SELECT_FULL && isSupabaseSchemaDriftError(error.message)) {
+      continue;
+    }
+    if (error) throw new Error(error.message);
+  }
+  throw new Error("Không tìm thấy chứng từ.");
 }
