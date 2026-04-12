@@ -6,8 +6,6 @@ import { finiteNumber } from "@/lib/billing/order-grand-total";
 import { createSupabaseAdmin } from "@/lib/supabase/server";
 import { isSupabaseSchemaDriftError } from "@/lib/supabase/schema-drift";
 import type { CashReceiptPrintPayload } from "@/lib/reports/cash-receipt-html";
-
-export type { CashReceiptPrintPayload };
 import type { ListArgs, ListResult } from "@/components/shared/data-grid/excel-data-grid";
 import { decodeMultiFilter } from "@/lib/grid/multi-filter";
 

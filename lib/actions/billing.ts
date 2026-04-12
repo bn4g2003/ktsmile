@@ -7,9 +7,6 @@ import type {
   PaymentNoticeLine,
   PaymentNoticePrintPayload,
 } from "@/lib/reports/payment-notice-html";
-
-export type { PaymentNoticePrintPayload };
-
 import { computeOrderGrandTotal, finiteNumber } from "@/lib/billing/order-grand-total";
 
 function round2(n: number): number {
