@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { finiteNumber } from "@/lib/billing/order-grand-total";
 import { createSupabaseAdmin } from "@/lib/supabase/server";
 import { isSupabaseSchemaDriftError } from "@/lib/supabase/schema-drift";
 import type { CashReceiptPrintPayload } from "@/lib/reports/cash-receipt-html";
@@ -64,11 +65,15 @@ function cashInsertPayload(row: z.infer<typeof cashSchema>) {
 
 /** Có `payer_name` (migration 20260419120000). */
 const CASH_LIST_SELECT_FULL =
-  "id, transaction_date, doc_number, payment_channel, direction, business_category, amount, partner_id, payer_name, description, reference_type, reference_id, created_at, updated_at, partners:partner_id(code,name)";
+  "id, transaction_date, doc_number, payment_channel, direction, business_category, amount, partner_id, payer_name, description, reference_type, reference_id, created_at, updated_at, partners!cash_transactions_partner_id_fkey(code,name)";
 
 /** Schema ban đầu, chưa có cột payer_name. */
 const CASH_LIST_SELECT_LEGACY =
-  "id, transaction_date, doc_number, payment_channel, direction, business_category, amount, partner_id, description, reference_type, reference_id, created_at, updated_at, partners:partner_id(code,name)";
+  "id, transaction_date, doc_number, payment_channel, direction, business_category, amount, partner_id, description, reference_type, reference_id, created_at, updated_at, partners!cash_transactions_partner_id_fkey(code,name)";
+
+/** Không nhúng partners (tránh lỗi embed hiếm gặp). */
+const CASH_LIST_SELECT_NO_EMBED =
+  "id, transaction_date, doc_number, payment_channel, direction, business_category, amount, partner_id, payer_name, description, reference_type, reference_id, created_at, updated_at";
 
 function mapCashListRow(r: Record<string, unknown>): CashRow {
   const partners = r["partners"] as { code?: string; name?: string } | null;
@@ -79,7 +84,7 @@ function mapCashListRow(r: Record<string, unknown>): CashRow {
     payment_channel: r["payment_channel"] as string,
     direction: r["direction"] as "receipt" | "payment",
     business_category: r["business_category"] as string,
-    amount: Number(r["amount"]),
+    amount: finiteNumber(r["amount"]),
     partner_id: (r["partner_id"] as string | null) ?? null,
     payer_name: (r["payer_name"] as string | null) ?? null,
     description: (r["description"] as string | null) ?? null,
@@ -100,7 +105,7 @@ export async function listCashTransactions(
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
 
-  const selects = [CASH_LIST_SELECT_FULL, CASH_LIST_SELECT_LEGACY];
+  const selects = [CASH_LIST_SELECT_FULL, CASH_LIST_SELECT_LEGACY, CASH_LIST_SELECT_NO_EMBED];
   let lastMessage = "";
   for (let i = 0; i < selects.length; i++) {
     const sel = selects[i]!;
@@ -208,6 +213,7 @@ export type CashFlowTotals = {
 };
 
 function roundMoney(n: number): number {
+  if (!Number.isFinite(n)) return 0;
   return Math.round(n * 100) / 100;
 }
 
@@ -348,39 +354,40 @@ export async function getCashFlowTotalsForRange(
 }
 
 const CASH_RECEIPT_SELECT_FULL =
-  "doc_number, transaction_date, payment_channel, direction, business_category, amount, payer_name, description, partners:partner_id(code,name)";
+  "doc_number, transaction_date, payment_channel, direction, business_category, amount, payer_name, description, partners!cash_transactions_partner_id_fkey(code,name)";
 
 const CASH_RECEIPT_SELECT_LEGACY =
-  "doc_number, transaction_date, payment_channel, direction, business_category, amount, description, partners:partner_id(code,name)";
+  "doc_number, transaction_date, payment_channel, direction, business_category, amount, description, partners!cash_transactions_partner_id_fkey(code,name)";
+
+const CASH_RECEIPT_SELECT_NO_EMBED =
+  "doc_number, transaction_date, payment_channel, direction, business_category, amount, payer_name, description";
 
 export async function getCashReceiptPrintPayload(id: string): Promise<CashReceiptPrintPayload> {
   const supabase = createSupabaseAdmin();
-  for (const sel of [CASH_RECEIPT_SELECT_FULL, CASH_RECEIPT_SELECT_LEGACY]) {
-    const { data, error } = await supabase
-      .from("cash_transactions")
-      .select(sel)
-      .eq("id", id)
-      .single();
+  const selects = [CASH_RECEIPT_SELECT_FULL, CASH_RECEIPT_SELECT_LEGACY, CASH_RECEIPT_SELECT_NO_EMBED];
+  let lastMsg = "";
+  for (let i = 0; i < selects.length; i++) {
+    const sel = selects[i]!;
+    const { data, error } = await supabase.from("cash_transactions").select(sel).eq("id", id).single();
     if (!error && data) {
       const row = data as unknown as Record<string, unknown>;
-      const partners = row["partners"] as { code?: string; name?: string } | null;
+      const partners = row["partners"] as { code?: string; name?: string } | null | undefined;
       return {
         doc_number: row["doc_number"] as string,
         transaction_date: row["transaction_date"] as string,
         payment_channel: row["payment_channel"] as string,
         direction: row["direction"] as string,
         business_category: row["business_category"] as string,
-        amount: Number(row["amount"]),
+        amount: finiteNumber(row["amount"]),
         payer_name: (row["payer_name"] as string | null) ?? null,
         partner_code: partners?.code ?? null,
         partner_name: partners?.name ?? null,
         description: (row["description"] as string | null) ?? null,
       };
     }
-    if (error && sel === CASH_RECEIPT_SELECT_FULL && isSupabaseSchemaDriftError(error.message)) {
-      continue;
-    }
-    if (error) throw new Error(error.message);
+    lastMsg = error?.message ?? "";
+    const retry = i < selects.length - 1 && error && isSupabaseSchemaDriftError(error.message);
+    if (!retry && error) throw new Error(error.message);
   }
-  throw new Error("Không tìm thấy chứng từ.");
+  throw new Error(lastMsg || "Không tìm thấy chứng từ.");
 }

@@ -12,7 +12,7 @@ import {
   isAllowedLabOrderStatusTransition,
   labOrderStatusTransitionErrorMessage,
 } from "@/lib/format/labels";
-import { computeOrderGrandTotal } from "@/lib/billing/order-grand-total";
+import { computeOrderGrandTotal, finiteNumber } from "@/lib/billing/order-grand-total";
 import { LAB_ORDER_ACCESSORY_DEFS, parseAccessoriesJson } from "@/lib/lab/order-accessories";
 
 export type LabOrderRow = {
@@ -43,16 +43,24 @@ export type LabOrderRow = {
   sender_phone?: string | null;
 };
 
+/* Gợi ý FK theo tên constraint (tránh PGRST201 khi PostgREST không chọn đúng quan hệ). */
 const LAB_ORDERS_LIST_SELECT_FULL =
-  "id, order_number, received_at, partner_id, patient_name, clinic_name, status, notes, created_at, updated_at, order_category, sender_name, coord_review_status, doctor_prescription_id, billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, payment_notice_doc_number, payment_notice_issued_at, partners:partner_id(code,name), doctor_prescriptions(slip_code), lab_order_lines(line_amount)";
+  "id, order_number, received_at, partner_id, patient_name, clinic_name, status, notes, created_at, updated_at, order_category, sender_name, coord_review_status, doctor_prescription_id, billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, payment_notice_doc_number, payment_notice_issued_at, partners!lab_orders_partner_id_fkey(code,name), doctor_prescriptions!lab_orders_doctor_prescription_id_fkey(slip_code), lab_order_lines!lab_order_lines_order_id_fkey(line_amount)";
 
 /** Trước migration 20260420 (order_category, sender_name, …). */
 const LAB_ORDERS_LIST_SELECT_NO_PROD_UI =
-  "id, order_number, received_at, partner_id, patient_name, clinic_name, status, notes, created_at, updated_at, coord_review_status, doctor_prescription_id, billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, payment_notice_doc_number, payment_notice_issued_at, partners:partner_id(code,name), doctor_prescriptions(slip_code), lab_order_lines(line_amount)";
+  "id, order_number, received_at, partner_id, patient_name, clinic_name, status, notes, created_at, updated_at, coord_review_status, doctor_prescription_id, billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, payment_notice_doc_number, payment_notice_issued_at, partners!lab_orders_partner_id_fkey(code,name), doctor_prescriptions!lab_orders_doctor_prescription_id_fkey(slip_code), lab_order_lines!lab_order_lines_order_id_fkey(line_amount)";
 
 /** Trước migration 20260419 (phiếu BS, đối chiếu, GBTT trên đơn). */
 const LAB_ORDERS_LIST_SELECT_LEGACY_CORE =
-  "id, order_number, received_at, partner_id, patient_name, clinic_name, status, notes, created_at, updated_at, partners:partner_id(code,name), lab_order_lines(line_amount)";
+  "id, order_number, received_at, partner_id, patient_name, clinic_name, status, notes, created_at, updated_at, partners!lab_orders_partner_id_fkey(code,name), lab_order_lines!lab_order_lines_order_id_fkey(line_amount)";
+
+/** Khi embed phiếu BS vẫn lỗi — bỏ doctor_prescriptions, giữ tổng dòng. */
+const LAB_ORDERS_LIST_SELECT_NO_RX_EMBED =
+  "id, order_number, received_at, partner_id, patient_name, clinic_name, status, notes, created_at, updated_at, order_category, sender_name, coord_review_status, doctor_prescription_id, billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, payment_notice_doc_number, payment_notice_issued_at, partners!lab_orders_partner_id_fkey(code,name), lab_order_lines!lab_order_lines_order_id_fkey(line_amount)";
+
+const LAB_ORDERS_LIST_SELECT_NO_PROD_UI_NO_RX =
+  "id, order_number, received_at, partner_id, patient_name, clinic_name, status, notes, created_at, updated_at, coord_review_status, doctor_prescription_id, billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, payment_notice_doc_number, payment_notice_issued_at, partners!lab_orders_partner_id_fkey(code,name), lab_order_lines!lab_order_lines_order_id_fkey(line_amount)";
 
 function mapLabOrderListRow(r: Record<string, unknown>): LabOrderRow {
   const partners = r["partners"] as { code?: string; name?: string } | null;
@@ -61,13 +69,13 @@ function mapLabOrderListRow(r: Record<string, unknown>): LabOrderRow {
   const lines = r["lab_order_lines"] as { line_amount?: string | number }[] | null;
   let total = 0;
   for (const line of lines ?? []) {
-    total += Number(line.line_amount ?? 0);
+    total += finiteNumber(line.line_amount);
   }
   const crs = r["coord_review_status"] as string | undefined;
   const subtotal = Math.round(total * 100) / 100;
-  const bPct = Number(r["billing_order_discount_percent"] ?? 0);
-  const bAmt = Number(r["billing_order_discount_amount"] ?? 0);
-  const bFees = Number(r["billing_other_fees"] ?? 0);
+  const bPct = finiteNumber(r["billing_order_discount_percent"]);
+  const bAmt = finiteNumber(r["billing_order_discount_amount"]);
+  const bFees = finiteNumber(r["billing_other_fees"]);
   return {
     id: r["id"] as string,
     order_number: r["order_number"] as string,
@@ -101,7 +109,12 @@ function mapLabOrderListRow(r: Record<string, unknown>): LabOrderRow {
   };
 }
 
-type ListLabOrdersSelectTier = "full" | "noProdUi" | "legacyCore";
+type ListLabOrdersSelectTier =
+  | "full"
+  | "noProdUi"
+  | "noRxEmbed"
+  | "noProdUiNoRx"
+  | "legacyCore";
 
 export async function listLabOrders(args: ListArgs): Promise<ListResult<LabOrderRow>> {
   const supabase = createSupabaseAdmin();
@@ -110,10 +123,18 @@ export async function listLabOrders(args: ListArgs): Promise<ListResult<LabOrder
   const to = from + pageSize - 1;
   const sortAsc = filters.received_sort === "asc";
 
-  const tiers: ListLabOrdersSelectTier[] = ["full", "noProdUi", "legacyCore"];
+  const tiers: ListLabOrdersSelectTier[] = [
+    "full",
+    "noProdUi",
+    "noRxEmbed",
+    "noProdUiNoRx",
+    "legacyCore",
+  ];
   const selectFor: Record<ListLabOrdersSelectTier, string> = {
     full: LAB_ORDERS_LIST_SELECT_FULL,
     noProdUi: LAB_ORDERS_LIST_SELECT_NO_PROD_UI,
+    noRxEmbed: LAB_ORDERS_LIST_SELECT_NO_RX_EMBED,
+    noProdUiNoRx: LAB_ORDERS_LIST_SELECT_NO_PROD_UI_NO_RX,
     legacyCore: LAB_ORDERS_LIST_SELECT_LEGACY_CORE,
   };
 
@@ -463,7 +484,7 @@ export async function listLabOrderLines(orderId: string): Promise<LabOrderLineRo
   const { data, error } = await supabase
     .from("lab_order_lines")
     .select(
-      "id, order_id, product_id, tooth_positions, shade, tooth_count, work_type, arch_connection, quantity, unit_price, discount_percent, discount_amount, line_amount, notes, created_at, products:product_id(code,name)",
+      "id, order_id, product_id, tooth_positions, shade, tooth_count, work_type, arch_connection, quantity, unit_price, discount_percent, discount_amount, line_amount, notes, created_at, products!lab_order_lines_product_id_fkey(code,name)",
     )
     .eq("order_id", orderId)
     .order("created_at", { ascending: true });
@@ -479,14 +500,14 @@ export async function listLabOrderLines(orderId: string): Promise<LabOrderLineRo
       tooth_count:
         r["tooth_count"] === null || r["tooth_count"] === undefined
           ? null
-          : Number(r["tooth_count"]),
+          : Math.floor(finiteNumber(r["tooth_count"])),
       work_type: (r["work_type"] as LabOrderLineRow["work_type"]) ?? "new_work",
       arch_connection: (r["arch_connection"] as LabOrderLineRow["arch_connection"]) ?? "unit",
-      quantity: Number(r["quantity"]),
-      unit_price: Number(r["unit_price"]),
-      discount_percent: Number(r["discount_percent"]),
-      discount_amount: Number(r["discount_amount"] ?? 0),
-      line_amount: Number(r["line_amount"]),
+      quantity: finiteNumber(r["quantity"], 0) || 0,
+      unit_price: finiteNumber(r["unit_price"]),
+      discount_percent: finiteNumber(r["discount_percent"]),
+      discount_amount: finiteNumber(r["discount_amount"]),
+      line_amount: finiteNumber(r["line_amount"]),
       notes: (r["notes"] as string | null) ?? null,
       created_at: r["created_at"] as string,
       product_code: pr?.code,
@@ -580,7 +601,7 @@ export async function getLabOrder(id: string) {
   const { data, error } = await supabase
     .from("lab_orders")
     .select(
-      "id, order_number, received_at, partner_id, patient_name, clinic_name, status, notes, created_at, updated_at, coord_review_status, coord_reviewed_at, doctor_prescription_id, billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, payment_notice_doc_number, payment_notice_issued_at, sender_name, sender_phone, delivery_address, patient_age, patient_gender, order_category, due_completion_at, due_delivery_at, clinical_indication, margin_above_gingiva, margin_at_gingiva, margin_subgingival, margin_shoulder, notes_accounting, notes_coordination, accessories, partners:partner_id(code,name), doctor_prescriptions(slip_code, slip_date)",
+      "id, order_number, received_at, partner_id, patient_name, clinic_name, status, notes, created_at, updated_at, coord_review_status, coord_reviewed_at, doctor_prescription_id, billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, payment_notice_doc_number, payment_notice_issued_at, sender_name, sender_phone, delivery_address, patient_age, patient_gender, order_category, due_completion_at, due_delivery_at, clinical_indication, margin_above_gingiva, margin_at_gingiva, margin_subgingival, margin_shoulder, notes_accounting, notes_coordination, accessories, partners!lab_orders_partner_id_fkey(code,name), doctor_prescriptions!lab_orders_doctor_prescription_id_fkey(slip_code, slip_date)",
     )
     .eq("id", id)
     .single();
@@ -612,7 +633,7 @@ export async function getLabOrderPrintPayload(orderId: string): Promise<LabOrder
   const { data: row, error } = await supabase
     .from("lab_orders")
     .select(
-      "order_number, received_at, patient_name, clinic_name, status, notes, sender_name, sender_phone, delivery_address, patient_age, patient_gender, order_category, due_completion_at, due_delivery_at, clinical_indication, margin_above_gingiva, margin_at_gingiva, margin_subgingival, margin_shoulder, notes_accounting, notes_coordination, accessories, partners:partner_id(code,name)",
+      "order_number, received_at, patient_name, clinic_name, status, notes, sender_name, sender_phone, delivery_address, patient_age, patient_gender, order_category, due_completion_at, due_delivery_at, clinical_indication, margin_above_gingiva, margin_at_gingiva, margin_subgingival, margin_shoulder, notes_accounting, notes_coordination, accessories, partners!lab_orders_partner_id_fkey(code,name)",
     )
     .eq("id", orderId)
     .single();
@@ -624,7 +645,7 @@ export async function getLabOrderPrintPayload(orderId: string): Promise<LabOrder
   const { data: lineRows, error: le } = await supabase
     .from("lab_order_lines")
     .select(
-      "tooth_positions, shade, tooth_count, work_type, arch_connection, quantity, unit_price, discount_percent, discount_amount, line_amount, notes, products:product_id(code,name,unit)",
+      "tooth_positions, shade, tooth_count, work_type, arch_connection, quantity, unit_price, discount_percent, discount_amount, line_amount, notes, products!lab_order_lines_product_id_fkey(code,name,unit)",
     )
     .eq("order_id", orderId)
     .order("created_at", { ascending: true });
@@ -686,10 +707,18 @@ export async function getLabOrderPrintPayload(orderId: string): Promise<LabOrder
 /** Đơn hàng gần nhất của một đối tác (xem nhanh trong modal). */
 export async function listLabOrdersByPartner(partnerId: string, limit = 50): Promise<LabOrderRow[]> {
   const supabase = createSupabaseAdmin();
-  const tiers: ListLabOrdersSelectTier[] = ["full", "noProdUi", "legacyCore"];
+  const tiers: ListLabOrdersSelectTier[] = [
+    "full",
+    "noProdUi",
+    "noRxEmbed",
+    "noProdUiNoRx",
+    "legacyCore",
+  ];
   const selectFor: Record<ListLabOrdersSelectTier, string> = {
     full: LAB_ORDERS_LIST_SELECT_FULL,
     noProdUi: LAB_ORDERS_LIST_SELECT_NO_PROD_UI,
+    noRxEmbed: LAB_ORDERS_LIST_SELECT_NO_RX_EMBED,
+    noProdUiNoRx: LAB_ORDERS_LIST_SELECT_NO_PROD_UI_NO_RX,
     legacyCore: LAB_ORDERS_LIST_SELECT_LEGACY_CORE,
   };
   let lastMessage = "";

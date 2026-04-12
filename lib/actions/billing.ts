@@ -10,7 +10,7 @@ import type {
 
 export type { PaymentNoticePrintPayload };
 
-import { computeOrderGrandTotal } from "@/lib/billing/order-grand-total";
+import { computeOrderGrandTotal, finiteNumber } from "@/lib/billing/order-grand-total";
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
@@ -35,14 +35,14 @@ export async function getLabOrderBillingTotals(orderId: string): Promise<LabOrde
   const { data: ord, error: oe } = await supabase
     .from("lab_orders")
     .select(
-      "billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, lab_order_lines(line_amount)",
+      "billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, lab_order_lines!lab_order_lines_order_id_fkey(line_amount)",
     )
     .eq("id", orderId)
     .single();
   if (oe || !ord) return null;
   const lines = ord["lab_order_lines"] as { line_amount?: string | number }[] | null;
   let subtotal = 0;
-  for (const ln of lines ?? []) subtotal += Number(ln.line_amount ?? 0);
+  for (const ln of lines ?? []) subtotal += finiteNumber(ln.line_amount);
   const billing_order_discount_percent = Number(ord.billing_order_discount_percent ?? 0);
   const billing_order_discount_amount = Number(ord.billing_order_discount_amount ?? 0);
   const billing_other_fees = Number(ord.billing_other_fees ?? 0);
@@ -177,7 +177,7 @@ export async function getPaymentNoticePrintPayload(orderId: string): Promise<Pay
   const { data: row, error } = await supabase
     .from("lab_orders")
     .select(
-      "order_number, received_at, patient_name, clinic_name, notes, payment_notice_doc_number, payment_notice_issued_at, billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, partners:partner_id(code,name)",
+      "order_number, received_at, patient_name, clinic_name, notes, payment_notice_doc_number, payment_notice_issued_at, billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, partners!lab_orders_partner_id_fkey(code,name)",
     )
     .eq("id", orderId)
     .single();
@@ -186,7 +186,7 @@ export async function getPaymentNoticePrintPayload(orderId: string): Promise<Pay
   const { data: lineRows, error: le } = await supabase
     .from("lab_order_lines")
     .select(
-      "tooth_positions, shade, tooth_count, work_type, quantity, unit_price, discount_percent, discount_amount, line_amount, notes, products:product_id(code,name,unit)",
+      "tooth_positions, shade, tooth_count, work_type, quantity, unit_price, discount_percent, discount_amount, line_amount, notes, products!lab_order_lines_product_id_fkey(code,name,unit)",
     )
     .eq("order_id", orderId)
     .order("created_at", { ascending: true });

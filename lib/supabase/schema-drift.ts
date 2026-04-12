@@ -6,6 +6,8 @@ export function isSupabaseSchemaDriftError(message: string): boolean {
     m.includes("schema cache") ||
     m.includes("could not find") ||
     m.includes("42703") ||
-    m.includes("pgrst204")
+    m.includes("pgrst204") ||
+    m.includes("pgrst201") ||
+    m.includes("more than one relationship")
   );
 }

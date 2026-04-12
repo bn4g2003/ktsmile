@@ -105,7 +105,9 @@ begin
   alter table public.lab_orders
     add constraint lab_orders_payment_notice_doc_number_key unique (payment_notice_doc_number);
 exception
+  /* unique → tạo index; lần chạy lại thường báo 42P07 duplicate_table, không phải 42710 duplicate_object */
   when duplicate_object then null;
+  when duplicate_table then null;
 end
 $u$;
 
