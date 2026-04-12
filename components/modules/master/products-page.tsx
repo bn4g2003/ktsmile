@@ -19,6 +19,7 @@ import {
 import { ProductRowDetailPanel } from "@/components/modules/master/product-row-detail-panel";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { importProductsFromExcel } from "@/lib/actions/products-import";
 import {
   createProduct,
   deleteProduct,
@@ -44,6 +45,8 @@ export function ProductsPage() {
   const [unitPrice, setUnitPrice] = React.useState("0");
   const [warranty, setWarranty] = React.useState("");
   const [isActive, setIsActive] = React.useState(true);
+  const fileImportRef = React.useRef<HTMLInputElement>(null);
+  const [importBusy, setImportBusy] = React.useState(false);
 
   const reset = () => {
     setEditing(null);
@@ -95,6 +98,36 @@ export function ProductsPage() {
       setErr(e2 instanceof Error ? e2.message : "Lỗi");
     } finally {
       setPending(false);
+    }
+  };
+
+  const onPickExcel = () => fileImportRef.current?.click();
+
+  const onExcelSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setImportBusy(true);
+    try {
+      const fd = new FormData();
+      fd.set("file", file);
+      const res = await importProductsFromExcel(fd);
+      if (res.ok) {
+        const warn = res.errors?.length
+          ? "\n\nCảnh báo:\n" + res.errors.slice(0, 40).join("\n") + (res.errors.length > 40 ? "\n…" : "")
+          : "";
+        alert((res.message ?? "Nhập xong.") + warn);
+        bumpGrid();
+      } else {
+        const detail = res.errors?.length
+          ? "\n\n" + res.errors.slice(0, 40).join("\n") + (res.errors.length > 40 ? "\n…" : "")
+          : "";
+        alert((res.message ?? "Nhập thất bại.") + detail);
+      }
+    } catch (e2) {
+      alert(e2 instanceof Error ? e2.message : "Lỗi nhập file");
+    } finally {
+      setImportBusy(false);
     }
   };
 
@@ -155,9 +188,27 @@ export function ProductsPage() {
         renderRowDetail={(row) => <ProductRowDetailPanel row={row} />}
         rowDetailTitle={(r) => "Sản phẩm " + r.code}
         toolbarExtra={
-          <Button variant="primary" type="button" size="sm" onClick={openCreate}>
-            Thêm SP
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              ref={fileImportRef}
+              type="file"
+              accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+              className="hidden"
+              onChange={(ev) => void onExcelSelected(ev)}
+            />
+            <Button
+              variant="secondary"
+              type="button"
+              size="sm"
+              disabled={importBusy}
+              onClick={onPickExcel}
+            >
+              {importBusy ? "Đang nhập…" : "Nhập Excel (bảng giá)"}
+            </Button>
+            <Button variant="primary" type="button" size="sm" onClick={openCreate}>
+              Thêm SP
+            </Button>
+          </div>
         }
         getRowId={(r) => r.id}
       />
@@ -165,7 +216,10 @@ export function ProductsPage() {
         <DialogContent size="xl" className="max-h-[90vh]">
           <DialogHeader>
             <DialogTitle>{editing ? "Sửa sản phẩm" : "Thêm sản phẩm"}</DialogTitle>
-            <DialogDescription>Mã, tên, đơn vị và đơn giá.</DialogDescription>
+            <DialogDescription>
+              Mã, tên, đơn vị và đơn giá. Import từ Excel tạo mã dạng BG-0001 theo cột STT (hoặc BG-R0001
+              nếu thiếu STT).
+            </DialogDescription>
           </DialogHeader>
           <form onSubmit={(e) => void submit(e)} className="grid gap-4 sm:grid-cols-2">
             {err ? <p className="text-sm text-[#b91c1c] sm:col-span-2">{err}</p> : null}

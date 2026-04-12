@@ -16,6 +16,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { DetailTabStrip } from "@/components/ui/detail-tab-strip";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
@@ -23,9 +24,14 @@ import { PartnerRowDetailPanel } from "@/components/modules/master/partner-row-d
 import { Textarea } from "@/components/ui/textarea";
 import { formatPartnerType } from "@/lib/format/labels";
 import {
+  importCustomerPartnersFromExcel,
+  importSupplierPartnersFromExcel,
+} from "@/lib/actions/partners-import";
+import {
   createPartner,
   deletePartner,
-  listPartners,
+  listCustomerPartners,
+  listSupplierPartners,
   updatePartner,
   type PartnerRow,
 } from "@/lib/actions/partners";
@@ -36,13 +42,21 @@ const partnerTypeOptions = [
   { value: "supplier", label: "Nhà cung cấp" },
 ];
 
+const customerPartnerTypeFilterOptions = partnerTypeOptions.filter((o) => o.value !== "supplier");
+
 export function PartnersPage() {
   const router = useRouter();
+  const [tab, setTab] = React.useState<"customers" | "suppliers">("customers");
   const [gridReload, setGridReload] = React.useState(0);
   const bumpGrid = React.useCallback(() => {
     setGridReload((n) => n + 1);
     router.refresh();
   }, [router]);
+
+  React.useEffect(() => {
+    setGridReload((n) => n + 1);
+  }, [tab]);
+
   const [open, setOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<PartnerRow | null>(null);
   const [pending, setPending] = React.useState(false);
@@ -60,11 +74,15 @@ export function PartnersPage() {
   const [notes, setNotes] = React.useState("");
   const [isActive, setIsActive] = React.useState(true);
 
+  const fileCustomerImportRef = React.useRef<HTMLInputElement>(null);
+  const fileSupplierImportRef = React.useRef<HTMLInputElement>(null);
+  const [importBusy, setImportBusy] = React.useState(false);
+
   const reset = () => {
     setEditing(null);
     setCode("");
     setName("");
-    setPartnerType("customer_clinic");
+    setPartnerType(tab === "suppliers" ? "supplier" : "customer_clinic");
     setRepresentativeName("");
     setPhone("");
     setAddress("");
@@ -77,6 +95,7 @@ export function PartnersPage() {
 
   const openCreate = () => {
     reset();
+    setPartnerType(tab === "suppliers" ? "supplier" : "customer_clinic");
     setOpen(true);
   };
 
@@ -125,6 +144,65 @@ export function PartnersPage() {
     }
   };
 
+  const onPickCustomerExcel = () => fileCustomerImportRef.current?.click();
+  const onPickSupplierExcel = () => fileSupplierImportRef.current?.click();
+
+  const onCustomerExcelSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setImportBusy(true);
+    try {
+      const fd = new FormData();
+      fd.set("file", file);
+      const res = await importCustomerPartnersFromExcel(fd);
+      if (res.ok) {
+        const warn = res.errors?.length
+          ? "\n\nCảnh báo:\n" + res.errors.slice(0, 40).join("\n") + (res.errors.length > 40 ? "\n…" : "")
+          : "";
+        alert((res.message ?? "Nhập xong.") + warn);
+        bumpGrid();
+      } else {
+        const detail = res.errors?.length
+          ? "\n\n" + res.errors.slice(0, 40).join("\n") + (res.errors.length > 40 ? "\n…" : "")
+          : "";
+        alert((res.message ?? "Nhập thất bại.") + detail);
+      }
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Lỗi nhập file");
+    } finally {
+      setImportBusy(false);
+    }
+  };
+
+  const onSupplierExcelSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setImportBusy(true);
+    try {
+      const fd = new FormData();
+      fd.set("file", file);
+      const res = await importSupplierPartnersFromExcel(fd);
+      if (res.ok) {
+        const warn = res.errors?.length
+          ? "\n\nCảnh báo:\n" + res.errors.slice(0, 40).join("\n") + (res.errors.length > 40 ? "\n…" : "")
+          : "";
+        alert((res.message ?? "Nhập xong.") + warn);
+        bumpGrid();
+      } else {
+        const detail = res.errors?.length
+          ? "\n\n" + res.errors.slice(0, 40).join("\n") + (res.errors.length > 40 ? "\n…" : "")
+          : "";
+        alert((res.message ?? "Nhập thất bại.") + detail);
+      }
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Lỗi nhập file");
+    } finally {
+      setImportBusy(false);
+    }
+  };
+
   const onDelete = async (row: PartnerRow) => {
     if (!confirm("Xóa đối tác " + row.code + "?")) return;
     try {
@@ -135,11 +213,11 @@ export function PartnersPage() {
     }
   };
 
-  const columns = React.useMemo<ColumnDef<PartnerRow, unknown>[]>(
+  const columnsCustomers = React.useMemo<ColumnDef<PartnerRow, unknown>[]>(
     () => [
       {
         accessorKey: "code",
-        header: "Mã",
+        header: "Mã KH",
         meta: { filterKey: "code", filterType: "text" },
       },
       {
@@ -154,7 +232,7 @@ export function PartnersPage() {
         meta: {
           filterKey: "partner_type",
           filterType: "select",
-          filterOptions: partnerTypeOptions,
+          filterOptions: customerPartnerTypeFilterOptions,
         },
         cell: ({ getValue }) => formatPartnerType(getValue() as PartnerRow["partner_type"]),
       },
@@ -165,9 +243,60 @@ export function PartnersPage() {
       },
       { accessorKey: "phone", header: "SĐT" },
       { accessorKey: "tax_id", header: "MST" },
+      { accessorKey: "default_discount_percent", header: "CK %" },
       {
-        accessorKey: "default_discount_percent",
-        header: "CK %",
+        id: "is_active",
+        accessorKey: "is_active",
+        header: "Hoạt động",
+        meta: {
+          filterKey: "is_active",
+          filterType: "select",
+          filterOptions: [
+            { value: "true", label: "Có" },
+            { value: "false", label: "Không" },
+          ],
+        },
+        cell: ({ getValue }) => ((getValue() as boolean) ? "Có" : "Không"),
+      },
+      {
+        id: "actions",
+        header: "Thao tác",
+        enableHiding: false,
+        meta: { filterType: "none" },
+        cell: ({ row }) => (
+          <>
+            <DataGridEditButton type="button" onClick={() => openEdit(row.original)} />
+            <DataGridDeleteButton type="button" onClick={() => void onDelete(row.original)} />
+          </>
+        ),
+      },
+    ],
+    [],
+  );
+
+  const columnsSuppliers = React.useMemo<ColumnDef<PartnerRow, unknown>[]>(
+    () => [
+      {
+        accessorKey: "code",
+        header: "Mã NCC",
+        meta: { filterKey: "code", filterType: "text" },
+      },
+      {
+        accessorKey: "name",
+        header: "Tên công ty",
+        meta: { filterKey: "name", filterType: "text" },
+      },
+      { accessorKey: "phone", header: "SĐT" },
+      { accessorKey: "tax_id", header: "MST" },
+      { accessorKey: "address", header: "Địa chỉ", meta: { filterType: "none" } },
+      {
+        accessorKey: "notes",
+        header: "Ghi chú",
+        meta: { filterType: "none" },
+        cell: ({ getValue }) => {
+          const v = getValue() as string | null;
+          return v ? (v.length > 48 ? v.slice(0, 48) + "…" : v) : "—";
+        },
       },
       {
         id: "is_active",
@@ -199,30 +328,105 @@ export function PartnersPage() {
     [],
   );
 
+  const typeOptionsForForm = editing
+    ? partnerTypeOptions
+    : tab === "suppliers"
+      ? partnerTypeOptions.filter((o) => o.value === "supplier")
+      : customerPartnerTypeFilterOptions;
+
+  const dialogTitle =
+    editing ? "Sửa đối tác" : tab === "suppliers" ? "Thêm nhà cung cấp" : "Thêm khách hàng";
+
   return (
-    <>
-      <ExcelDataGrid<PartnerRow>
-        moduleId="partners"
-        title="Danh mục đối tác"
-        columns={columns}
-        list={listPartners}
-        reloadSignal={gridReload}
-        renderRowDetail={(row) => <PartnerRowDetailPanel row={row} />}
-        rowDetailTitle={(r) => "Đối tác " + r.code}
-        toolbarExtra={
-          <Button variant="primary" type="button" size="sm" onClick={openCreate}>
-            Thêm đối tác
-          </Button>
-        }
-        getRowId={(r) => r.id}
+    <div className="flex flex-col gap-4">
+      <DetailTabStrip
+        items={[
+          { id: "customers", label: "Khách hàng" },
+          { id: "suppliers", label: "Nhà cung cấp" },
+        ]}
+        value={tab}
+        onChange={(id) => setTab(id as typeof tab)}
       />
+
+      <input
+        ref={fileCustomerImportRef}
+        type="file"
+        accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+        className="hidden"
+        onChange={(ev) => void onCustomerExcelSelected(ev)}
+      />
+      <input
+        ref={fileSupplierImportRef}
+        type="file"
+        accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+        className="hidden"
+        onChange={(ev) => void onSupplierExcelSelected(ev)}
+      />
+
+      {tab === "customers" ? (
+        <ExcelDataGrid<PartnerRow>
+          moduleId="partners_khach"
+          title="Khách hàng (phòng khám & labo)"
+          columns={columnsCustomers}
+          list={listCustomerPartners}
+          reloadSignal={gridReload}
+          renderRowDetail={(row) => <PartnerRowDetailPanel row={row} />}
+          rowDetailTitle={(r) => "Khách " + r.code}
+          toolbarExtra={
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="secondary"
+                type="button"
+                size="sm"
+                disabled={importBusy}
+                onClick={onPickCustomerExcel}
+              >
+                {importBusy ? "Đang nhập…" : "Nhập Excel (danh sách KH)"}
+              </Button>
+              <Button variant="primary" type="button" size="sm" onClick={openCreate}>
+                Thêm khách
+              </Button>
+            </div>
+          }
+          getRowId={(r) => r.id}
+        />
+      ) : (
+        <ExcelDataGrid<PartnerRow>
+          moduleId="partners_ncc"
+          title="Nhà cung cấp"
+          columns={columnsSuppliers}
+          list={listSupplierPartners}
+          reloadSignal={gridReload}
+          renderRowDetail={(row) => <PartnerRowDetailPanel row={row} />}
+          rowDetailTitle={(r) => "NCC " + r.code}
+          toolbarExtra={
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="secondary"
+                type="button"
+                size="sm"
+                disabled={importBusy}
+                onClick={onPickSupplierExcel}
+              >
+                {importBusy ? "Đang nhập…" : "Nhập Excel (NCC)"}
+              </Button>
+              <Button variant="primary" type="button" size="sm" onClick={openCreate}>
+                Thêm NCC
+              </Button>
+            </div>
+          }
+          getRowId={(r) => r.id}
+        />
+      )}
 
       <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) reset(); }}>
         <DialogContent size="xl" className="max-h-[90vh]">
           <DialogHeader>
-            <DialogTitle>{editing ? "Sửa đối tác" : "Thêm đối tác"}</DialogTitle>
+            <DialogTitle>{dialogTitle}</DialogTitle>
             <DialogDescription>
-              Nhập thông tin đối tác. Các trường bắt buộc: mã, tên, phân loại.
+              {tab === "suppliers" && !editing
+                ? "Nhà cung cấp — cùng bảng đối tác, phân loại NCC."
+                : "Nhập thông tin đối tác. Các trường bắt buộc: mã, tên, phân loại."}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={(e) => void submit(e)} className="grid gap-4 sm:grid-cols-2">
@@ -232,7 +436,7 @@ export function PartnersPage() {
               </p>
             ) : null}
             <div className="grid gap-2">
-              <Label htmlFor="p-code">Mã</Label>
+              <Label htmlFor="p-code">{tab === "suppliers" && !editing ? "Mã NCC" : "Mã"}</Label>
               <Input id="p-code" value={code} onChange={(e) => setCode(e.target.value)} required />
             </div>
             <div className="grid gap-2">
@@ -248,7 +452,7 @@ export function PartnersPage() {
                   setPartnerType(e.target.value as PartnerRow["partner_type"])
                 }
               >
-                {partnerTypeOptions.map((o) => (
+                {typeOptionsForForm.map((o) => (
                   <option key={o.value} value={o.value}>
                     {o.label}
                   </option>
@@ -314,6 +518,6 @@ export function PartnersPage() {
           </form>
         </DialogContent>
       </Dialog>
-    </>
+    </div>
   );
 }

@@ -22,7 +22,20 @@ export type PartnerRow = {
   updated_at: string;
 };
 
-export async function listPartners(args: ListArgs): Promise<ListResult<PartnerRow>> {
+function intersectPartnerTypes(
+  grid: string[],
+  scope: PartnerRow["partner_type"][],
+): PartnerRow["partner_type"][] {
+  const allowed = new Set(scope);
+  if (grid.length === 0) return [...scope];
+  const hit = grid.filter((x) => allowed.has(x as PartnerRow["partner_type"])) as PartnerRow["partner_type"][];
+  return hit.length ? hit : [...scope];
+}
+
+async function listPartnersScoped(
+  args: ListArgs,
+  scope: PartnerRow["partner_type"][] | null,
+): Promise<ListResult<PartnerRow>> {
   const supabase = createSupabaseAdmin();
   const { page, pageSize, globalSearch, filters } = args;
   let q = supabase.from("partners").select("*", { count: "exact" });
@@ -42,9 +55,16 @@ export async function listPartners(args: ListArgs): Promise<ListResult<PartnerRo
     );
   }
 
-  const pt = decodeMultiFilter(filters.partner_type);
-  if (pt.length === 1) q = q.eq("partner_type", pt[0]!);
-  else if (pt.length > 1) q = q.in("partner_type", pt);
+  const ptGrid = decodeMultiFilter(filters.partner_type);
+  if (scope) {
+    const useTypes = intersectPartnerTypes(ptGrid, scope);
+    if (useTypes.length === 1) q = q.eq("partner_type", useTypes[0]!);
+    else q = q.in("partner_type", useTypes);
+  } else {
+    if (ptGrid.length === 1) q = q.eq("partner_type", ptGrid[0]!);
+    else if (ptGrid.length > 1) q = q.in("partner_type", ptGrid);
+  }
+
   const activeOnly = narrowIsActiveFilter(filters.is_active);
   if (activeOnly !== null) q = q.eq("is_active", activeOnly);
   if (filters.code?.trim()) q = q.ilike("code", "%" + filters.code.trim() + "%");
@@ -57,6 +77,21 @@ export async function listPartners(args: ListArgs): Promise<ListResult<PartnerRo
   const { data, error, count } = await q;
   if (error) throw new Error(error.message);
   return { rows: (data ?? []) as PartnerRow[], total: count ?? 0 };
+}
+
+/** Tất cả loại (dùng khi cần danh sách không giới hạn tab). */
+export async function listPartners(args: ListArgs): Promise<ListResult<PartnerRow>> {
+  return listPartnersScoped(args, null);
+}
+
+/** Chỉ khách phòng khám & labo — dùng tab Khách hàng. */
+export async function listCustomerPartners(args: ListArgs): Promise<ListResult<PartnerRow>> {
+  return listPartnersScoped(args, ["customer_clinic", "customer_labo"]);
+}
+
+/** Chỉ nhà cung cấp — dùng tab NCC. */
+export async function listSupplierPartners(args: ListArgs): Promise<ListResult<PartnerRow>> {
+  return listPartnersScoped(args, ["supplier"]);
 }
 
 const partnerSchema = z.object({
