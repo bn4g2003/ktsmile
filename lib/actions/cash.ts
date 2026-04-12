@@ -75,6 +75,10 @@ const CASH_LIST_SELECT_LEGACY =
 const CASH_LIST_SELECT_NO_EMBED =
   "id, transaction_date, doc_number, payment_channel, direction, business_category, amount, partner_id, payer_name, description, reference_type, reference_id, created_at, updated_at";
 
+/** Vừa không embed vừa chưa có cột payer_name (migration chưa chạy + FK embed lỗi). */
+const CASH_LIST_SELECT_MINIMAL =
+  "id, transaction_date, doc_number, payment_channel, direction, business_category, amount, partner_id, description, reference_type, reference_id, created_at, updated_at";
+
 function mapCashListRow(r: Record<string, unknown>): CashRow {
   const partners = r["partners"] as { code?: string; name?: string } | null;
   return {
@@ -105,7 +109,12 @@ export async function listCashTransactions(
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
 
-  const selects = [CASH_LIST_SELECT_FULL, CASH_LIST_SELECT_LEGACY, CASH_LIST_SELECT_NO_EMBED];
+  const selects = [
+    CASH_LIST_SELECT_FULL,
+    CASH_LIST_SELECT_LEGACY,
+    CASH_LIST_SELECT_NO_EMBED,
+    CASH_LIST_SELECT_MINIMAL,
+  ];
   let lastMessage = "";
   for (let i = 0; i < selects.length; i++) {
     const sel = selects[i]!;
@@ -362,9 +371,17 @@ const CASH_RECEIPT_SELECT_LEGACY =
 const CASH_RECEIPT_SELECT_NO_EMBED =
   "doc_number, transaction_date, payment_channel, direction, business_category, amount, payer_name, description";
 
+const CASH_RECEIPT_SELECT_MINIMAL =
+  "doc_number, transaction_date, payment_channel, direction, business_category, amount, description";
+
 export async function getCashReceiptPrintPayload(id: string): Promise<CashReceiptPrintPayload> {
   const supabase = createSupabaseAdmin();
-  const selects = [CASH_RECEIPT_SELECT_FULL, CASH_RECEIPT_SELECT_LEGACY, CASH_RECEIPT_SELECT_NO_EMBED];
+  const selects = [
+    CASH_RECEIPT_SELECT_FULL,
+    CASH_RECEIPT_SELECT_LEGACY,
+    CASH_RECEIPT_SELECT_NO_EMBED,
+    CASH_RECEIPT_SELECT_MINIMAL,
+  ];
   let lastMsg = "";
   for (let i = 0; i < selects.length; i++) {
     const sel = selects[i]!;

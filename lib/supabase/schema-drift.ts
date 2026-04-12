@@ -8,6 +8,9 @@ export function isSupabaseSchemaDriftError(message: string): boolean {
     m.includes("42703") ||
     m.includes("pgrst204") ||
     m.includes("pgrst201") ||
-    m.includes("more than one relationship")
+    m.includes("pgrst200") ||
+    m.includes("more than one relationship") ||
+    /* PostgREST: embed / hint không khớp quan hệ trong cache */
+    (m.includes("relationship") && m.includes("hint"))
   );
 }

@@ -55,6 +55,17 @@ const LAB_ORDERS_LIST_SELECT_NO_PROD_UI =
 const LAB_ORDERS_LIST_SELECT_LEGACY_CORE =
   "id, order_number, received_at, partner_id, patient_name, clinic_name, status, notes, created_at, updated_at, partners!lab_orders_partner_id_fkey(code,name), lab_order_lines!lab_order_lines_order_id_fkey(line_amount)";
 
+/**
+ * Chỉ cột lab_orders (không embed) — khi PostgREST lỗi quan hệ/lồng lab_order_lines hoặc partners.
+ * Cộng dòng = 0 cho đến khi schema/API ổn định.
+ */
+const LAB_ORDERS_LIST_SELECT_SCALARS_FULL =
+  "id, order_number, received_at, partner_id, patient_name, clinic_name, status, notes, created_at, updated_at, order_category, sender_name, coord_review_status, doctor_prescription_id, billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, payment_notice_doc_number, payment_notice_issued_at";
+
+/** Scalar tối thiểu (trước migration billing / đối chiếu). */
+const LAB_ORDERS_LIST_SELECT_SCALARS_LEGACY =
+  "id, order_number, received_at, partner_id, patient_name, clinic_name, status, notes, created_at, updated_at";
+
 /** Khi embed phiếu BS vẫn lỗi — bỏ doctor_prescriptions, giữ tổng dòng. */
 const LAB_ORDERS_LIST_SELECT_NO_RX_EMBED =
   "id, order_number, received_at, partner_id, patient_name, clinic_name, status, notes, created_at, updated_at, order_category, sender_name, coord_review_status, doctor_prescription_id, billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, payment_notice_doc_number, payment_notice_issued_at, partners!lab_orders_partner_id_fkey(code,name), lab_order_lines!lab_order_lines_order_id_fkey(line_amount)";
@@ -114,7 +125,9 @@ type ListLabOrdersSelectTier =
   | "noProdUi"
   | "noRxEmbed"
   | "noProdUiNoRx"
-  | "legacyCore";
+  | "legacyCore"
+  | "scalarsFull"
+  | "scalarsLegacy";
 
 export async function listLabOrders(args: ListArgs): Promise<ListResult<LabOrderRow>> {
   const supabase = createSupabaseAdmin();
@@ -129,6 +142,8 @@ export async function listLabOrders(args: ListArgs): Promise<ListResult<LabOrder
     "noRxEmbed",
     "noProdUiNoRx",
     "legacyCore",
+    "scalarsFull",
+    "scalarsLegacy",
   ];
   const selectFor: Record<ListLabOrdersSelectTier, string> = {
     full: LAB_ORDERS_LIST_SELECT_FULL,
@@ -136,6 +151,8 @@ export async function listLabOrders(args: ListArgs): Promise<ListResult<LabOrder
     noRxEmbed: LAB_ORDERS_LIST_SELECT_NO_RX_EMBED,
     noProdUiNoRx: LAB_ORDERS_LIST_SELECT_NO_PROD_UI_NO_RX,
     legacyCore: LAB_ORDERS_LIST_SELECT_LEGACY_CORE,
+    scalarsFull: LAB_ORDERS_LIST_SELECT_SCALARS_FULL,
+    scalarsLegacy: LAB_ORDERS_LIST_SELECT_SCALARS_LEGACY,
   };
 
   let lastMessage = "";
@@ -157,7 +174,8 @@ export async function listLabOrders(args: ListArgs): Promise<ListResult<LabOrder
       q = q.ilike("order_number", "%" + filters.order_number.trim() + "%");
     if (filters.received_from?.trim()) q = q.gte("received_at", filters.received_from.trim());
     if (filters.received_to?.trim()) q = q.lte("received_at", filters.received_to.trim());
-    if (tier !== "legacyCore") {
+    const skipCoordReviewFilter = tier === "legacyCore" || tier === "scalarsLegacy";
+    if (!skipCoordReviewFilter) {
       const cr = decodeMultiFilter(filters.coord_review_status);
       if (cr.length === 1) q = q.eq("coord_review_status", cr[0]!);
       else if (cr.length > 1) q = q.in("coord_review_status", cr);
@@ -713,6 +731,8 @@ export async function listLabOrdersByPartner(partnerId: string, limit = 50): Pro
     "noRxEmbed",
     "noProdUiNoRx",
     "legacyCore",
+    "scalarsFull",
+    "scalarsLegacy",
   ];
   const selectFor: Record<ListLabOrdersSelectTier, string> = {
     full: LAB_ORDERS_LIST_SELECT_FULL,
@@ -720,6 +740,8 @@ export async function listLabOrdersByPartner(partnerId: string, limit = 50): Pro
     noRxEmbed: LAB_ORDERS_LIST_SELECT_NO_RX_EMBED,
     noProdUiNoRx: LAB_ORDERS_LIST_SELECT_NO_PROD_UI_NO_RX,
     legacyCore: LAB_ORDERS_LIST_SELECT_LEGACY_CORE,
+    scalarsFull: LAB_ORDERS_LIST_SELECT_SCALARS_FULL,
+    scalarsLegacy: LAB_ORDERS_LIST_SELECT_SCALARS_LEGACY,
   };
   let lastMessage = "";
   for (let i = 0; i < tiers.length; i++) {
