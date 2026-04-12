@@ -1,53 +1,119 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils/cn";
+
+/** Nhãn cho đường dẫn đầy đủ (trang cụ thể). */
+const ROUTE_LABELS: Record<string, string> = {
+  "/master/partners": "Đối tác",
+  "/master/products": "Sản phẩm",
+  "/master/employees": "Nhân sự",
+  "/master/prices": "Giá theo KH",
+  "/orders": "Đơn hàng",
+  "/inventory/documents": "Kho — Phiếu",
+  "/inventory/stock": "Tồn kho",
+  "/accounting/cash": "Sổ quỹ",
+  "/accounting/debt": "Công nợ",
+};
+
+/** Nhãn phân nhóm cho phần đầu path (khi chưa có ROUTE_LABELS khớp). */
+const PARENT_SEGMENT_LABELS: Record<string, string> = {
+  master: "Danh mục",
+  inventory: "Kho",
+  accounting: "Kế toán",
+  orders: "Đơn hàng",
+};
+
+function breadcrumbsForPath(pathname: string): { href: string; label: string }[] {
+  const normalized = pathname.split("?")[0] || "/";
+  const crumbs: { href: string; label: string }[] = [{ href: "/", label: "Tổng quan" }];
+  if (normalized === "/") return crumbs;
+
+  const parts = normalized.split("/").filter(Boolean);
+  let acc = "";
+  for (let i = 0; i < parts.length; i++) {
+    acc += "/" + parts[i];
+    const seg = parts[i];
+    let label: string;
+    if (ROUTE_LABELS[acc]) {
+      label = ROUTE_LABELS[acc];
+    } else if (i === parts.length - 1) {
+      label = "Chi tiết";
+    } else {
+      label = PARENT_SEGMENT_LABELS[seg] ?? seg;
+    }
+    crumbs.push({ href: acc, label });
+  }
+  return crumbs;
+}
+
+function ChevronRight({ className }: { className?: string }) {
+  return (
+    <svg
+      className={cn("h-3.5 w-3.5 shrink-0 text-[var(--on-surface-faint)]", className)}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={2}
+      aria-hidden
+    >
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+    </svg>
+  );
+}
 
 export function AppHeader({ onOpenNav }: { onOpenNav?: () => void }) {
+  const pathname = usePathname();
+  const crumbs = breadcrumbsForPath(pathname);
+
   return (
     <header className="sticky top-0 z-40 border-b border-transparent bg-[color-mix(in_srgb,var(--surface-canvas)_88%,#fff)] px-4 py-3 backdrop-blur-md sm:px-6 sm:py-4">
-      <div className="mx-auto flex max-w-[min(100%,112rem)] flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4">
-        <div className="flex min-w-0 w-full items-center gap-2 sm:contents">
-          {onOpenNav ? (
-            <Button
-              variant="ghost"
-              type="button"
-              className="min-h-11 min-w-11 shrink-0 px-0 md:hidden"
-              onClick={onOpenNav}
-              aria-label="Mở menu điều hướng"
-            >
-              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75} aria-hidden>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
-            </Button>
-          ) : null}
-          <div className="relative min-w-0 flex-1 sm:max-w-md sm:flex-1 sm:min-w-[12rem]">
-          <span className="pointer-events-none absolute left-4 top-1/2 z-10 -translate-y-1/2 text-[var(--on-surface-faint)]">
-            <svg
-              className="h-4 w-4"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={2}
-              aria-hidden
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-              />
+      <div className="mx-auto flex max-w-[min(100%,112rem)] items-center gap-3">
+        {onOpenNav ? (
+          <Button
+            variant="ghost"
+            type="button"
+            className="min-h-11 min-w-11 shrink-0 px-0 md:hidden"
+            onClick={onOpenNav}
+            aria-label="Mở menu điều hướng"
+          >
+            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75} aria-hidden>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
             </svg>
-          </span>
-            <Input
-              variant="search"
-              className="w-full min-w-0 pl-11"
-              placeholder="Tìm kiếm đơn hàng, đối tác…"
-              aria-label="Tìm kiếm toàn cục"
-            />
-          </div>
-        </div>
-        <div className="flex w-full shrink-0 items-center justify-end gap-2 sm:ml-auto sm:w-auto">
+          </Button>
+        ) : null}
+
+        <nav aria-label="Vị trí trang" className="min-w-0 flex-1">
+          <ol className="m-0 flex list-none flex-wrap items-center gap-x-1 gap-y-0.5 p-0 text-sm">
+            {crumbs.map((c, i) => {
+              const isLast = i === crumbs.length - 1;
+              return (
+                <li key={c.href} className="flex min-w-0 items-center gap-1">
+                  {i > 0 ? <ChevronRight /> : null}
+                  {isLast ? (
+                    <span
+                      className="truncate font-semibold text-[var(--on-surface)]"
+                      aria-current="page"
+                    >
+                      {c.label}
+                    </span>
+                  ) : (
+                    <Link
+                      href={c.href}
+                      className="truncate text-[var(--on-surface-muted)] transition hover:text-[var(--on-surface)] hover:underline"
+                    >
+                      {c.label}
+                    </Link>
+                  )}
+                </li>
+              );
+            })}
+          </ol>
+        </nav>
+
+        <div className="flex shrink-0 items-center gap-2">
           <Button variant="ghost" type="button" className="min-h-11 min-w-11 px-0" aria-label="Thông báo">
             <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
               <path
