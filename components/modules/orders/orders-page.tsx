@@ -29,6 +29,8 @@ import { listProductPicker } from "@/lib/actions/products";
 import {
   allowedLabOrderStatusTargets,
   canChangeLabOrderStatusFrom,
+  coordReviewStatusOptions,
+  formatCoordReviewStatus,
   formatOrderStatus,
   labOrderLineWorkTypeOptions,
   labOrderStatusOptions,
@@ -56,6 +58,7 @@ type DraftLine = {
   qty: string;
   price: string;
   disc: string;
+  disc_vnd: string;
   work_type: "new_work" | "warranty";
   notes: string;
 };
@@ -74,6 +77,7 @@ function newDraftLine(): DraftLine {
     qty: "1",
     price: "0",
     disc: "0",
+    disc_vnd: "0",
     work_type: "new_work",
     notes: "",
   };
@@ -216,6 +220,7 @@ export function OrdersPage() {
             quantity: Number(l.qty),
             unit_price: Number(l.price),
             discount_percent: Number(l.disc) || 0,
+            discount_amount: Number(l.disc_vnd) || 0,
             work_type: l.work_type,
             notes: l.notes.trim() || null,
           }));
@@ -337,6 +342,21 @@ export function OrdersPage() {
       { accessorKey: "partner_name", header: "Khách" },
       { accessorKey: "clinic_name", header: "Nha khoa" },
       { accessorKey: "patient_name", header: "Bệnh nhân" },
+      {
+        accessorKey: "coord_review_status",
+        header: "Đối chiếu",
+        meta: {
+          filterKey: "coord_review_status",
+          filterType: "select",
+          filterOptions: [...coordReviewStatusOptions],
+        },
+        cell: ({ getValue }) => formatCoordReviewStatus(String(getValue())),
+      },
+      {
+        accessorKey: "prescription_slip_code",
+        header: "Phiếu BS",
+        cell: ({ getValue }) => (getValue() ? String(getValue()) : "—"),
+      },
       {
         accessorKey: "status",
         header: "Trạng thái",
@@ -680,6 +700,22 @@ export function OrdersPage() {
                           onChange={(e) =>
                             setDraftLines((prev) =>
                               prev.map((l) => (l.key === line.key ? { ...l, disc: e.target.value } : l)),
+                            )
+                          }
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label>Giảm VNĐ (dòng)</Label>
+                        <Input
+                          type="number"
+                          min={0}
+                          step={0.01}
+                          value={line.disc_vnd}
+                          onChange={(e) =>
+                            setDraftLines((prev) =>
+                              prev.map((l) =>
+                                l.key === line.key ? { ...l, disc_vnd: e.target.value } : l,
+                              ),
                             )
                           }
                         />

@@ -216,6 +216,7 @@ export async function importLabOrdersFromExcel(formData: FormData): Promise<Impo
           clinic_name: null,
           status: "draft",
           notes: orderNotesFromGroup(lines),
+          coord_review_status: "pending",
         })
         .select("id")
         .single();
@@ -232,6 +233,7 @@ export async function importLabOrdersFromExcel(formData: FormData): Promise<Impo
         quantity: l.quantity,
         unit_price: l.unitPrice,
         discount_percent: 0,
+        discount_amount: 0,
         notes: lineNotes(l),
       }));
 

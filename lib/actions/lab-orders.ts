@@ -11,6 +11,7 @@ import {
   isAllowedLabOrderStatusTransition,
   labOrderStatusTransitionErrorMessage,
 } from "@/lib/format/labels";
+import { computeOrderGrandTotal } from "@/lib/billing/order-grand-total";
 
 export type LabOrderRow = {
   id: string;
@@ -26,13 +27,22 @@ export type LabOrderRow = {
   partner_code?: string | null;
   partner_name?: string | null;
   total_amount: number;
+  coord_review_status: "pending" | "verified";
+  doctor_prescription_id: string | null;
+  prescription_slip_code: string | null;
+  billing_order_discount_percent: number;
+  billing_order_discount_amount: number;
+  billing_other_fees: number;
+  payment_notice_doc_number: string | null;
+  payment_notice_issued_at: string | null;
+  grand_total: number;
 };
 
 export async function listLabOrders(args: ListArgs): Promise<ListResult<LabOrderRow>> {
   const supabase = createSupabaseAdmin();
   const { page, pageSize, globalSearch, filters } = args;
   let q = supabase.from("lab_orders").select(
-    "id, order_number, received_at, partner_id, patient_name, clinic_name, status, notes, created_at, updated_at, partners:partner_id(code,name), lab_order_lines(line_amount)",
+    "id, order_number, received_at, partner_id, patient_name, clinic_name, status, notes, created_at, updated_at, coord_review_status, doctor_prescription_id, billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, payment_notice_doc_number, payment_notice_issued_at, partners:partner_id(code,name), doctor_prescriptions(slip_code), lab_order_lines(line_amount)",
     { count: "exact" },
   );
 
@@ -55,21 +65,32 @@ export async function listLabOrders(args: ListArgs): Promise<ListResult<LabOrder
     q = q.ilike("order_number", "%" + filters.order_number.trim() + "%");
   if (filters.received_from?.trim()) q = q.gte("received_at", filters.received_from.trim());
   if (filters.received_to?.trim()) q = q.lte("received_at", filters.received_to.trim());
+  const cr = decodeMultiFilter(filters.coord_review_status);
+  if (cr.length === 1) q = q.eq("coord_review_status", cr[0]!);
+  else if (cr.length > 1) q = q.in("coord_review_status", cr);
 
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
-  q = q.order("received_at", { ascending: false }).range(from, to);
+  const sortAsc = filters.received_sort === "asc";
+  q = q.order("received_at", { ascending: sortAsc }).range(from, to);
 
   const { data, error, count } = await q;
   if (error) throw new Error(error.message);
 
   const rows: LabOrderRow[] = (data ?? []).map((r: Record<string, unknown>) => {
     const partners = r["partners"] as { code?: string; name?: string } | null;
+    const rawRx = r["doctor_prescriptions"] as { slip_code?: string | null } | { slip_code?: string | null }[] | null;
+    const rx = Array.isArray(rawRx) ? rawRx[0] : rawRx;
     const lines = r["lab_order_lines"] as { line_amount?: string | number }[] | null;
     let total = 0;
     for (const line of lines ?? []) {
       total += Number(line.line_amount ?? 0);
     }
+    const crs = r["coord_review_status"] as string | undefined;
+    const subtotal = Math.round(total * 100) / 100;
+    const bPct = Number(r["billing_order_discount_percent"] ?? 0);
+    const bAmt = Number(r["billing_order_discount_amount"] ?? 0);
+    const bFees = Number(r["billing_other_fees"] ?? 0);
     return {
       id: r["id"] as string,
       order_number: r["order_number"] as string,
@@ -83,7 +104,21 @@ export async function listLabOrders(args: ListArgs): Promise<ListResult<LabOrder
       updated_at: r["updated_at"] as string,
       partner_code: partners?.code,
       partner_name: partners?.name,
-      total_amount: Math.round(total * 100) / 100,
+      total_amount: subtotal,
+      coord_review_status: crs === "verified" ? "verified" : "pending",
+      doctor_prescription_id: (r["doctor_prescription_id"] as string | null) ?? null,
+      prescription_slip_code: rx?.slip_code ?? null,
+      billing_order_discount_percent: bPct,
+      billing_order_discount_amount: bAmt,
+      billing_other_fees: bFees,
+      payment_notice_doc_number: (r["payment_notice_doc_number"] as string | null) ?? null,
+      payment_notice_issued_at: (r["payment_notice_issued_at"] as string | null) ?? null,
+      grand_total: computeOrderGrandTotal({
+        subtotal_lines: subtotal,
+        billing_order_discount_percent: bPct,
+        billing_order_discount_amount: bAmt,
+        billing_other_fees: bFees,
+      }),
     };
   });
 
@@ -109,6 +144,7 @@ const labOrderLineDraftSchema = z.object({
   quantity: z.coerce.number().positive(),
   unit_price: z.coerce.number().min(0),
   discount_percent: z.coerce.number().min(0).max(100).optional().nullable(),
+  discount_amount: z.coerce.number().min(0).optional().nullable(),
   work_type: z.enum(["new_work", "warranty"]).optional(),
   notes: z.string().max(1000).optional().nullable(),
 });
@@ -181,6 +217,7 @@ export async function createLabOrder(
         clinic_name: h.clinic_name?.trim() ? h.clinic_name.trim() : null,
         status: h.status ?? "delivered",
         notes: h.notes?.trim() ? h.notes.trim() : null,
+        coord_review_status: "pending",
       })
       .select("id")
       .single();
@@ -206,6 +243,7 @@ export async function createLabOrder(
           quantity: ln.quantity,
           unit_price: ln.unit_price,
           discount_percent: ln.discount_percent ?? 0,
+          discount_amount: ln.discount_amount ?? 0,
           work_type: ln.work_type ?? "new_work",
           notes: ln.notes?.trim() ? ln.notes.trim() : null,
         });
@@ -288,6 +326,7 @@ export type LabOrderLineRow = {
   quantity: number;
   unit_price: number;
   discount_percent: number;
+  discount_amount: number;
   line_amount: number;
   notes: string | null;
   created_at: string;
@@ -300,7 +339,7 @@ export async function listLabOrderLines(orderId: string): Promise<LabOrderLineRo
   const { data, error } = await supabase
     .from("lab_order_lines")
     .select(
-      "id, order_id, product_id, tooth_positions, shade, tooth_count, work_type, quantity, unit_price, discount_percent, line_amount, notes, created_at, products:product_id(code,name)",
+      "id, order_id, product_id, tooth_positions, shade, tooth_count, work_type, quantity, unit_price, discount_percent, discount_amount, line_amount, notes, created_at, products:product_id(code,name)",
     )
     .eq("order_id", orderId)
     .order("created_at", { ascending: true });
@@ -321,6 +360,7 @@ export async function listLabOrderLines(orderId: string): Promise<LabOrderLineRo
       quantity: Number(r["quantity"]),
       unit_price: Number(r["unit_price"]),
       discount_percent: Number(r["discount_percent"]),
+      discount_amount: Number(r["discount_amount"] ?? 0),
       line_amount: Number(r["line_amount"]),
       notes: (r["notes"] as string | null) ?? null,
       created_at: r["created_at"] as string,
@@ -339,6 +379,7 @@ const lineSchema = z.object({
   quantity: z.coerce.number().positive(),
   unit_price: z.coerce.number().min(0),
   discount_percent: z.coerce.number().min(0).max(100).optional().nullable(),
+  discount_amount: z.coerce.number().min(0).optional().nullable(),
   work_type: z.enum(["new_work", "warranty"]).optional(),
   notes: z.string().max(1000).optional().nullable(),
 });
@@ -349,6 +390,7 @@ export async function createLabOrderLine(input: z.infer<typeof lineSchema>) {
   const { error } = await supabase.from("lab_order_lines").insert({
     ...row,
     discount_percent: row.discount_percent ?? 0,
+    discount_amount: row.discount_amount ?? 0,
     tooth_count: row.tooth_count ?? null,
     work_type: row.work_type ?? "new_work",
   });
@@ -411,7 +453,7 @@ export async function getLabOrder(id: string) {
   const { data, error } = await supabase
     .from("lab_orders")
     .select(
-      "id, order_number, received_at, partner_id, patient_name, clinic_name, status, notes, created_at, updated_at, partners:partner_id(code,name)",
+      "id, order_number, received_at, partner_id, patient_name, clinic_name, status, notes, created_at, updated_at, coord_review_status, coord_reviewed_at, doctor_prescription_id, billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, payment_notice_doc_number, payment_notice_issued_at, partners:partner_id(code,name), doctor_prescriptions(slip_code, slip_date)",
     )
     .eq("id", id)
     .single();
@@ -435,7 +477,7 @@ export async function getLabOrderPrintPayload(orderId: string): Promise<LabOrder
   const { data: lineRows, error: le } = await supabase
     .from("lab_order_lines")
     .select(
-      "tooth_positions, shade, tooth_count, work_type, quantity, unit_price, discount_percent, line_amount, notes, products:product_id(code,name,unit)",
+      "tooth_positions, shade, tooth_count, work_type, quantity, unit_price, discount_percent, discount_amount, line_amount, notes, products:product_id(code,name,unit)",
     )
     .eq("order_id", orderId)
     .order("created_at", { ascending: true });
@@ -457,6 +499,7 @@ export async function getLabOrderPrintPayload(orderId: string): Promise<LabOrder
       quantity: Number(r["quantity"]),
       unit_price: Number(r["unit_price"]),
       discount_percent: Number(r["discount_percent"]),
+      discount_amount: Number(r["discount_amount"] ?? 0),
       line_amount: Number(r["line_amount"]),
       notes: (r["notes"] as string | null) ?? null,
     };
@@ -481,7 +524,7 @@ export async function listLabOrdersByPartner(partnerId: string, limit = 50): Pro
   const { data, error } = await supabase
     .from("lab_orders")
     .select(
-      "id, order_number, received_at, partner_id, patient_name, clinic_name, status, notes, created_at, updated_at, partners:partner_id(code,name), lab_order_lines(line_amount)",
+      "id, order_number, received_at, partner_id, patient_name, clinic_name, status, notes, created_at, updated_at, coord_review_status, doctor_prescription_id, billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, payment_notice_doc_number, payment_notice_issued_at, partners:partner_id(code,name), doctor_prescriptions(slip_code), lab_order_lines(line_amount)",
     )
     .eq("partner_id", partnerId)
     .order("received_at", { ascending: false })
@@ -490,11 +533,18 @@ export async function listLabOrdersByPartner(partnerId: string, limit = 50): Pro
 
   return (data ?? []).map((r: Record<string, unknown>) => {
     const partners = r["partners"] as { code?: string; name?: string } | null;
+    const rawRx = r["doctor_prescriptions"] as { slip_code?: string | null } | { slip_code?: string | null }[] | null;
+    const rx = Array.isArray(rawRx) ? rawRx[0] : rawRx;
     const lines = r["lab_order_lines"] as { line_amount?: string | number }[] | null;
     let total = 0;
     for (const line of lines ?? []) {
       total += Number(line.line_amount ?? 0);
     }
+    const crs = r["coord_review_status"] as string | undefined;
+    const subtotal = Math.round(total * 100) / 100;
+    const bPct = Number(r["billing_order_discount_percent"] ?? 0);
+    const bAmt = Number(r["billing_order_discount_amount"] ?? 0);
+    const bFees = Number(r["billing_other_fees"] ?? 0);
     return {
       id: r["id"] as string,
       order_number: r["order_number"] as string,
@@ -508,7 +558,21 @@ export async function listLabOrdersByPartner(partnerId: string, limit = 50): Pro
       updated_at: r["updated_at"] as string,
       partner_code: partners?.code,
       partner_name: partners?.name,
-      total_amount: Math.round(total * 100) / 100,
+      total_amount: subtotal,
+      coord_review_status: crs === "verified" ? "verified" : "pending",
+      doctor_prescription_id: (r["doctor_prescription_id"] as string | null) ?? null,
+      prescription_slip_code: rx?.slip_code ?? null,
+      billing_order_discount_percent: bPct,
+      billing_order_discount_amount: bAmt,
+      billing_other_fees: bFees,
+      payment_notice_doc_number: (r["payment_notice_doc_number"] as string | null) ?? null,
+      payment_notice_issued_at: (r["payment_notice_issued_at"] as string | null) ?? null,
+      grand_total: computeOrderGrandTotal({
+        subtotal_lines: subtotal,
+        billing_order_discount_percent: bPct,
+        billing_order_discount_amount: bAmt,
+        billing_other_fees: bFees,
+      }),
     };
   });
 }

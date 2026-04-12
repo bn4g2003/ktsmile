@@ -23,8 +23,20 @@ import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { LabOrderStatusQuickDialog } from "@/components/modules/orders/lab-order-status-quick-dialog";
 import { LabOrderPrintButton } from "@/components/shared/reports/lab-order-print-button";
+import { PaymentNoticePrintButton } from "@/components/shared/reports/payment-notice-print-button";
 import { Card } from "@/components/ui/card";
 import { DetailPreview } from "@/components/ui/detail-preview";
+import {
+  issuePaymentNoticeForLabOrder,
+  updateLabOrderBilling,
+  getLabOrderBillingTotals,
+} from "@/lib/actions/billing";
+import {
+  compareDoctorPrescriptionToLabOrder,
+  createDoctorPrescriptionFromLabOrder,
+  linkLabOrderToDoctorPrescription,
+  listDoctorPrescriptionsByPartner,
+} from "@/lib/actions/doctor-prescriptions";
 import { listProductPicker } from "@/lib/actions/products";
 import {
   createLabOrderLine,
@@ -41,6 +53,7 @@ import {
 import {
   allowedLabOrderStatusTargets,
   canChangeLabOrderStatusFrom,
+  formatCoordReviewStatus,
   formatLabOrderLineWorkType,
   formatOrderStatus,
   labOrderLineWorkTypeOptions,
@@ -66,6 +79,7 @@ export function OrderDetailPage() {
   const [qty, setQty] = React.useState("1");
   const [price, setPrice] = React.useState("0");
   const [disc, setDisc] = React.useState("0");
+  const [discVnd, setDiscVnd] = React.useState("0");
   const [notes, setNotes] = React.useState("");
   const [toothCount, setToothCount] = React.useState("");
   const [workType, setWorkType] = React.useState<"new_work" | "warranty">("new_work");
@@ -73,6 +87,20 @@ export function OrderDetailPage() {
   const [quickStatus, setQuickStatus] = React.useState<LabOrderRow["status"]>("draft");
   const [quickPending, setQuickPending] = React.useState(false);
   const [quickErr, setQuickErr] = React.useState<string | null>(null);
+
+  const [rxList, setRxList] = React.useState<{ id: string; slip_code: string | null; slip_date: string; patient_name: string }[]>([]);
+  const [rxSelect, setRxSelect] = React.useState("");
+  const [slipCodeNew, setSlipCodeNew] = React.useState("");
+  const [rxBusy, setRxBusy] = React.useState(false);
+  const [rxMsg, setRxMsg] = React.useState<string | null>(null);
+  const [compareMsg, setCompareMsg] = React.useState<string | null>(null);
+
+  const [bPct, setBPct] = React.useState("0");
+  const [bAmt, setBAmt] = React.useState("0");
+  const [bFees, setBFees] = React.useState("0");
+  const [billTotals, setBillTotals] = React.useState<{ subtotal_lines: number; grand_total: number } | null>(null);
+  const [billBusy, setBillBusy] = React.useState(false);
+  const [issueBusy, setIssueBusy] = React.useState(false);
 
   const loadHeader = React.useCallback(async () => {
     const h = await getLabOrder(id);
@@ -89,6 +117,27 @@ export function OrderDetailPage() {
     void loadHeader();
     void listProductPicker().then(setProducts).catch(() => {});
   }, [loadHeader]);
+
+  const partnerIdHdr = (header?.partner_id as string) ?? "";
+
+  React.useEffect(() => {
+    if (!partnerIdHdr) return;
+    void listDoctorPrescriptionsByPartner(partnerIdHdr).then(setRxList).catch(() => setRxList([]));
+  }, [partnerIdHdr, gridReload]);
+
+  React.useEffect(() => {
+    if (!header) {
+      setBillTotals(null);
+      return;
+    }
+    setBPct(String(header.billing_order_discount_percent ?? 0));
+    setBAmt(String(header.billing_order_discount_amount ?? 0));
+    setBFees(String(header.billing_other_fees ?? 0));
+    setRxSelect(String(header.doctor_prescription_id ?? ""));
+    void getLabOrderBillingTotals(id)
+      .then((t) => (t ? setBillTotals({ subtotal_lines: t.subtotal_lines, grand_total: t.grand_total }) : setBillTotals(null)))
+      .catch(() => setBillTotals(null));
+  }, [header, id, gridReload]);
 
   const partnerId = (header?.partner_id as string) ?? "";
 
@@ -135,6 +184,7 @@ export function OrderDetailPage() {
     setQty("1");
     setPrice("0");
     setDisc("0");
+    setDiscVnd("0");
     setNotes("");
     setToothCount("");
     setWorkType("new_work");
@@ -156,6 +206,7 @@ export function OrderDetailPage() {
     setQty(String(row.quantity));
     setPrice(String(row.unit_price));
     setDisc(String(row.discount_percent));
+    setDiscVnd(String(row.discount_amount ?? 0));
     setNotes(row.notes ?? "");
     setErr(null);
     setOpen(true);
@@ -179,6 +230,7 @@ export function OrderDetailPage() {
         quantity: Number(qty),
         unit_price: Number(price),
         discount_percent: Number(disc) || 0,
+        discount_amount: Number(discVnd) || 0,
         work_type: workType,
         notes: notes.trim() || null,
       };
@@ -226,6 +278,11 @@ export function OrderDetailPage() {
       { accessorKey: "quantity", header: "SL" },
       { accessorKey: "unit_price", header: "Đơn giá" },
       { accessorKey: "discount_percent", header: "CK %" },
+      {
+        accessorKey: "discount_amount",
+        header: "Giảm VNĐ",
+        cell: ({ getValue }) => Number(getValue()).toLocaleString("vi-VN"),
+      },
       { accessorKey: "line_amount", header: "Thành tiền" },
       {
         id: "actions",
@@ -256,6 +313,7 @@ export function OrderDetailPage() {
           { label: "Số lượng", value: row.quantity },
           { label: "Đơn giá", value: row.unit_price },
           { label: "CK %", value: row.discount_percent },
+          { label: "Giảm VNĐ", value: row.discount_amount },
           { label: "Thành tiền", value: row.line_amount },
           { label: "Ghi chú", value: row.notes, span: "full" },
           { label: "ID dòng", value: row.id, span: "full" },
@@ -332,12 +390,190 @@ export function OrderDetailPage() {
                 · BN: {String(header.patient_name)} · Ngày nhận: {String(header.received_at)}
               </p>
             </div>
-            <LabOrderPrintButton orderId={id} label="In / lưu PDF (trình duyệt)" />
+            <div className="flex flex-wrap gap-2">
+              <LabOrderPrintButton orderId={id} label="In / lưu PDF (trình duyệt)" />
+              <PaymentNoticePrintButton orderId={id} label="In GBTT" />
+            </div>
           </div>
+          <p className="text-xs text-[var(--on-surface-muted)]">
+            Đối chiếu điều phối:{" "}
+            <strong>{formatCoordReviewStatus(String(header.coord_review_status ?? "pending"))}</strong>
+            {header.coord_reviewed_at ? " · " + String(header.coord_reviewed_at) : null} ·{" "}
+            <Link href="/orders/review" className="text-[var(--primary)] underline-offset-2 hover:underline">
+              Mở trang kiểm tra đơn
+            </Link>
+          </p>
         </Card>
       ) : (
         <p className="text-[var(--on-surface-muted)]">Đang tải…</p>
       )}
+
+      {header ? (
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Card className="space-y-3 p-5">
+            <h2 className="text-sm font-semibold text-[var(--on-surface)]">Phiếu chỉ định bác sĩ</h2>
+            <p className="text-xs text-[var(--on-surface-muted)]">
+              Liên kết phiếu gốc để so khớp số lượng với đơn điều phối. Có thể tạo phiếu từ dòng đơn hiện tại làm mốc.
+            </p>
+            {rxMsg ? <p className="text-xs text-[#b91c1c]">{rxMsg}</p> : null}
+            {compareMsg ? (
+              <pre className="max-h-24 overflow-auto whitespace-pre-wrap rounded bg-[var(--surface-muted)] p-2 text-xs">{compareMsg}</pre>
+            ) : null}
+            <div className="grid gap-2">
+              <Label htmlFor="rx-link">Gắn phiếu có sẵn</Label>
+              <Select
+                id="rx-link"
+                value={rxSelect}
+                onChange={(e) => setRxSelect(e.target.value)}
+              >
+                <option value="">— Không chọn —</option>
+                {rxList.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {(r.slip_code ?? r.id.slice(0, 8)) + " · " + r.slip_date + " · " + r.patient_name}
+                  </option>
+                ))}
+              </Select>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                disabled={rxBusy}
+                onClick={() => {
+                  setRxBusy(true);
+                  setRxMsg(null);
+                  void linkLabOrderToDoctorPrescription({ order_id: id, prescription_id: rxSelect || null })
+                    .then(() => {
+                      bumpGrid();
+                      void loadHeader();
+                    })
+                    .catch((e) => setRxMsg(e instanceof Error ? e.message : "Lỗi"))
+                    .finally(() => setRxBusy(false));
+                }}
+              >
+                Lưu liên kết
+              </Button>
+            </div>
+            <div className="grid gap-2 border-t border-[var(--border-ghost)] pt-3">
+              <Label htmlFor="rx-slip">Mã phiếu BS mới (tuỳ chọn)</Label>
+              <Input id="rx-slip" value={slipCodeNew} onChange={(e) => setSlipCodeNew(e.target.value)} placeholder="VD: BS-2026-001" />
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  disabled={rxBusy}
+                  onClick={() => {
+                    setRxBusy(true);
+                    setRxMsg(null);
+                    void createDoctorPrescriptionFromLabOrder(id, slipCodeNew.trim() || null)
+                      .then(() => {
+                        setSlipCodeNew("");
+                        bumpGrid();
+                        void loadHeader();
+                      })
+                      .catch((e) => setRxMsg(e instanceof Error ? e.message : "Lỗi"))
+                      .finally(() => setRxBusy(false));
+                  }}
+                >
+                  Tạo phiếu từ đơn này
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={rxBusy}
+                  onClick={() => {
+                    setCompareMsg(null);
+                    void compareDoctorPrescriptionToLabOrder(id)
+                      .then(({ hasPrescription, result }) => {
+                        if (!hasPrescription) {
+                          setCompareMsg("Chưa gắn phiếu BS.");
+                          return;
+                        }
+                        setCompareMsg(result.ok ? "Khớp nhóm SL." : result.messages.join("\n"));
+                      })
+                      .catch((e) => setCompareMsg(e instanceof Error ? e.message : "Lỗi"));
+                  }}
+                >
+                  So khớp nhanh
+                </Button>
+              </div>
+            </div>
+          </Card>
+
+          <Card className="space-y-3 p-5">
+            <h2 className="text-sm font-semibold text-[var(--on-surface)]">Giấy báo thanh toán</h2>
+            {billTotals ? (
+              <p className="text-xs text-[var(--on-surface-muted)]">
+                Cộng dòng: <strong>{billTotals.subtotal_lines.toLocaleString("vi-VN")}</strong> · Phải thu:{" "}
+                <strong>{billTotals.grand_total.toLocaleString("vi-VN")}</strong>
+                {header.payment_notice_doc_number ? (
+                  <>
+                    <br />
+                    Số GBTT: <strong>{String(header.payment_notice_doc_number)}</strong>
+                  </>
+                ) : null}
+              </p>
+            ) : null}
+            <div className="grid gap-2 sm:grid-cols-3">
+              <div className="grid gap-1">
+                <Label htmlFor="bill-pct">CK tổng %</Label>
+                <Input id="bill-pct" value={bPct} onChange={(e) => setBPct(e.target.value)} inputMode="decimal" />
+              </div>
+              <div className="grid gap-1">
+                <Label htmlFor="bill-amt">CK tổng VNĐ</Label>
+                <Input id="bill-amt" value={bAmt} onChange={(e) => setBAmt(e.target.value)} inputMode="decimal" />
+              </div>
+              <div className="grid gap-1">
+                <Label htmlFor="bill-fees">Phí khác (+)</Label>
+                <Input id="bill-fees" value={bFees} onChange={(e) => setBFees(e.target.value)} inputMode="decimal" />
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                disabled={billBusy}
+                onClick={() => {
+                  setBillBusy(true);
+                  void updateLabOrderBilling(id, {
+                    billing_order_discount_percent: Number(bPct) || 0,
+                    billing_order_discount_amount: Number(bAmt) || 0,
+                    billing_other_fees: Number(bFees) || 0,
+                  })
+                    .then(() => {
+                      bumpGrid();
+                      void loadHeader();
+                    })
+                    .catch((e) => alert(e instanceof Error ? e.message : "Lỗi"))
+                    .finally(() => setBillBusy(false));
+                }}
+              >
+                {billBusy ? "Đang lưu…" : "Lưu điều chỉnh"}
+              </Button>
+              <Button
+                type="button"
+                variant="primary"
+                size="sm"
+                disabled={issueBusy}
+                onClick={() => {
+                  setIssueBusy(true);
+                  void issuePaymentNoticeForLabOrder(id)
+                    .then(() => {
+                      bumpGrid();
+                      void loadHeader();
+                    })
+                    .catch((e) => alert(e instanceof Error ? e.message : "Lỗi"))
+                    .finally(() => setIssueBusy(false));
+                }}
+              >
+                {issueBusy ? "…" : "Cấp số GBTT"}
+              </Button>
+            </div>
+          </Card>
+        </div>
+      ) : null}
 
       <ExcelDataGrid<LabOrderLineRow>
         moduleId={"lab_order_lines_" + id}
@@ -458,6 +694,17 @@ export function OrderDetailPage() {
                 step={0.01}
                 value={disc}
                 onChange={(e) => setDisc(e.target.value)}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="ln-disc-vnd">Giảm VNĐ (dòng)</Label>
+              <Input
+                id="ln-disc-vnd"
+                type="number"
+                min={0}
+                step={0.01}
+                value={discVnd}
+                onChange={(e) => setDiscVnd(e.target.value)}
               />
             </div>
             <div className="grid gap-2 sm:col-span-2">

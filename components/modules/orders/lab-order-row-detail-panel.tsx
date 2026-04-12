@@ -5,6 +5,7 @@ import * as React from "react";
 import { DetailPreview } from "@/components/ui/detail-preview";
 import { DetailTabStrip } from "@/components/ui/detail-tab-strip";
 import {
+  formatCoordReviewStatus,
   formatLabOrderLineWorkType,
   formatOrderStatus,
   orderStatusBadgeClassName,
@@ -47,6 +48,7 @@ function OrderLinesBlock({ orderId }: { orderId: string }) {
             <th className="px-3 py-2 text-right">SL</th>
             <th className="px-3 py-2 text-right">Đơn giá</th>
             <th className="px-3 py-2 text-right">CK %</th>
+            <th className="px-3 py-2 text-right">Giảm VNĐ</th>
             <th className="px-3 py-2 text-right">Thành tiền</th>
           </tr>
         </thead>
@@ -69,6 +71,7 @@ function OrderLinesBlock({ orderId }: { orderId: string }) {
                 {ln.unit_price.toLocaleString("vi-VN")}
               </td>
               <td className="px-3 py-2 text-right tabular-nums">{ln.discount_percent}</td>
+              <td className="px-3 py-2 text-right tabular-nums">{ln.discount_amount.toLocaleString("vi-VN")}</td>
               <td className="px-3 py-2 text-right tabular-nums font-medium">
                 {ln.line_amount.toLocaleString("vi-VN")}
               </td>
@@ -112,7 +115,17 @@ export function LabOrderRowDetailPanel({ row }: { row: LabOrderRow }) {
                 <span className={orderStatusBadgeClassName(row.status)}>{formatOrderStatus(row.status)}</span>
               ),
             },
-            { label: "Tổng tiền", value: row.total_amount.toLocaleString("vi-VN") },
+            { label: "Tổng dòng", value: row.total_amount.toLocaleString("vi-VN") },
+            { label: "Phải thu (GBTT)", value: row.grand_total.toLocaleString("vi-VN") },
+            {
+              label: "Đối chiếu",
+              value: formatCoordReviewStatus(row.coord_review_status),
+            },
+            {
+              label: "Phiếu BS",
+              value: row.prescription_slip_code ?? (row.doctor_prescription_id ? row.doctor_prescription_id.slice(0, 8) : "—"),
+            },
+            { label: "Số GBTT", value: row.payment_notice_doc_number ?? "—" },
             { label: "Ghi chú", value: row.notes, span: "full" },
             {
               label: "Mở trang đơn",

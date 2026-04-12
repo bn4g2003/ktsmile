@@ -28,6 +28,7 @@ const groups: { title: string; items: { href: string; label: string }[] }[] = [
     title: "Vận hành",
     items: [
       { href: "/orders", label: "Đơn hàng" },
+      { href: "/orders/review", label: "Kiểm tra đơn" },
       { href: "/inventory/documents", label: "Kho — Phiếu" },
       { href: "/inventory/stock", label: "Tồn kho" },
     ],
@@ -35,6 +36,7 @@ const groups: { title: string; items: { href: string; label: string }[] }[] = [
   {
     title: "Kế toán",
     items: [
+      { href: "/accounting/sales", label: "Doanh số & GBTT" },
       { href: "/accounting/cash", label: "Sổ quỹ" },
       { href: "/accounting/debt", label: "Công nợ" },
     ],

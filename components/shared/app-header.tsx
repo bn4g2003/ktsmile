@@ -12,8 +12,10 @@ const ROUTE_LABELS: Record<string, string> = {
   "/master/employees": "Nhân sự",
   "/master/prices": "Giá theo KH",
   "/orders": "Đơn hàng",
+  "/orders/review": "Kiểm tra đơn",
   "/inventory/documents": "Kho — Phiếu",
   "/inventory/stock": "Tồn kho",
+  "/accounting/sales": "Doanh số & GBTT",
   "/accounting/cash": "Sổ quỹ",
   "/accounting/debt": "Công nợ",
 };

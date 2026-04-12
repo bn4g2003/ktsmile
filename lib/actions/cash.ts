@@ -3,6 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createSupabaseAdmin } from "@/lib/supabase/server";
+import type { CashReceiptPrintPayload } from "@/lib/reports/cash-receipt-html";
+
+export type { CashReceiptPrintPayload };
 import type { ListArgs, ListResult } from "@/components/shared/data-grid/excel-data-grid";
 import { decodeMultiFilter } from "@/lib/grid/multi-filter";
 
@@ -15,6 +18,7 @@ export type CashRow = {
   business_category: string;
   amount: number;
   partner_id: string | null;
+  payer_name: string | null;
   description: string | null;
   reference_type: string | null;
   reference_id: string | null;
@@ -32,6 +36,7 @@ const cashSchema = z.object({
   business_category: z.string().min(1).max(200),
   amount: z.coerce.number().positive(),
   partner_id: z.string().uuid().optional().nullable(),
+  payer_name: z.string().max(500).optional().nullable(),
   description: z.string().max(2000).optional().nullable(),
   reference_type: z.string().max(100).optional().nullable(),
   reference_id: z
@@ -49,6 +54,7 @@ function cashInsertPayload(row: z.infer<typeof cashSchema>) {
     business_category: row.business_category,
     amount: row.amount,
     partner_id: row.partner_id ?? null,
+    payer_name: row.payer_name?.trim() ? row.payer_name.trim() : null,
     description: row.description ?? null,
     reference_type: row.reference_type ?? null,
     reference_id: row.reference_id ?? null,
@@ -61,7 +67,7 @@ export async function listCashTransactions(
   const supabase = createSupabaseAdmin();
   const { page, pageSize, globalSearch, filters } = args;
   let q = supabase.from("cash_transactions").select(
-    "id, transaction_date, doc_number, payment_channel, direction, business_category, amount, partner_id, description, reference_type, reference_id, created_at, updated_at, partners:partner_id(code,name)",
+    "id, transaction_date, doc_number, payment_channel, direction, business_category, amount, partner_id, payer_name, description, reference_type, reference_id, created_at, updated_at, partners:partner_id(code,name)",
     { count: "exact" },
   );
 
@@ -109,6 +115,7 @@ export async function listCashTransactions(
       business_category: r["business_category"] as string,
       amount: Number(r["amount"]),
       partner_id: (r["partner_id"] as string | null) ?? null,
+      payer_name: (r["payer_name"] as string | null) ?? null,
       description: (r["description"] as string | null) ?? null,
       reference_type: (r["reference_type"] as string | null) ?? null,
       reference_id: (r["reference_id"] as string | null) ?? null,
@@ -295,5 +302,31 @@ export async function getCashFlowTotalsForRange(
     payment: s.totals.paymentInPeriod,
     dateFrom: s.dateFrom,
     dateTo: s.dateTo,
+  };
+}
+
+export async function getCashReceiptPrintPayload(id: string): Promise<CashReceiptPrintPayload> {
+  const supabase = createSupabaseAdmin();
+  const { data, error } = await supabase
+    .from("cash_transactions")
+    .select(
+      "doc_number, transaction_date, payment_channel, direction, business_category, amount, payer_name, description, partners:partner_id(code,name)",
+    )
+    .eq("id", id)
+    .single();
+  if (error || !data) throw new Error(error?.message ?? "Không tìm thấy chứng từ.");
+  const row = data as Record<string, unknown>;
+  const partners = row["partners"] as { code?: string; name?: string } | null;
+  return {
+    doc_number: row["doc_number"] as string,
+    transaction_date: row["transaction_date"] as string,
+    payment_channel: row["payment_channel"] as string,
+    direction: row["direction"] as string,
+    business_category: row["business_category"] as string,
+    amount: Number(row["amount"]),
+    payer_name: (row["payer_name"] as string | null) ?? null,
+    partner_code: partners?.code ?? null,
+    partner_name: partners?.name ?? null,
+    description: (row["description"] as string | null) ?? null,
   };
 }

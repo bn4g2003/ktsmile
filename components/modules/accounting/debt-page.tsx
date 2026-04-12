@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { DebtChartsSection } from "@/components/modules/accounting/debt-charts-section";
 import { importDebtOpeningFromExcel } from "@/lib/actions/debt-import";
-import { listDebtReport, type DebtRow } from "@/lib/actions/debt";
+import { carryForwardOpeningToNextMonth, listDebtReport, type DebtRow } from "@/lib/actions/debt";
 
 export function DebtPage() {
   const router = useRouter();
@@ -22,6 +22,7 @@ export function DebtPage() {
   const [gridReload, setGridReload] = React.useState(0);
   const fileImportRef = React.useRef<HTMLInputElement>(null);
   const [importBusy, setImportBusy] = React.useState(false);
+  const [carryBusy, setCarryBusy] = React.useState(false);
 
   const bumpGrid = React.useCallback(() => {
     setGridReload((n) => n + 1);
@@ -146,6 +147,35 @@ export function DebtPage() {
           onClick={() => setShowCharts((v) => !v)}
         >
           {showCharts ? "Ẩn biểu đồ" : "Hiện biểu đồ công nợ"}
+        </Button>
+        <Button
+          type="button"
+          variant="primary"
+          size="sm"
+          className="min-h-8 self-end"
+          disabled={carryBusy}
+          onClick={() => {
+            if (
+              !confirm(
+                "Kết chuyển nợ cuối kỳ tháng " +
+                  month +
+                  "/" +
+                  year +
+                  " sang NỢ ĐẦU KỲ tháng sau cho toàn bộ khách? (ghi đè nếu đã có dòng đầu kỳ tháng đích)",
+              )
+            )
+              return;
+            setCarryBusy(true);
+            void carryForwardOpeningToNextMonth(Number(year), Number(month))
+              .then((r) => {
+                alert("Đã cập nhật " + r.upserted + " khách — nợ đầu kỳ tháng " + r.nextMonth + "/" + r.nextYear + ".");
+                bumpGrid();
+              })
+              .catch((e) => alert(e instanceof Error ? e.message : "Lỗi"))
+              .finally(() => setCarryBusy(false));
+          }}
+        >
+          {carryBusy ? "Đang kết chuyển…" : "Kết chuyển → nợ đầu kỳ tháng sau"}
         </Button>
       </Card>
       {showCharts ? <DebtChartsSection year={year} month={month} /> : null}

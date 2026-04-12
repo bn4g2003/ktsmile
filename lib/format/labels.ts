@@ -139,3 +139,19 @@ const dirLabels: Record<string, string> = {
 export function formatCashDirection(d: string) {
   return dirLabels[d] ?? d;
 }
+
+export const coordReviewStatusOptions = [
+  { value: "pending", label: "Chờ đối chiếu" },
+  { value: "verified", label: "Đã duyệt" },
+] as const;
+
+export type CoordReviewStatus = (typeof coordReviewStatusOptions)[number]["value"];
+
+const coordReviewLabels: Record<string, string> = {
+  pending: "Chờ đối chiếu",
+  verified: "Đã duyệt",
+};
+
+export function formatCoordReviewStatus(s: string) {
+  return coordReviewLabels[s] ?? s;
+}

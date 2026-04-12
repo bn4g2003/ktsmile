@@ -24,6 +24,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { listPartnerPicker } from "@/lib/actions/partners";
 import { formatCashDirection } from "@/lib/format/labels";
 import { CashFlowChartsSection } from "@/components/modules/accounting/cash-flow-charts-section";
+import { CashReceiptPrintButton } from "@/components/shared/reports/cash-receipt-print-button";
 import {
   createCashTransaction,
   deleteCashTransaction,
@@ -56,6 +57,7 @@ export function CashPage() {
   const [category, setCategory] = React.useState("");
   const [amount, setAmount] = React.useState("0");
   const [partnerId, setPartnerId] = React.useState("");
+  const [payerName, setPayerName] = React.useState("");
   const [desc, setDesc] = React.useState("");
   const [refType, setRefType] = React.useState("");
   const [refId, setRefId] = React.useState("");
@@ -74,6 +76,7 @@ export function CashPage() {
     setCategory("");
     setAmount("0");
     setPartnerId("");
+    setPayerName("");
     setDesc("");
     setRefType("");
     setRefId("");
@@ -94,6 +97,7 @@ export function CashPage() {
     setCategory(row.business_category);
     setAmount(String(row.amount));
     setPartnerId(row.partner_id ?? "");
+    setPayerName(row.payer_name ?? "");
     setDesc(row.description ?? "");
     setRefType(row.reference_type ?? "");
     setRefId(row.reference_id ?? "");
@@ -114,6 +118,7 @@ export function CashPage() {
         business_category: category.trim(),
         amount: Number(amount),
         partner_id: partnerId || null,
+        payer_name: payerName.trim() || null,
         description: desc.trim() || null,
         reference_type: refType.trim() || null,
         reference_id: refId.trim() || null,
@@ -169,6 +174,7 @@ export function CashPage() {
       { accessorKey: "amount", header: "Số tiền" },
       { accessorKey: "partner_code", header: "Mã ĐT" },
       { accessorKey: "partner_name", header: "Đối tượng" },
+      { accessorKey: "payer_name", header: "Người nộp" },
       {
         id: "actions",
         header: "Thao tác",
@@ -176,6 +182,9 @@ export function CashPage() {
         meta: { filterType: "none" },
         cell: ({ row }) => (
           <>
+            {row.original.direction === "receipt" ? (
+              <CashReceiptPrintButton transactionId={row.original.id} label="In PT" />
+            ) : null}
             <DataGridEditButton type="button" onClick={() => openEdit(row.original)} />
             <DataGridDeleteButton type="button" onClick={() => void onDelete(row.original)} />
           </>
@@ -197,6 +206,7 @@ export function CashPage() {
           { label: "Số tiền", value: row.amount },
           { label: "Mã ĐT", value: row.partner_code },
           { label: "Đối tượng", value: row.partner_name },
+          { label: "Người nộp", value: row.payer_name },
           { label: "Diễn giải", value: row.description, span: "full" },
           { label: "Reference type", value: row.reference_type },
           { label: "Reference id", value: row.reference_id },
@@ -303,6 +313,15 @@ export function CashPage() {
                   </option>
                 ))}
               </Select>
+            </div>
+            <div className="grid gap-2 sm:col-span-2">
+              <Label htmlFor="c-payer">Người nộp (phiếu thu)</Label>
+              <Input
+                id="c-payer"
+                value={payerName}
+                onChange={(e) => setPayerName(e.target.value)}
+                placeholder="Họ tên người nộp tiền"
+              />
             </div>
             <div className="grid gap-2 sm:col-span-2">
               <Label htmlFor="c-desc">Diễn giải</Label>

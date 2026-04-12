@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { createSupabaseAdmin } from "@/lib/supabase/server";
 import type { ListArgs, ListResult } from "@/components/shared/data-grid/excel-data-grid";
 
@@ -30,11 +31,8 @@ function monthBounds(year: number, month: number) {
   return { start: start.toISOString(), end: end.toISOString() };
 }
 
-export async function listDebtReport(args: ListArgs): Promise<ListResult<DebtRow>> {
+async function loadDebtRowsForMonth(y: number, m: number): Promise<DebtRow[]> {
   const supabase = createSupabaseAdmin();
-  const now = new Date();
-  const y = Number(args.filters.year) || now.getUTCFullYear();
-  const m = Number(args.filters.month) || now.getUTCMonth() + 1;
   const { start, end } = monthBounds(y, m);
 
   const { data: partners, error: pe } = await supabase
@@ -78,8 +76,7 @@ export async function listDebtReport(args: ListArgs): Promise<ListResult<DebtRow
     receiptMap.set(r.partner_id as string, Number(r.total_amount));
   }
 
-  const g = args.globalSearch.trim().toLowerCase();
-  let rows: DebtRow[] = (partners ?? []).map((p) => {
+  return (partners ?? []).map((p) => {
     const pid = p.id as string;
     const opening = openMap.get(pid) ?? 0;
     const orders_month = orderMap.get(pid) ?? 0;
@@ -95,7 +92,49 @@ export async function listDebtReport(args: ListArgs): Promise<ListResult<DebtRow
       closing,
     };
   });
+}
 
+/** Ghi nợ đầu kỳ tháng sau = nợ cuối kỳ tháng hiện tại (toàn bộ KH clinic/labo). */
+export async function carryForwardOpeningToNextMonth(year: number, month: number): Promise<{ nextYear: number; nextMonth: number; upserted: number }> {
+  const supabase = createSupabaseAdmin();
+  const y = Math.floor(year);
+  const m = Math.floor(month);
+  if (m < 1 || m > 12 || y < 2000 || y > 2100) throw new Error("Tháng/năm không hợp lệ.");
+  const rows = await loadDebtRowsForMonth(y, m);
+  let ny = y;
+  let nm = m + 1;
+  if (nm > 12) {
+    nm = 1;
+    ny += 1;
+  }
+  let upserted = 0;
+  for (const r of rows) {
+    const closing = Math.round(r.closing * 100) / 100;
+    const { error } = await supabase.from("partner_opening_balances").upsert(
+      {
+        partner_id: r.partner_id,
+        year: ny,
+        month: nm,
+        opening_balance: closing,
+        notes: "Kết chuyển từ " + String(m) + "/" + String(y),
+      },
+      { onConflict: "partner_id,year,month" },
+    );
+    if (error) throw new Error(error.message);
+    upserted += 1;
+  }
+  revalidatePath("/accounting/debt");
+  return { nextYear: ny, nextMonth: nm, upserted };
+}
+
+export async function listDebtReport(args: ListArgs): Promise<ListResult<DebtRow>> {
+  const now = new Date();
+  const y = Number(args.filters.year) || now.getUTCFullYear();
+  const m = Number(args.filters.month) || now.getUTCMonth() + 1;
+
+  let rows = await loadDebtRowsForMonth(y, m);
+
+  const g = args.globalSearch.trim().toLowerCase();
   if (g) {
     rows = rows.filter(
       (r) =>
