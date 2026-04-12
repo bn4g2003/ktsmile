@@ -31,7 +31,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { fetchListWithCache, invalidateListCache } from "@/lib/cache/grid-data-cache";
+import { decodeMultiFilter, encodeMultiFilter } from "@/lib/grid/multi-filter";
 import { cn } from "@/lib/utils/cn";
+
+export type ListSummaryLine = { label: string; value: string | number };
 
 function dataGridColumnLabel<T>(col: Column<T, unknown>): string {
   const h = col.columnDef.header;
@@ -46,7 +49,132 @@ export type ListArgs = {
   filters: Record<string, string>;
 };
 
-export type ListResult<T> = { rows: T[]; total: number };
+export type ListResult<T> = { rows: T[]; total: number; summary?: ListSummaryLine[] };
+
+function formatSummaryValue(v: string | number): string {
+  if (typeof v === "number" && Number.isFinite(v)) return v.toLocaleString("vi-VN");
+  return String(v);
+}
+
+function GridMultiSelectFilter({
+  filterKey,
+  options,
+  valueRaw,
+  onCommit,
+  triggerId,
+}: {
+  filterKey: string;
+  options: { value: string; label: string }[];
+  valueRaw: string;
+  onCommit: (key: string, encoded: string) => void;
+  triggerId: string;
+}) {
+  const selected = React.useMemo(() => new Set(decodeMultiFilter(valueRaw)), [valueRaw]);
+  const toggle = (val: string, checked: boolean) => {
+    const next = new Set(selected);
+    if (checked) next.add(val);
+    else next.delete(val);
+    onCommit(filterKey, encodeMultiFilter([...next]));
+  };
+  const labelText = React.useMemo(() => {
+    if (selected.size === 0) return "Tất cả";
+    if (selected.size <= 2) {
+      return [...selected]
+        .map((v) => options.find((o) => o.value === v)?.label ?? v)
+        .join(", ");
+    }
+    return String(selected.size) + " giá trị";
+  }, [selected, options]);
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          id={triggerId}
+          variant="secondary"
+          type="button"
+          size="sm"
+          className="h-9 min-h-9 w-full max-w-full justify-between gap-1 truncate px-2 text-left text-xs font-normal"
+          aria-label={"Lọc " + filterKey}
+        >
+          <span className="min-w-0 truncate">{labelText}</span>
+          <svg
+            className="h-3.5 w-3.5 shrink-0 opacity-60"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+            aria-hidden
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+          </svg>
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="start"
+        className="max-h-72 w-[min(100vw-2rem,16rem)] overflow-y-auto"
+        onCloseAutoFocus={(e) => e.preventDefault()}
+      >
+        {options.map((o) => (
+          <DropdownMenuCheckboxItem
+            key={o.value}
+            className="text-sm"
+            checked={selected.has(o.value)}
+            onCheckedChange={(c) => toggle(o.value, c === true)}
+            onSelect={(e) => e.preventDefault()}
+          >
+            {o.label}
+          </DropdownMenuCheckboxItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function GridStatsBar({
+  total,
+  page,
+  pageCount,
+  extraLines,
+}: {
+  total: number;
+  page: number;
+  pageCount: number;
+  /** Tối đa 2 dòng từ server (đã slice ở caller). */
+  extraLines: ListSummaryLine[];
+}) {
+  const chip =
+    "inline-flex max-w-full items-center gap-1.5 rounded-[var(--radius-md)] bg-[var(--surface-muted)] px-2.5 py-1 text-xs shadow-[inset_0_0_0_1px_var(--border-ghost)]";
+  return (
+    <div
+      className="flex w-full flex-wrap items-center justify-start gap-2 sm:w-auto sm:justify-end"
+      aria-label="Số liệu lưới"
+    >
+      <span className={cn(chip, "tabular-nums text-[var(--on-surface)]")}>
+        <span className="font-medium text-[var(--on-surface-muted)]">Tổng</span>
+        <span className="font-semibold">{formatSummaryValue(total)}</span>
+      </span>
+      <span className={cn(chip, "tabular-nums text-[var(--on-surface)]")}>
+        <span className="font-medium text-[var(--on-surface-muted)]">Trang</span>
+        <span className="font-semibold">
+          {page}/{pageCount}
+        </span>
+      </span>
+      {extraLines.map((s, i) => (
+        <span
+          key={"ex-" + i}
+          className={cn(chip, "min-w-0 max-w-[min(100%,14rem)]")}
+          title={s.label + ": " + formatSummaryValue(s.value)}
+        >
+          <span className="min-w-0 truncate font-medium text-[var(--on-surface-muted)]">{s.label}</span>
+          <span className="shrink-0 font-semibold tabular-nums text-[var(--on-surface)]">
+            {formatSummaryValue(s.value)}
+          </span>
+        </span>
+      ))}
+    </div>
+  );
+}
 
 type ExcelDataGridProps<T> = {
   prependFilters?: Record<string, string>;
@@ -86,6 +214,7 @@ export function ExcelDataGrid<T>({
   const [data, setData] = React.useState<T[]>([]);
   const [viewRow, setViewRow] = React.useState<T | null>(null);
   const [total, setTotal] = React.useState(0);
+  const [listSummary, setListSummary] = React.useState<ListSummaryLine[]>([]);
   const [page, setPage] = React.useState(1);
   const [pageSize, setPageSize] = React.useState(initialPageSize);
   const [globalSearch, setGlobalSearch] = React.useState("");
@@ -144,10 +273,12 @@ export function ExcelDataGrid<T>({
       });
       setData(res.rows);
       setTotal(res.total);
+      setListSummary(res.summary ?? []);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Lỗi tải dữ liệu");
       setData([]);
       setTotal(0);
+      setListSummary([]);
     } finally {
       setLoading(false);
     }
@@ -173,6 +304,19 @@ export function ExcelDataGrid<T>({
   }, [debouncedSearch, filters, pageSize]);
 
   const pageCount = Math.max(1, Math.ceil(total / pageSize) || 1);
+
+  const summaryExtra = React.useMemo(() => (listSummary ?? []).slice(0, 2), [listSummary]);
+
+  const hasActiveFilters = React.useMemo(() => {
+    if (globalSearch.trim()) return true;
+    return Object.values(filters).some((v) => String(v ?? "").trim() !== "");
+  }, [globalSearch, filters]);
+
+  const clearAllFilters = React.useCallback(() => {
+    setFilters({});
+    setGlobalSearch("");
+    setDebouncedSearch("");
+  }, []);
 
   const columnsResolved = React.useMemo(() => {
     if (!renderRowDetail) return columns;
@@ -289,23 +433,43 @@ export function ExcelDataGrid<T>({
   return (
     <div className="space-y-4 sm:space-y-6">
       <div className="rounded-[var(--radius-xl)] bg-[var(--surface-card)] p-4 shadow-[var(--shadow-card)] sm:p-6">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div className="min-w-0">
-            <h1 className="text-xl font-bold tracking-tight text-[var(--on-surface)] sm:text-2xl md:text-3xl">
-              {title}
-            </h1>
-            <p className="mt-1 text-xs text-[var(--on-surface-muted)] sm:text-sm">
-              Lọc cột, tìm trong bảng, ẩn/hiện cột và xuất Excel.
-            </p>
-          </div>
-          <div className="flex w-full min-w-0 flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end lg:w-auto lg:flex-nowrap">
-            <Input
-              placeholder="Tìm trong bảng…"
-              value={globalSearch}
-              onChange={(e) => setGlobalSearch(e.target.value)}
-              className="min-h-10 w-full min-w-0 py-2 text-sm sm:min-w-[min(100%,16rem)] sm:max-w-md lg:w-64 lg:max-w-xs lg:shrink-0"
-              aria-label="Tìm kiếm trong bảng"
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0 flex-1">
+              <h1 className="text-xl font-bold tracking-tight text-[var(--on-surface)] sm:text-2xl md:text-3xl">
+                {title}
+              </h1>
+              <p className="mt-1 text-xs text-[var(--on-surface-muted)] sm:text-sm">
+                Lọc cột, tìm trong bảng, ẩn/hiện cột và xuất Excel.
+              </p>
+            </div>
+            <GridStatsBar
+              total={total}
+              page={page}
+              pageCount={pageCount}
+              extraLines={summaryExtra}
             />
+          </div>
+          <div className="flex w-full min-w-0 flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-end lg:justify-between">
+            <div className="flex w-full min-w-0 flex-col gap-2 sm:flex-row sm:items-center lg:w-auto lg:max-w-md lg:flex-1">
+              <Input
+                placeholder="Tìm trong bảng…"
+                value={globalSearch}
+                onChange={(e) => setGlobalSearch(e.target.value)}
+                className="min-h-10 w-full min-w-0 py-2 text-sm"
+                aria-label="Tìm kiếm trong bảng"
+              />
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                className="min-h-10 w-full shrink-0 sm:w-auto"
+                disabled={!hasActiveFilters}
+                onClick={clearAllFilters}
+              >
+                Xóa bộ lọc
+              </Button>
+            </div>
             <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-1 sm:flex-wrap sm:items-center sm:gap-1.5 lg:flex-none">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -388,19 +552,13 @@ export function ExcelDataGrid<T>({
                         {label}
                       </label>
                       {ft === "select" ? (
-                        <Select
-                          id={"dg-filter-" + String(col.id)}
-                          value={filters[fk] ?? ""}
-                          onChange={(e) => setFilter(fk, e.target.value)}
-                          aria-label={"Lọc " + fk}
-                        >
-                          <option value="">Tất cả</option>
-                          {(col.columnDef.meta?.filterOptions ?? []).map((o) => (
-                            <option key={o.value} value={o.value}>
-                              {o.label}
-                            </option>
-                          ))}
-                        </Select>
+                        <GridMultiSelectFilter
+                          filterKey={fk}
+                          options={col.columnDef.meta?.filterOptions ?? []}
+                          valueRaw={filters[fk] ?? ""}
+                          onCommit={setFilter}
+                          triggerId={"dg-filter-" + String(col.id)}
+                        />
                       ) : (
                         <Input
                           id={"dg-filter-" + String(col.id)}
@@ -506,19 +664,17 @@ export function ExcelDataGrid<T>({
                     if (ft === "select") {
                       const opts = col.columnDef.meta?.filterOptions ?? [];
                       return (
-                        <td key={col.id} className="px-3 py-2 first:pl-4 last:pr-4">
-                          <Select
-                            value={filters[fk] ?? ""}
-                            onChange={(e) => setFilter(fk, e.target.value)}
-                            aria-label={"Lọc " + fk}
-                          >
-                            <option value="">Tất cả</option>
-                            {opts.map((o) => (
-                              <option key={o.value} value={o.value}>
-                                {o.label}
-                              </option>
-                            ))}
-                          </Select>
+                        <td
+                          key={col.id}
+                          className="min-w-[9.5rem] px-3 py-2 align-top first:pl-4 last:pr-4"
+                        >
+                          <GridMultiSelectFilter
+                            filterKey={fk}
+                            options={opts}
+                            valueRaw={filters[fk] ?? ""}
+                            onCommit={setFilter}
+                            triggerId={"dg-th-" + String(col.id)}
+                          />
                         </td>
                       );
                     }
@@ -629,18 +785,23 @@ export function ExcelDataGrid<T>({
 
       {renderRowDetail ? (
         <Dialog open={viewRow != null} onOpenChange={(o) => !o && setViewRow(null)}>
-          <DialogContent size="xl" className="max-h-[85vh]">
-            <DialogHeader>
+          <DialogContent
+            size="2xl"
+            className="flex max-h-[92vh] flex-col gap-0 overflow-hidden p-5 sm:p-6"
+          >
+            <DialogHeader className="shrink-0 space-y-1 pb-3">
               <DialogTitle>
                 {viewRow
                   ? (rowDetailTitle?.(viewRow) ?? "Chi tiết dòng")
                   : "Chi tiết"}
               </DialogTitle>
-              <DialogDescription>
-                Xem nhanh toàn bộ trường; sau này có thể bổ sung tab, file đính kèm, lịch sử…
+              <DialogDescription className="text-xs sm:text-sm">
+                Xem thông tin, các tab liên quan (đơn hàng, công nợ, dòng chi tiết…) tải khi bạn chọn tab.
               </DialogDescription>
             </DialogHeader>
-            {viewRow ? renderRowDetail(viewRow) : null}
+            <div className="min-h-0 flex-1 overflow-y-auto pr-0.5">
+              {viewRow ? renderRowDetail(viewRow) : null}
+            </div>
           </DialogContent>
         </Dialog>
       ) : null}

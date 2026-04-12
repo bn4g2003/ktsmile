@@ -25,8 +25,10 @@ import { DetailPreview } from "@/components/ui/detail-preview";
 import { Textarea } from "@/components/ui/textarea";
 import { StockVoucherPrintButton } from "@/components/shared/reports/stock-voucher-print-button";
 import { listPartnerPicker } from "@/lib/actions/partners";
-import { formatMovement } from "@/lib/format/labels";
+import { formatMovement, formatPostingStatus } from "@/lib/format/labels";
+import { listProductPicker } from "@/lib/actions/products";
 import {
+  createOutboundStockRequest,
   createStockDocument,
   deleteStockDocument,
   listStockDocuments,
@@ -37,6 +39,11 @@ import {
 const movOpts = [
   { value: "inbound", label: "Nhập kho" },
   { value: "outbound", label: "Xuất kho" },
+];
+
+const postingOpts = [
+  { value: "draft", label: formatPostingStatus("draft") },
+  { value: "posted", label: formatPostingStatus("posted") },
 ];
 
 export function InventoryDocumentsPage() {
@@ -57,10 +64,23 @@ export function InventoryDocumentsPage() {
   const [partnerId, setPartnerId] = React.useState("");
   const [reason, setReason] = React.useState("");
   const [notes, setNotes] = React.useState("");
+  const [openRequest, setOpenRequest] = React.useState(false);
+  const [reqProducts, setReqProducts] = React.useState<
+    { id: string; code: string; name: string; unit_price: number }[]
+  >([]);
+  const [reqProductId, setReqProductId] = React.useState("");
+  const [reqQty, setReqQty] = React.useState("1");
+  const [reqReason, setReqReason] = React.useState("");
+  const [reqErr, setReqErr] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     void listPartnerPicker().then(setPartners).catch(() => {});
   }, []);
+
+  React.useEffect(() => {
+    if (!openRequest) return;
+    void listProductPicker().then(setReqProducts).catch(() => {});
+  }, [openRequest]);
 
   const reset = () => {
     setEditing(null);
@@ -76,6 +96,38 @@ export function InventoryDocumentsPage() {
   const openCreate = () => {
     reset();
     setOpen(true);
+  };
+
+  const openRequestDialog = () => {
+    setReqProductId("");
+    setReqQty("1");
+    setReqReason("");
+    setReqErr(null);
+    setOpenRequest(true);
+  };
+
+  const submitRequest = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reqProductId) {
+      setReqErr("Chọn sản phẩm.");
+      return;
+    }
+    setPending(true);
+    setReqErr(null);
+    try {
+      const newId = await createOutboundStockRequest({
+        product_id: reqProductId,
+        quantity: Number(reqQty),
+        reason: reqReason.trim() || null,
+      });
+      setOpenRequest(false);
+      bumpGrid();
+      router.push("/inventory/documents/" + newId);
+    } catch (e2) {
+      setReqErr(e2 instanceof Error ? e2.message : "Lỗi");
+    } finally {
+      setPending(false);
+    }
   };
 
   const openEdit = (row: StockDocumentRow) => {
@@ -161,6 +213,16 @@ export function InventoryDocumentsPage() {
         },
         cell: ({ getValue }) => formatMovement(String(getValue())),
       },
+      {
+        accessorKey: "posting_status",
+        header: "Ghi tồn",
+        meta: {
+          filterKey: "posting_status",
+          filterType: "select",
+          filterOptions: postingOpts,
+        },
+        cell: ({ getValue }) => formatPostingStatus(String(getValue())),
+      },
       { accessorKey: "partner_code", header: "Mã ĐT" },
       { accessorKey: "partner_name", header: "Đối tác" },
       { accessorKey: "line_count", header: "Số dòng" },
@@ -189,6 +251,7 @@ export function InventoryDocumentsPage() {
           { label: "Số phiếu", value: row.document_number },
           { label: "Ngày", value: row.document_date },
           { label: "Loại", value: formatMovement(row.movement_type) },
+          { label: "Ghi tồn", value: formatPostingStatus(row.posting_status) },
           { label: "Mã ĐT", value: row.partner_code },
           { label: "Đối tác", value: row.partner_name },
           { label: "Số dòng", value: row.line_count },
@@ -213,9 +276,14 @@ export function InventoryDocumentsPage() {
         renderRowDetail={renderStockDocDetail}
         rowDetailTitle={(r) => "Phiếu " + r.document_number}
         toolbarExtra={
-          <Button variant="primary" type="button" onClick={openCreate}>
-            Thêm phiếu
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="secondary" type="button" onClick={openRequestDialog}>
+              Yêu cầu xuất kho
+            </Button>
+            <Button variant="primary" type="button" onClick={openCreate}>
+              Thêm phiếu
+            </Button>
+          </div>
         }
         getRowId={(r) => r.id}
       />
@@ -276,6 +344,60 @@ export function InventoryDocumentsPage() {
               </Button>
               <Button variant="primary" type="submit" disabled={pending}>
                 {pending ? "Đang lưu…" : "Lưu"}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={openRequest} onOpenChange={setOpenRequest}>
+        <DialogContent size="xl" className="max-h-[90vh]">
+          <DialogHeader>
+            <DialogTitle>Yêu cầu xuất kho</DialogTitle>
+            <DialogDescription>
+              Tạo phiếu xuất ở trạng thái nháp (chưa trừ tồn). Sau khi duyệt dòng phiếu, mở chi tiết và bấm «Ghi nhận tồn
+              kho».
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={(e) => void submitRequest(e)} className="grid gap-4 sm:grid-cols-2">
+            {reqErr ? <p className="text-sm text-[#b91c1c] sm:col-span-2">{reqErr}</p> : null}
+            <div className="grid gap-2 sm:col-span-2">
+              <Label htmlFor="ycxk-p">Sản phẩm</Label>
+              <Select
+                id="ycxk-p"
+                value={reqProductId}
+                onChange={(e) => setReqProductId(e.target.value)}
+                required
+              >
+                <option value="">Chọn…</option>
+                {reqProducts.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.code} — {p.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="ycxk-q">Số lượng</Label>
+              <Input
+                id="ycxk-q"
+                type="number"
+                min={0.0001}
+                step={0.0001}
+                value={reqQty}
+                onChange={(e) => setReqQty(e.target.value)}
+                required
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="ycxk-r">Lý do (tuỳ chọn)</Label>
+              <Input id="ycxk-r" value={reqReason} onChange={(e) => setReqReason(e.target.value)} />
+            </div>
+            <div className="flex justify-end gap-2 pt-2 sm:col-span-2">
+              <Button type="button" variant="ghost" onClick={() => setOpenRequest(false)}>
+                Hủy
+              </Button>
+              <Button variant="primary" type="submit" disabled={pending}>
+                {pending ? "Đang tạo…" : "Tạo và mở phiếu"}
               </Button>
             </div>
           </form>

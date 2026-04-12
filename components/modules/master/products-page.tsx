@@ -16,7 +16,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { DetailPreview } from "@/components/ui/detail-preview";
+import { ProductRowDetailPanel } from "@/components/modules/master/product-row-detail-panel";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -144,23 +144,6 @@ export function ProductsPage() {
     [],
   );
 
-  const renderProductDetail = React.useCallback((row: ProductRow) => {
-    return (
-      <DetailPreview
-        fields={[
-          { label: "Mã SP", value: row.code },
-          { label: "Tên", value: row.name },
-          { label: "ĐVT", value: row.unit },
-          { label: "Đơn giá", value: row.unit_price },
-          { label: "Bảo hành (năm)", value: row.warranty_years ?? "—" },
-          { label: "Hoạt động", value: row.is_active ? "Có" : "Không" },
-          { label: "Tạo lúc", value: row.created_at },
-          { label: "Cập nhật", value: row.updated_at },
-        ]}
-      />
-    );
-  }, []);
-
   return (
     <>
       <ExcelDataGrid<ProductRow>
@@ -169,7 +152,7 @@ export function ProductsPage() {
         columns={columns}
         list={listProducts}
         reloadSignal={gridReload}
-        renderRowDetail={renderProductDetail}
+        renderRowDetail={(row) => <ProductRowDetailPanel row={row} />}
         rowDetailTitle={(r) => "Sản phẩm " + r.code}
         toolbarExtra={
           <Button variant="primary" type="button" size="sm" onClick={openCreate}>

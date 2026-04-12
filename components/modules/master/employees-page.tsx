@@ -16,7 +16,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { DetailPreview } from "@/components/ui/detail-preview";
+import { EmployeeRowDetailPanel } from "@/components/modules/master/employee-row-detail-panel";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -148,23 +148,6 @@ export function EmployeesPage() {
     [],
   );
 
-  const renderEmployeeDetail = React.useCallback((row: EmployeeRow) => {
-    return (
-      <DetailPreview
-        fields={[
-          { label: "Mã NV", value: row.code },
-          { label: "Họ tên", value: row.full_name },
-          { label: "Vai trò", value: row.role },
-          { label: "Lương CB", value: row.base_salary },
-          { label: "Auth user id", value: row.auth_user_id ?? "—" },
-          { label: "Hoạt động", value: row.is_active ? "Có" : "Không" },
-          { label: "Tạo lúc", value: row.created_at },
-          { label: "Cập nhật", value: row.updated_at },
-        ]}
-      />
-    );
-  }, []);
-
   return (
     <>
       <ExcelDataGrid<EmployeeRow>
@@ -173,7 +156,7 @@ export function EmployeesPage() {
         columns={columns}
         list={listEmployees}
         reloadSignal={gridReload}
-        renderRowDetail={renderEmployeeDetail}
+        renderRowDetail={(row) => <EmployeeRowDetailPanel row={row} />}
         rowDetailTitle={(r) => "NV " + r.code}
         toolbarExtra={
           <Button variant="primary" type="button" size="sm" onClick={openCreate}>

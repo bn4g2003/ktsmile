@@ -13,7 +13,9 @@ type ListArgsLike = {
   filters: Record<string, string>;
 };
 
-type Entry<T> = { result: { rows: T[]; total: number }; expires: number };
+type ListSummaryLine = { label: string; value: string | number };
+
+type Entry<T> = { result: { rows: T[]; total: number; summary?: ListSummaryLine[] }; expires: number };
 
 const store = new Map<string, Entry<unknown>>();
 const inflight = new Map<string, Promise<unknown>>();
@@ -71,9 +73,9 @@ export async function fetchListWithCache<T>(
   moduleId: string,
   args: ListArgsLike,
   prependFilters: Record<string, string> | undefined,
-  fetcher: (args: ListArgsLike) => Promise<{ rows: T[]; total: number }>,
+  fetcher: (args: ListArgsLike) => Promise<{ rows: T[]; total: number; summary?: ListSummaryLine[] }>,
   options: FetchListOptions,
-): Promise<{ rows: T[]; total: number }> {
+): Promise<{ rows: T[]; total: number; summary?: ListSummaryLine[] }> {
   if (options.bypassCache) {
     return fetcher(args);
   }
@@ -86,7 +88,7 @@ export async function fetchListWithCache<T>(
     return hit.result;
   }
 
-  let p = inflight.get(key) as Promise<{ rows: T[]; total: number }> | undefined;
+  let p = inflight.get(key) as Promise<{ rows: T[]; total: number; summary?: ListSummaryLine[] }> | undefined;
   if (p) return p;
 
   p = fetcher(args)

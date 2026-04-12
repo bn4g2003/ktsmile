@@ -189,12 +189,18 @@ create table public.stock_documents (
   partner_id uuid references public.partners (id) on delete set null,
   reason text,
   notes text,
+  posting_status text not null default 'posted',
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  constraint stock_documents_posting_status_check check (posting_status in ('draft', 'posted'))
 );
+
+comment on column public.stock_documents.posting_status is
+  'draft = yêu cầu/chưa trừ tồn; posted = đã ghi nhận nhập−xuất';
 
 create index stock_documents_document_date_idx on public.stock_documents (document_date desc);
 create index stock_documents_movement_type_idx on public.stock_documents (movement_type);
+create index stock_documents_posting_status_idx on public.stock_documents (posting_status);
 
 create trigger stock_documents_set_updated_at
   before update on public.stock_documents
@@ -231,10 +237,13 @@ select
   )::numeric(14, 4) as quantity_on_hand
 from public.products p
 left join public.stock_lines sl on sl.product_id = p.id
-left join public.stock_documents d on d.id = sl.document_id
+left join public.stock_documents d
+  on d.id = sl.document_id
+  and d.posting_status = 'posted'
 group by p.id, p.code, p.name, p.unit;
 
-comment on view public.v_product_stock is 'Tồn kho hiện tại = tổng nhập - tổng xuất';
+comment on view public.v_product_stock is
+  'Tồn kho = tổng nhập − tổng xuất (chỉ phiếu posting_status = posted)';
 
 -- ===========================================================================
 -- Bảng 6 — Cashbook (sổ quỹ thu/chi)

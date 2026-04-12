@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createSupabaseAdmin } from "@/lib/supabase/server";
 import type { ListArgs, ListResult } from "@/components/shared/data-grid/excel-data-grid";
+import { narrowIsActiveFilter } from "@/lib/grid/multi-filter";
 
 export type ProductRow = {
   id: string;
@@ -27,8 +28,8 @@ export async function listProducts(args: ListArgs): Promise<ListResult<ProductRo
     const p = "%" + g + "%";
     q = q.or("code.ilike." + p + ",name.ilike." + p);
   }
-  if (filters.is_active === "true") q = q.eq("is_active", true);
-  if (filters.is_active === "false") q = q.eq("is_active", false);
+  const activeOnly = narrowIsActiveFilter(filters.is_active);
+  if (activeOnly !== null) q = q.eq("is_active", activeOnly);
   if (filters.code?.trim()) q = q.ilike("code", "%" + filters.code.trim() + "%");
   if (filters.name?.trim()) q = q.ilike("name", "%" + filters.name.trim() + "%");
 

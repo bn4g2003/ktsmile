@@ -32,6 +32,8 @@ const dialogContentSizes = {
   lg: "w-[min(94vw,42rem)] max-h-[min(92vh,48rem)]",
   /** Rộng — form nhiều trường, 2 cột */
   xl: "w-[min(96vw,56rem)] max-h-[min(92vh,52rem)]",
+  /** Rất rộng — xem chi tiết dòng lưới, nhiều tab */
+  "2xl": "w-[min(99vw,88rem)] max-h-[96vh]",
 } as const;
 
 export const DialogContent = React.forwardRef<

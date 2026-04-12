@@ -23,12 +23,16 @@ import { Select } from "@/components/ui/select";
 import { StockVoucherPrintButton } from "@/components/shared/reports/stock-voucher-print-button";
 import { Card } from "@/components/ui/card";
 import { DetailPreview } from "@/components/ui/detail-preview";
+import { formatMovement, formatPostingStatus } from "@/lib/format/labels";
 import { listProductPicker } from "@/lib/actions/products";
 import {
   createStockLine,
   deleteStockLine,
+  getStockDocumentById,
   listStockLines,
+  postStockDocument,
   updateStockLine,
+  type StockDocumentHeader,
   type StockLineRow,
 } from "@/lib/actions/stock";
 
@@ -51,10 +55,47 @@ export function InventoryDocumentDetailPage() {
   const [productId, setProductId] = React.useState("");
   const [qty, setQty] = React.useState("1");
   const [price, setPrice] = React.useState("0");
+  const [docHeader, setDocHeader] = React.useState<StockDocumentHeader | null>(null);
+  const [headerLoading, setHeaderLoading] = React.useState(true);
+  const [postPending, setPostPending] = React.useState(false);
+  const [postMsg, setPostMsg] = React.useState<string | null>(null);
+
+  const reloadHeader = React.useCallback(async () => {
+    const h = await getStockDocumentById(id);
+    setDocHeader(h);
+  }, [id]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    setHeaderLoading(true);
+    void reloadHeader()
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setHeaderLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [reloadHeader]);
 
   React.useEffect(() => {
     void listProductPicker().then(setProducts).catch(() => {});
   }, []);
+
+  const onPostStock = async () => {
+    setPostPending(true);
+    setPostMsg(null);
+    try {
+      await postStockDocument(id);
+      await reloadHeader();
+      bumpGrid();
+      router.refresh();
+    } catch (e2) {
+      setPostMsg(e2 instanceof Error ? e2.message : "Lỗi");
+    } finally {
+      setPostPending(false);
+    }
+  };
 
   const listLines = React.useCallback(
     async (args: import("@/components/shared/data-grid/excel-data-grid").ListArgs) => {
@@ -174,14 +215,46 @@ export function InventoryDocumentDetailPage() {
       <Button variant="ghost" asChild>
         <Link href="/inventory/documents">← Phiếu kho</Link>
       </Button>
-      <Card className="p-5">
+      <Card className="p-5 space-y-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
+          <div className="space-y-1">
             <h1 className="text-xl font-semibold tracking-tight text-[var(--on-surface)]">Chi tiết phiếu</h1>
-            <p className="text-sm text-[var(--on-surface-muted)]">ID: {id}</p>
+            {headerLoading ? (
+              <p className="text-sm text-[var(--on-surface-muted)]">Đang tải thông tin phiếu…</p>
+            ) : docHeader ? (
+              <p className="text-sm text-[var(--on-surface-muted)]">
+                <span className="font-medium text-[var(--on-surface)]">{docHeader.document_number}</span>
+                {" · "}
+                {docHeader.document_date}
+                {" · "}
+                {formatMovement(docHeader.movement_type)}
+                {" · "}
+                {formatPostingStatus(docHeader.posting_status)}
+              </p>
+            ) : (
+              <p className="text-sm text-[#b91c1c]">Không tìm thấy phiếu.</p>
+            )}
+            <p className="text-xs text-[var(--on-surface-muted)]">ID: {id}</p>
           </div>
           <StockVoucherPrintButton documentId={id} label="In / lưu PDF (trình duyệt)" />
         </div>
+        {docHeader?.posting_status === "draft" ? (
+          <div className="rounded-lg border border-[color-mix(in_srgb,var(--primary)_28%,transparent)] bg-[var(--surface-muted)] p-4 space-y-3">
+            <p className="text-sm leading-relaxed text-[var(--on-surface)]">
+              Đây là <strong>yêu cầu</strong>: dòng phiếu đã lưu nhưng <strong>chưa trừ / cộng tồn kho</strong>. Khi đủ điều
+              kiện (đủ tồn với phiếu xuất), bấm nút bên dưới để ghi nhận — tồn kho cập nhật theo view Nhập − Xuất.
+            </p>
+            {postMsg ? <p className="text-sm text-[#b91c1c]">{postMsg}</p> : null}
+            <Button
+              variant="primary"
+              type="button"
+              disabled={postPending}
+              onClick={() => void onPostStock()}
+            >
+              {postPending ? "Đang ghi nhận…" : "Ghi nhận tồn kho"}
+            </Button>
+          </div>
+        ) : null}
       </Card>
       <ExcelDataGrid<StockLineRow>
         moduleId={"stock_lines_" + id}

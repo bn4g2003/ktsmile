@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createSupabaseAdmin } from "@/lib/supabase/server";
 import type { ListArgs, ListResult } from "@/components/shared/data-grid/excel-data-grid";
+import { decodeMultiFilter } from "@/lib/grid/multi-filter";
 
 export type CashRow = {
   id: string;
@@ -78,7 +79,9 @@ export async function listCashTransactions(
         p,
     );
   }
-  if (filters.direction) q = q.eq("direction", filters.direction);
+  const dirs = decodeMultiFilter(filters.direction);
+  if (dirs.length === 1) q = q.eq("direction", dirs[0]!);
+  else if (dirs.length > 1) q = q.in("direction", dirs);
   if (filters.payment_channel?.trim())
     q = q.ilike("payment_channel", "%" + filters.payment_channel.trim() + "%");
   if (filters.business_category?.trim())

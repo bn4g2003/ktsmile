@@ -19,7 +19,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
-import { DetailPreview } from "@/components/ui/detail-preview";
+import { PartnerRowDetailPanel } from "@/components/modules/master/partner-row-detail-panel";
 import { Textarea } from "@/components/ui/textarea";
 import { formatPartnerType } from "@/lib/format/labels";
 import {
@@ -199,27 +199,6 @@ export function PartnersPage() {
     [],
   );
 
-  const renderPartnerDetail = React.useCallback((row: PartnerRow) => {
-    return (
-      <DetailPreview
-        fields={[
-          { label: "Mã", value: row.code },
-          { label: "Tên", value: row.name },
-          { label: "Phân loại", value: formatPartnerType(row.partner_type) },
-          { label: "Người đại diện", value: row.representative_name },
-          { label: "SĐT", value: row.phone },
-          { label: "Mã số thuế", value: row.tax_id },
-          { label: "Chiết khấu mặc định %", value: row.default_discount_percent ?? "—" },
-          { label: "Hoạt động", value: row.is_active ? "Có" : "Không" },
-          { label: "Địa chỉ", value: row.address, span: "full" },
-          { label: "Ghi chú", value: row.notes, span: "full" },
-          { label: "Tạo lúc", value: row.created_at },
-          { label: "Cập nhật", value: row.updated_at },
-        ]}
-      />
-    );
-  }, []);
-
   return (
     <>
       <ExcelDataGrid<PartnerRow>
@@ -228,7 +207,7 @@ export function PartnersPage() {
         columns={columns}
         list={listPartners}
         reloadSignal={gridReload}
-        renderRowDetail={renderPartnerDetail}
+        renderRowDetail={(row) => <PartnerRowDetailPanel row={row} />}
         rowDetailTitle={(r) => "Đối tác " + r.code}
         toolbarExtra={
           <Button variant="primary" type="button" size="sm" onClick={openCreate}>

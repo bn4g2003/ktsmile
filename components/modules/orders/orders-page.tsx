@@ -21,10 +21,15 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
-import { DetailPreview } from "@/components/ui/detail-preview";
+import { LabOrderRowDetailPanel } from "@/components/modules/orders/lab-order-row-detail-panel";
+import { LabOrderStatusQuickDialog } from "@/components/modules/orders/lab-order-status-quick-dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { listPartnerPicker } from "@/lib/actions/partners";
-import { formatOrderStatus } from "@/lib/format/labels";
+import {
+  formatOrderStatus,
+  labOrderStatusOptions,
+  orderStatusBadgeClassName,
+} from "@/lib/format/labels";
 import { LabOrderPrintButton } from "@/components/shared/reports/lab-order-print-button";
 import { importLabOrdersFromExcel } from "@/lib/actions/lab-orders-import";
 import {
@@ -32,16 +37,9 @@ import {
   deleteLabOrder,
   listLabOrders,
   updateLabOrder,
+  updateLabOrderStatus,
   type LabOrderRow,
 } from "@/lib/actions/lab-orders";
-
-const statusOpts = [
-  { value: "draft", label: "Nháp" },
-  { value: "in_progress", label: "Đang làm" },
-  { value: "completed", label: "Hoàn thành" },
-  { value: "delivered", label: "Đã giao" },
-  { value: "cancelled", label: "Đã hủy" },
-];
 
 export function OrdersPage() {
   const router = useRouter();
@@ -63,6 +61,11 @@ export function OrdersPage() {
   const [notes, setNotes] = React.useState("");
   const fileImportRef = React.useRef<HTMLInputElement>(null);
   const [importBusy, setImportBusy] = React.useState(false);
+  const [quickOpen, setQuickOpen] = React.useState(false);
+  const [quickRow, setQuickRow] = React.useState<LabOrderRow | null>(null);
+  const [quickStatus, setQuickStatus] = React.useState<LabOrderRow["status"]>("draft");
+  const [quickPending, setQuickPending] = React.useState(false);
+  const [quickErr, setQuickErr] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     void listPartnerPicker().then(setPartners).catch(() => {});
@@ -158,6 +161,29 @@ export function OrdersPage() {
     }
   };
 
+  const openQuickStatus = React.useCallback((row: LabOrderRow) => {
+    setQuickRow(row);
+    setQuickStatus(row.status);
+    setQuickErr(null);
+    setQuickOpen(true);
+  }, []);
+
+  const saveQuickStatus = React.useCallback(async () => {
+    if (!quickRow) return;
+    setQuickPending(true);
+    setQuickErr(null);
+    try {
+      await updateLabOrderStatus(quickRow.id, quickStatus);
+      setQuickOpen(false);
+      setQuickRow(null);
+      bumpGrid();
+    } catch (e2) {
+      setQuickErr(e2 instanceof Error ? e2.message : "Lỗi");
+    } finally {
+      setQuickPending(false);
+    }
+  }, [quickRow, quickStatus, bumpGrid]);
+
   const columns = React.useMemo<ColumnDef<LabOrderRow, unknown>[]>(
     () => [
       {
@@ -193,9 +219,27 @@ export function OrdersPage() {
         meta: {
           filterKey: "status",
           filterType: "select",
-          filterOptions: statusOpts,
+          filterOptions: [...labOrderStatusOptions],
         },
-        cell: ({ getValue }) => formatOrderStatus(String(getValue())),
+        cell: ({ row }) => (
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span
+              className={orderStatusBadgeClassName(row.original.status)}
+              title={formatOrderStatus(row.original.status)}
+            >
+              {formatOrderStatus(row.original.status)}
+            </span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 shrink-0 px-2 text-xs"
+              onClick={() => openQuickStatus(row.original)}
+            >
+              Đổi
+            </Button>
+          </div>
+        ),
       },
       { accessorKey: "total_amount", header: "Tổng tiền" },
       {
@@ -213,28 +257,8 @@ export function OrdersPage() {
         ),
       },
     ],
-    [],
+    [openQuickStatus],
   );
-
-  const renderOrderDetail = React.useCallback((row: LabOrderRow) => {
-    return (
-      <DetailPreview
-        fields={[
-          { label: "Số đơn", value: row.order_number },
-          { label: "Ngày nhận", value: row.received_at },
-          { label: "Mã KH", value: row.partner_code },
-          { label: "Khách", value: row.partner_name },
-          { label: "Bệnh nhân", value: row.patient_name },
-          { label: "Trạng thái", value: formatOrderStatus(row.status) },
-          { label: "Tổng tiền", value: row.total_amount },
-          { label: "Ghi chú", value: row.notes, span: "full" },
-          { label: "ID", value: row.id, span: "full" },
-          { label: "Tạo lúc", value: row.created_at },
-          { label: "Cập nhật", value: row.updated_at },
-        ]}
-      />
-    );
-  }, []);
 
   return (
     <>
@@ -244,7 +268,7 @@ export function OrdersPage() {
         columns={columns}
         list={listLabOrders}
         reloadSignal={gridReload}
-        renderRowDetail={renderOrderDetail}
+        renderRowDetail={(row) => <LabOrderRowDetailPanel row={row} />}
         rowDetailTitle={(r) => "Đơn " + r.order_number}
         toolbarExtra={
           <>
@@ -311,7 +335,7 @@ export function OrdersPage() {
             <div className="grid gap-2">
               <Label htmlFor="lo-st">Trạng thái</Label>
               <Select id="lo-st" value={status} onChange={(e) => setStatus(e.target.value)}>
-                {statusOpts.map((o) => (
+                {labOrderStatusOptions.map((o) => (
                   <option key={o.value} value={o.value}>
                     {o.label}
                   </option>
@@ -333,6 +357,22 @@ export function OrdersPage() {
           </form>
         </DialogContent>
       </Dialog>
+      <LabOrderStatusQuickDialog
+        open={quickOpen}
+        onOpenChange={(v) => {
+          setQuickOpen(v);
+          if (!v) {
+            setQuickRow(null);
+            setQuickErr(null);
+          }
+        }}
+        orderLabel={quickRow?.order_number ?? ""}
+        value={quickStatus}
+        onValueChange={setQuickStatus}
+        onConfirm={saveQuickStatus}
+        pending={quickPending}
+        error={quickErr}
+      />
     </>
   );
 }

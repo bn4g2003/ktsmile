@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createSupabaseAdmin } from "@/lib/supabase/server";
 import type { ListArgs, ListResult } from "@/components/shared/data-grid/excel-data-grid";
+import { decodeMultiFilter, narrowIsActiveFilter } from "@/lib/grid/multi-filter";
 
 export type PartnerRow = {
   id: string;
@@ -41,9 +42,11 @@ export async function listPartners(args: ListArgs): Promise<ListResult<PartnerRo
     );
   }
 
-  if (filters.partner_type) q = q.eq("partner_type", filters.partner_type);
-  if (filters.is_active === "true") q = q.eq("is_active", true);
-  if (filters.is_active === "false") q = q.eq("is_active", false);
+  const pt = decodeMultiFilter(filters.partner_type);
+  if (pt.length === 1) q = q.eq("partner_type", pt[0]!);
+  else if (pt.length > 1) q = q.in("partner_type", pt);
+  const activeOnly = narrowIsActiveFilter(filters.is_active);
+  if (activeOnly !== null) q = q.eq("is_active", activeOnly);
   if (filters.code?.trim()) q = q.ilike("code", "%" + filters.code.trim() + "%");
   if (filters.name?.trim()) q = q.ilike("name", "%" + filters.name.trim() + "%");
 

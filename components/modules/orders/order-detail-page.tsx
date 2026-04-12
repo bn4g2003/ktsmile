@@ -21,6 +21,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { LabOrderStatusQuickDialog } from "@/components/modules/orders/lab-order-status-quick-dialog";
 import { LabOrderPrintButton } from "@/components/shared/reports/lab-order-print-button";
 import { Card } from "@/components/ui/card";
 import { DetailPreview } from "@/components/ui/detail-preview";
@@ -33,8 +34,11 @@ import {
   getSuggestedLinePrice,
   listLabOrderLines,
   updateLabOrderLine,
+  updateLabOrderStatus,
   type LabOrderLineRow,
+  type LabOrderRow,
 } from "@/lib/actions/lab-orders";
+import { formatOrderStatus, orderStatusBadgeClassName } from "@/lib/format/labels";
 
 export function OrderDetailPage() {
   const params = useParams();
@@ -56,6 +60,10 @@ export function OrderDetailPage() {
   const [price, setPrice] = React.useState("0");
   const [disc, setDisc] = React.useState("0");
   const [notes, setNotes] = React.useState("");
+  const [quickOpen, setQuickOpen] = React.useState(false);
+  const [quickStatus, setQuickStatus] = React.useState<LabOrderRow["status"]>("draft");
+  const [quickPending, setQuickPending] = React.useState(false);
+  const [quickErr, setQuickErr] = React.useState<string | null>(null);
 
   const loadHeader = React.useCallback(async () => {
     const h = await getLabOrder(id);
@@ -223,6 +231,30 @@ export function OrderDetailPage() {
   }, []);
 
   const partners = header?.partners as { code?: string; name?: string } | null;
+  const orderStatus = (header?.status as LabOrderRow["status"] | undefined) ?? "draft";
+  const orderNumberStr = header ? String(header.order_number) : "";
+
+  const openQuickStatus = () => {
+    setQuickStatus(orderStatus);
+    setQuickErr(null);
+    setQuickOpen(true);
+  };
+
+  const saveQuickStatus = async () => {
+    setQuickPending(true);
+    setQuickErr(null);
+    try {
+      await updateLabOrderStatus(id, quickStatus);
+      setQuickOpen(false);
+      await loadHeader();
+      bumpGrid();
+      router.refresh();
+    } catch (e2) {
+      setQuickErr(e2 instanceof Error ? e2.message : "Lỗi");
+    } finally {
+      setQuickPending(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -234,10 +266,24 @@ export function OrderDetailPage() {
       {header ? (
         <Card className="space-y-2 p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
+            <div className="min-w-0 space-y-2">
               <h1 className="text-xl font-semibold tracking-tight text-[var(--on-surface)]">
                 Đơn {String(header.order_number)}
               </h1>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className={orderStatusBadgeClassName(orderStatus)} title={formatOrderStatus(orderStatus)}>
+                  {formatOrderStatus(orderStatus)}
+                </span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2 text-xs"
+                  onClick={openQuickStatus}
+                >
+                  Đổi trạng thái
+                </Button>
+              </div>
               <p className="text-sm text-[var(--on-surface-muted)]">
                 Khách: {partners?.code} — {partners?.name} · BN: {String(header.patient_name)} · Ngày nhận:{" "}
                 {String(header.received_at)}
@@ -264,6 +310,20 @@ export function OrderDetailPage() {
           </Button>
         }
         getRowId={(r) => r.id}
+      />
+
+      <LabOrderStatusQuickDialog
+        open={quickOpen}
+        onOpenChange={(v) => {
+          setQuickOpen(v);
+          if (!v) setQuickErr(null);
+        }}
+        orderLabel={orderNumberStr}
+        value={quickStatus}
+        onValueChange={setQuickStatus}
+        onConfirm={saveQuickStatus}
+        pending={quickPending}
+        error={quickErr}
       />
 
       <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) reset(); }}>

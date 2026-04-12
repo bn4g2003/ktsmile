@@ -78,6 +78,39 @@ export async function listPartnerPrices(
   return { rows, total: count ?? 0 };
 }
 
+export async function listPartnerPricesByProductId(
+  productId: string,
+  limit = 60,
+): Promise<PartnerPriceRow[]> {
+  const supabase = createSupabaseAdmin();
+  const { data, error } = await supabase
+    .from("partner_product_prices")
+    .select(
+      "id, partner_id, product_id, unit_price, created_at, updated_at, partners:partner_id(code,name), products:product_id(code,name)",
+    )
+    .eq("product_id", productId)
+    .order("updated_at", { ascending: false })
+    .limit(limit);
+  if (error) throw new Error(error.message);
+
+  return (data ?? []).map((r: Record<string, unknown>) => {
+    const partners = r["partners"] as { code?: string; name?: string } | null;
+    const products = r["products"] as { code?: string; name?: string } | null;
+    return {
+      id: r["id"] as string,
+      partner_id: r["partner_id"] as string,
+      product_id: r["product_id"] as string,
+      unit_price: Number(r["unit_price"]),
+      created_at: r["created_at"] as string,
+      updated_at: r["updated_at"] as string,
+      partner_code: partners?.code,
+      partner_name: partners?.name,
+      product_code: products?.code,
+      product_name: products?.name,
+    };
+  });
+}
+
 const schema = z.object({
   partner_id: z.string().uuid(),
   product_id: z.string().uuid(),
