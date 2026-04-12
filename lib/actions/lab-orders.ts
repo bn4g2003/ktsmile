@@ -42,93 +42,138 @@ export type LabOrderRow = {
   sender_phone?: string | null;
 };
 
-export async function listLabOrders(args: ListArgs): Promise<ListResult<LabOrderRow>> {
-  const supabase = createSupabaseAdmin();
-  const { page, pageSize, globalSearch, filters } = args;
-  let q = supabase.from("lab_orders").select(
-    "id, order_number, received_at, partner_id, patient_name, clinic_name, status, notes, created_at, updated_at, order_category, sender_name, coord_review_status, doctor_prescription_id, billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, payment_notice_doc_number, payment_notice_issued_at, partners:partner_id(code,name), doctor_prescriptions(slip_code), lab_order_lines(line_amount)",
-    { count: "exact" },
+/** PostgREST / Postgres: thiếu cột hoặc schema cache chưa khớp migration. */
+function isLabOrdersListSchemaDriftError(message: string): boolean {
+  const m = message.toLowerCase();
+  return (
+    m.includes("does not exist") ||
+    m.includes("schema cache") ||
+    m.includes("could not find") ||
+    m.includes("42703") ||
+    m.includes("pgrst204")
   );
+}
 
-  const g = globalSearch.trim();
-  if (g) {
-    const p = "%" + g + "%";
-    q = q.or(
-      "order_number.ilike." +
-        p +
-        ",patient_name.ilike." +
-        p +
-        ",clinic_name.ilike." +
-        p,
-    );
+const LAB_ORDERS_LIST_SELECT_FULL =
+  "id, order_number, received_at, partner_id, patient_name, clinic_name, status, notes, created_at, updated_at, order_category, sender_name, coord_review_status, doctor_prescription_id, billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, payment_notice_doc_number, payment_notice_issued_at, partners:partner_id(code,name), doctor_prescriptions(slip_code), lab_order_lines(line_amount)";
+
+/** Trước migration 20260420 (order_category, sender_name, …). */
+const LAB_ORDERS_LIST_SELECT_NO_PROD_UI =
+  "id, order_number, received_at, partner_id, patient_name, clinic_name, status, notes, created_at, updated_at, coord_review_status, doctor_prescription_id, billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, payment_notice_doc_number, payment_notice_issued_at, partners:partner_id(code,name), doctor_prescriptions(slip_code), lab_order_lines(line_amount)";
+
+/** Trước migration 20260419 (phiếu BS, đối chiếu, GBTT trên đơn). */
+const LAB_ORDERS_LIST_SELECT_LEGACY_CORE =
+  "id, order_number, received_at, partner_id, patient_name, clinic_name, status, notes, created_at, updated_at, partners:partner_id(code,name), lab_order_lines(line_amount)";
+
+function mapLabOrderListRow(r: Record<string, unknown>): LabOrderRow {
+  const partners = r["partners"] as { code?: string; name?: string } | null;
+  const rawRx = r["doctor_prescriptions"] as { slip_code?: string | null } | { slip_code?: string | null }[] | null;
+  const rx = Array.isArray(rawRx) ? rawRx[0] : rawRx;
+  const lines = r["lab_order_lines"] as { line_amount?: string | number }[] | null;
+  let total = 0;
+  for (const line of lines ?? []) {
+    total += Number(line.line_amount ?? 0);
   }
-  const st = decodeMultiFilter(filters.status);
-  if (st.length === 1) q = q.eq("status", st[0]!);
-  else if (st.length > 1) q = q.in("status", st);
-  if (filters.order_number?.trim())
-    q = q.ilike("order_number", "%" + filters.order_number.trim() + "%");
-  if (filters.received_from?.trim()) q = q.gte("received_at", filters.received_from.trim());
-  if (filters.received_to?.trim()) q = q.lte("received_at", filters.received_to.trim());
-  const cr = decodeMultiFilter(filters.coord_review_status);
-  if (cr.length === 1) q = q.eq("coord_review_status", cr[0]!);
-  else if (cr.length > 1) q = q.in("coord_review_status", cr);
-
-  const from = (page - 1) * pageSize;
-  const to = from + pageSize - 1;
-  const sortAsc = filters.received_sort === "asc";
-  q = q.order("received_at", { ascending: sortAsc }).range(from, to);
-
-  const { data, error, count } = await q;
-  if (error) throw new Error(error.message);
-
-  const rows: LabOrderRow[] = (data ?? []).map((r: Record<string, unknown>) => {
-    const partners = r["partners"] as { code?: string; name?: string } | null;
-    const rawRx = r["doctor_prescriptions"] as { slip_code?: string | null } | { slip_code?: string | null }[] | null;
-    const rx = Array.isArray(rawRx) ? rawRx[0] : rawRx;
-    const lines = r["lab_order_lines"] as { line_amount?: string | number }[] | null;
-    let total = 0;
-    for (const line of lines ?? []) {
-      total += Number(line.line_amount ?? 0);
-    }
-    const crs = r["coord_review_status"] as string | undefined;
-    const subtotal = Math.round(total * 100) / 100;
-    const bPct = Number(r["billing_order_discount_percent"] ?? 0);
-    const bAmt = Number(r["billing_order_discount_amount"] ?? 0);
-    const bFees = Number(r["billing_other_fees"] ?? 0);
-    return {
-      id: r["id"] as string,
-      order_number: r["order_number"] as string,
-      received_at: r["received_at"] as string,
-      partner_id: r["partner_id"] as string,
-      patient_name: r["patient_name"] as string,
-      clinic_name: (r["clinic_name"] as string | null) ?? null,
-      status: r["status"] as LabOrderRow["status"],
-      notes: (r["notes"] as string | null) ?? null,
-      created_at: r["created_at"] as string,
-      updated_at: r["updated_at"] as string,
-      partner_code: partners?.code,
-      partner_name: partners?.name,
-      total_amount: subtotal,
-      coord_review_status: crs === "verified" ? "verified" : "pending",
-      doctor_prescription_id: (r["doctor_prescription_id"] as string | null) ?? null,
-      prescription_slip_code: rx?.slip_code ?? null,
+  const crs = r["coord_review_status"] as string | undefined;
+  const subtotal = Math.round(total * 100) / 100;
+  const bPct = Number(r["billing_order_discount_percent"] ?? 0);
+  const bAmt = Number(r["billing_order_discount_amount"] ?? 0);
+  const bFees = Number(r["billing_other_fees"] ?? 0);
+  return {
+    id: r["id"] as string,
+    order_number: r["order_number"] as string,
+    received_at: r["received_at"] as string,
+    partner_id: r["partner_id"] as string,
+    patient_name: r["patient_name"] as string,
+    clinic_name: (r["clinic_name"] as string | null) ?? null,
+    status: r["status"] as LabOrderRow["status"],
+    notes: (r["notes"] as string | null) ?? null,
+    created_at: r["created_at"] as string,
+    updated_at: r["updated_at"] as string,
+    partner_code: partners?.code,
+    partner_name: partners?.name,
+    total_amount: subtotal,
+    coord_review_status: crs === "pending" ? "pending" : "verified",
+    doctor_prescription_id: (r["doctor_prescription_id"] as string | null) ?? null,
+    prescription_slip_code: rx?.slip_code ?? null,
+    billing_order_discount_percent: bPct,
+    billing_order_discount_amount: bAmt,
+    billing_other_fees: bFees,
+    payment_notice_doc_number: (r["payment_notice_doc_number"] as string | null) ?? null,
+    payment_notice_issued_at: (r["payment_notice_issued_at"] as string | null) ?? null,
+    grand_total: computeOrderGrandTotal({
+      subtotal_lines: subtotal,
       billing_order_discount_percent: bPct,
       billing_order_discount_amount: bAmt,
       billing_other_fees: bFees,
-      payment_notice_doc_number: (r["payment_notice_doc_number"] as string | null) ?? null,
-      payment_notice_issued_at: (r["payment_notice_issued_at"] as string | null) ?? null,
-      grand_total: computeOrderGrandTotal({
-        subtotal_lines: subtotal,
-        billing_order_discount_percent: bPct,
-        billing_order_discount_amount: bAmt,
-        billing_other_fees: bFees,
-      }),
-      order_category: (r["order_category"] as string | undefined) ?? "new_work",
-      sender_name: (r["sender_name"] as string | null) ?? null,
-    };
-  });
+    }),
+    order_category: (r["order_category"] as string | undefined) ?? "new_work",
+    sender_name: (r["sender_name"] as string | null) ?? null,
+  };
+}
 
-  return { rows, total: count ?? 0 };
+type ListLabOrdersSelectTier = "full" | "noProdUi" | "legacyCore";
+
+export async function listLabOrders(args: ListArgs): Promise<ListResult<LabOrderRow>> {
+  const supabase = createSupabaseAdmin();
+  const { page, pageSize, globalSearch, filters } = args;
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+  const sortAsc = filters.received_sort === "asc";
+
+  const tiers: ListLabOrdersSelectTier[] = ["full", "noProdUi", "legacyCore"];
+  const selectFor: Record<ListLabOrdersSelectTier, string> = {
+    full: LAB_ORDERS_LIST_SELECT_FULL,
+    noProdUi: LAB_ORDERS_LIST_SELECT_NO_PROD_UI,
+    legacyCore: LAB_ORDERS_LIST_SELECT_LEGACY_CORE,
+  };
+
+  let lastMessage = "";
+  for (let i = 0; i < tiers.length; i++) {
+    const tier = tiers[i]!;
+    let q = supabase.from("lab_orders").select(selectFor[tier], { count: "exact" });
+
+    const g = globalSearch.trim();
+    if (g) {
+      const p = "%" + g + "%";
+      q = q.or(
+        "order_number.ilike." + p + ",patient_name.ilike." + p + ",clinic_name.ilike." + p,
+      );
+    }
+    const st = decodeMultiFilter(filters.status);
+    if (st.length === 1) q = q.eq("status", st[0]!);
+    else if (st.length > 1) q = q.in("status", st);
+    if (filters.order_number?.trim())
+      q = q.ilike("order_number", "%" + filters.order_number.trim() + "%");
+    if (filters.received_from?.trim()) q = q.gte("received_at", filters.received_from.trim());
+    if (filters.received_to?.trim()) q = q.lte("received_at", filters.received_to.trim());
+    if (tier !== "legacyCore") {
+      const cr = decodeMultiFilter(filters.coord_review_status);
+      if (cr.length === 1) q = q.eq("coord_review_status", cr[0]!);
+      else if (cr.length > 1) q = q.in("coord_review_status", cr);
+    }
+
+    q = q.order("received_at", { ascending: sortAsc }).range(from, to);
+    const { data, error, count } = await q;
+    if (!error) {
+      const rows: LabOrderRow[] = (data ?? []).map((r) =>
+        mapLabOrderListRow(r as unknown as Record<string, unknown>),
+      );
+      return { rows, total: count ?? 0 };
+    }
+    lastMessage = error.message;
+    const retry = i < tiers.length - 1 && isLabOrdersListSchemaDriftError(error.message);
+    if (!retry) {
+      throw new Error(
+        error.message +
+          (isLabOrdersListSchemaDriftError(error.message)
+            ? " — Chạy các file SQL trong supabase/sql theo thứ tự trên project Supabase (migration đồng bộ schema)."
+            : ""),
+      );
+    }
+  }
+
+  throw new Error(lastMessage || "Không tải được danh sách đơn.");
 }
 
 const labOrderProductionHeaderSchema = z.object({
@@ -652,61 +697,28 @@ export async function getLabOrderPrintPayload(orderId: string): Promise<LabOrder
 /** Đơn hàng gần nhất của một đối tác (xem nhanh trong modal). */
 export async function listLabOrdersByPartner(partnerId: string, limit = 50): Promise<LabOrderRow[]> {
   const supabase = createSupabaseAdmin();
-  const { data, error } = await supabase
-    .from("lab_orders")
-    .select(
-      "id, order_number, received_at, partner_id, patient_name, clinic_name, status, notes, created_at, updated_at, order_category, sender_name, coord_review_status, doctor_prescription_id, billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, payment_notice_doc_number, payment_notice_issued_at, partners:partner_id(code,name), doctor_prescriptions(slip_code), lab_order_lines(line_amount)",
-    )
-    .eq("partner_id", partnerId)
-    .order("received_at", { ascending: false })
-    .limit(limit);
-  if (error) throw new Error(error.message);
-
-  return (data ?? []).map((r: Record<string, unknown>) => {
-    const partners = r["partners"] as { code?: string; name?: string } | null;
-    const rawRx = r["doctor_prescriptions"] as { slip_code?: string | null } | { slip_code?: string | null }[] | null;
-    const rx = Array.isArray(rawRx) ? rawRx[0] : rawRx;
-    const lines = r["lab_order_lines"] as { line_amount?: string | number }[] | null;
-    let total = 0;
-    for (const line of lines ?? []) {
-      total += Number(line.line_amount ?? 0);
+  const tiers: ListLabOrdersSelectTier[] = ["full", "noProdUi", "legacyCore"];
+  const selectFor: Record<ListLabOrdersSelectTier, string> = {
+    full: LAB_ORDERS_LIST_SELECT_FULL,
+    noProdUi: LAB_ORDERS_LIST_SELECT_NO_PROD_UI,
+    legacyCore: LAB_ORDERS_LIST_SELECT_LEGACY_CORE,
+  };
+  let lastMessage = "";
+  for (let i = 0; i < tiers.length; i++) {
+    const tier = tiers[i]!;
+    const { data, error } = await supabase
+      .from("lab_orders")
+      .select(selectFor[tier])
+      .eq("partner_id", partnerId)
+      .order("received_at", { ascending: false })
+      .limit(limit);
+    if (!error) {
+      return (data ?? []).map((r) => mapLabOrderListRow(r as unknown as Record<string, unknown>));
     }
-    const crs = r["coord_review_status"] as string | undefined;
-    const subtotal = Math.round(total * 100) / 100;
-    const bPct = Number(r["billing_order_discount_percent"] ?? 0);
-    const bAmt = Number(r["billing_order_discount_amount"] ?? 0);
-    const bFees = Number(r["billing_other_fees"] ?? 0);
-    return {
-      id: r["id"] as string,
-      order_number: r["order_number"] as string,
-      received_at: r["received_at"] as string,
-      partner_id: r["partner_id"] as string,
-      patient_name: r["patient_name"] as string,
-      clinic_name: (r["clinic_name"] as string | null) ?? null,
-      status: r["status"] as LabOrderRow["status"],
-      notes: (r["notes"] as string | null) ?? null,
-      created_at: r["created_at"] as string,
-      updated_at: r["updated_at"] as string,
-      partner_code: partners?.code,
-      partner_name: partners?.name,
-      total_amount: subtotal,
-      coord_review_status: crs === "verified" ? "verified" : "pending",
-      doctor_prescription_id: (r["doctor_prescription_id"] as string | null) ?? null,
-      prescription_slip_code: rx?.slip_code ?? null,
-      billing_order_discount_percent: bPct,
-      billing_order_discount_amount: bAmt,
-      billing_other_fees: bFees,
-      payment_notice_doc_number: (r["payment_notice_doc_number"] as string | null) ?? null,
-      payment_notice_issued_at: (r["payment_notice_issued_at"] as string | null) ?? null,
-      grand_total: computeOrderGrandTotal({
-        subtotal_lines: subtotal,
-        billing_order_discount_percent: bPct,
-        billing_order_discount_amount: bAmt,
-        billing_other_fees: bFees,
-      }),
-      order_category: (r["order_category"] as string | undefined) ?? "new_work",
-      sender_name: (r["sender_name"] as string | null) ?? null,
-    };
-  });
+    lastMessage = error.message;
+    const retry = i < tiers.length - 1 && isLabOrdersListSchemaDriftError(error.message);
+    if (!retry) throw new Error(error.message);
+  }
+  throw new Error(lastMessage || "Không tải được đơn theo đối tác.");
 }
 
