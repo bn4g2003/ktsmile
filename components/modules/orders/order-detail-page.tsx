@@ -38,7 +38,14 @@ import {
   type LabOrderLineRow,
   type LabOrderRow,
 } from "@/lib/actions/lab-orders";
-import { formatOrderStatus, orderStatusBadgeClassName } from "@/lib/format/labels";
+import {
+  allowedLabOrderStatusTargets,
+  canChangeLabOrderStatusFrom,
+  formatLabOrderLineWorkType,
+  formatOrderStatus,
+  labOrderLineWorkTypeOptions,
+  orderStatusBadgeClassName,
+} from "@/lib/format/labels";
 
 export function OrderDetailPage() {
   const params = useParams();
@@ -60,6 +67,8 @@ export function OrderDetailPage() {
   const [price, setPrice] = React.useState("0");
   const [disc, setDisc] = React.useState("0");
   const [notes, setNotes] = React.useState("");
+  const [toothCount, setToothCount] = React.useState("");
+  const [workType, setWorkType] = React.useState<"new_work" | "warranty">("new_work");
   const [quickOpen, setQuickOpen] = React.useState(false);
   const [quickStatus, setQuickStatus] = React.useState<LabOrderRow["status"]>("draft");
   const [quickPending, setQuickPending] = React.useState(false);
@@ -107,7 +116,8 @@ export function OrderDetailPage() {
           (r) =>
             r.tooth_positions.toLowerCase().includes(g) ||
             (r.shade ?? "").toLowerCase().includes(g) ||
-            (r.product_code ?? "").toLowerCase().includes(g),
+            (r.product_code ?? "").toLowerCase().includes(g) ||
+            formatLabOrderLineWorkType(r.work_type).toLowerCase().includes(g),
         );
       }
       const total = filtered.length;
@@ -126,6 +136,8 @@ export function OrderDetailPage() {
     setPrice("0");
     setDisc("0");
     setNotes("");
+    setToothCount("");
+    setWorkType("new_work");
     setErr(null);
   };
 
@@ -139,6 +151,8 @@ export function OrderDetailPage() {
     setProductId(row.product_id);
     setTooth(row.tooth_positions);
     setShade(row.shade ?? "");
+    setToothCount(row.tooth_count != null ? String(row.tooth_count) : "");
+    setWorkType(row.work_type);
     setQty(String(row.quantity));
     setPrice(String(row.unit_price));
     setDisc(String(row.discount_percent));
@@ -149,6 +163,10 @@ export function OrderDetailPage() {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (toothCount.trim() !== "" && Number.isNaN(Number.parseInt(toothCount, 10))) {
+      setErr("Số răng phải là số nguyên.");
+      return;
+    }
     setPending(true);
     setErr(null);
     try {
@@ -157,9 +175,11 @@ export function OrderDetailPage() {
         product_id: productId,
         tooth_positions: tooth.trim(),
         shade: shade.trim() || null,
+        tooth_count: toothCount.trim() === "" ? null : Number.parseInt(toothCount, 10),
         quantity: Number(qty),
         unit_price: Number(price),
         discount_percent: Number(disc) || 0,
+        work_type: workType,
         notes: notes.trim() || null,
       };
       if (editing) await updateLabOrderLine(editing.id, payload);
@@ -190,6 +210,19 @@ export function OrderDetailPage() {
       { accessorKey: "product_name", header: "Tên SP" },
       { accessorKey: "tooth_positions", header: "Vị trí răng" },
       { accessorKey: "shade", header: "Màu" },
+      {
+        accessorKey: "tooth_count",
+        header: "Số răng",
+        cell: ({ getValue }) => {
+          const v = getValue() as number | null;
+          return v != null ? String(v) : "—";
+        },
+      },
+      {
+        accessorKey: "work_type",
+        header: "Loại",
+        cell: ({ getValue }) => formatLabOrderLineWorkType(String(getValue())),
+      },
       { accessorKey: "quantity", header: "SL" },
       { accessorKey: "unit_price", header: "Đơn giá" },
       { accessorKey: "discount_percent", header: "CK %" },
@@ -218,6 +251,8 @@ export function OrderDetailPage() {
           { label: "Tên SP", value: row.product_name },
           { label: "Vị trí răng", value: row.tooth_positions },
           { label: "Màu", value: row.shade },
+          { label: "Số răng", value: row.tooth_count != null ? row.tooth_count : "—" },
+          { label: "Loại", value: formatLabOrderLineWorkType(row.work_type) },
           { label: "Số lượng", value: row.quantity },
           { label: "Đơn giá", value: row.unit_price },
           { label: "CK %", value: row.discount_percent },
@@ -274,19 +309,27 @@ export function OrderDetailPage() {
                 <span className={orderStatusBadgeClassName(orderStatus)} title={formatOrderStatus(orderStatus)}>
                   {formatOrderStatus(orderStatus)}
                 </span>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 px-2 text-xs"
-                  onClick={openQuickStatus}
-                >
-                  Đổi trạng thái
-                </Button>
+                {canChangeLabOrderStatusFrom(orderStatus) ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2 text-xs"
+                    onClick={openQuickStatus}
+                  >
+                    Đổi trạng thái
+                  </Button>
+                ) : null}
               </div>
               <p className="text-sm text-[var(--on-surface-muted)]">
-                Khách: {partners?.code} — {partners?.name} · BN: {String(header.patient_name)} · Ngày nhận:{" "}
-                {String(header.received_at)}
+                Khách: {partners?.code} — {partners?.name}
+                {header.clinic_name ? (
+                  <>
+                    {" "}
+                    · Nha khoa: {String(header.clinic_name)}
+                  </>
+                ) : null}{" "}
+                · BN: {String(header.patient_name)} · Ngày nhận: {String(header.received_at)}
               </p>
             </div>
             <LabOrderPrintButton orderId={id} label="In / lưu PDF (trình duyệt)" />
@@ -319,6 +362,8 @@ export function OrderDetailPage() {
           if (!v) setQuickErr(null);
         }}
         orderLabel={orderNumberStr}
+        currentStatus={orderStatus}
+        allowedStatuses={allowedLabOrderStatusTargets(orderStatus)}
         value={quickStatus}
         onValueChange={setQuickStatus}
         onConfirm={saveQuickStatus}
@@ -352,6 +397,32 @@ export function OrderDetailPage() {
             <div className="grid gap-2">
               <Label htmlFor="ln-shade">Màu</Label>
               <Input id="ln-shade" value={shade} onChange={(e) => setShade(e.target.value)} />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="ln-toothcnt">Số răng</Label>
+              <Input
+                id="ln-toothcnt"
+                type="number"
+                min={0}
+                step={1}
+                value={toothCount}
+                onChange={(e) => setToothCount(e.target.value)}
+                placeholder="Tuỳ chọn"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="ln-work">Làm mới / bảo hành</Label>
+              <Select
+                id="ln-work"
+                value={workType}
+                onChange={(e) => setWorkType(e.target.value as "new_work" | "warranty")}
+              >
+                {labOrderLineWorkTypeOptions.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </Select>
             </div>
             <div className="grid gap-2">
               <Label htmlFor="ln-qty">Số lượng</Label>

@@ -6,6 +6,11 @@ import { createSupabaseAdmin } from "@/lib/supabase/server";
 import type { ListArgs, ListResult } from "@/components/shared/data-grid/excel-data-grid";
 import { decodeMultiFilter } from "@/lib/grid/multi-filter";
 import type { LabOrderPrintLine, LabOrderPrintPayload } from "@/lib/reports/lab-order-html";
+import {
+  type LabOrderStatus,
+  isAllowedLabOrderStatusTransition,
+  labOrderStatusTransitionErrorMessage,
+} from "@/lib/format/labels";
 
 export type LabOrderRow = {
   id: string;
@@ -13,6 +18,7 @@ export type LabOrderRow = {
   received_at: string;
   partner_id: string;
   patient_name: string;
+  clinic_name: string | null;
   status: "draft" | "in_progress" | "completed" | "delivered" | "cancelled";
   notes: string | null;
   created_at: string;
@@ -26,14 +32,21 @@ export async function listLabOrders(args: ListArgs): Promise<ListResult<LabOrder
   const supabase = createSupabaseAdmin();
   const { page, pageSize, globalSearch, filters } = args;
   let q = supabase.from("lab_orders").select(
-    "id, order_number, received_at, partner_id, patient_name, status, notes, created_at, updated_at, partners:partner_id(code,name), lab_order_lines(line_amount)",
+    "id, order_number, received_at, partner_id, patient_name, clinic_name, status, notes, created_at, updated_at, partners:partner_id(code,name), lab_order_lines(line_amount)",
     { count: "exact" },
   );
 
   const g = globalSearch.trim();
   if (g) {
     const p = "%" + g + "%";
-    q = q.or("order_number.ilike." + p + ",patient_name.ilike." + p);
+    q = q.or(
+      "order_number.ilike." +
+        p +
+        ",patient_name.ilike." +
+        p +
+        ",clinic_name.ilike." +
+        p,
+    );
   }
   const st = decodeMultiFilter(filters.status);
   if (st.length === 1) q = q.eq("status", st[0]!);
@@ -63,6 +76,7 @@ export async function listLabOrders(args: ListArgs): Promise<ListResult<LabOrder
       received_at: r["received_at"] as string,
       partner_id: r["partner_id"] as string,
       patient_name: r["patient_name"] as string,
+      clinic_name: (r["clinic_name"] as string | null) ?? null,
       status: r["status"] as LabOrderRow["status"],
       notes: (r["notes"] as string | null) ?? null,
       created_at: r["created_at"] as string,
@@ -76,31 +90,154 @@ export async function listLabOrders(args: ListArgs): Promise<ListResult<LabOrder
   return { rows, total: count ?? 0 };
 }
 
-const orderSchema = z.object({
-  order_number: z.string().min(1).max(100),
+const labOrderCreateHeaderSchema = z.object({
   received_at: z.string().min(1),
   partner_id: z.string().uuid(),
   patient_name: z.string().min(1).max(500),
+  clinic_name: z.string().max(500).optional().nullable(),
   status: z
     .enum(["draft", "in_progress", "completed", "delivered", "cancelled"])
     .optional(),
   notes: z.string().max(2000).optional().nullable(),
 });
 
-export async function createLabOrder(input: z.infer<typeof orderSchema>) {
+const labOrderLineDraftSchema = z.object({
+  product_id: z.string().uuid(),
+  tooth_positions: z.string().min(1).max(200),
+  shade: z.string().max(100).optional().nullable(),
+  tooth_count: z.coerce.number().int().min(0).optional().nullable(),
+  quantity: z.coerce.number().positive(),
+  unit_price: z.coerce.number().min(0),
+  discount_percent: z.coerce.number().min(0).max(100).optional().nullable(),
+  work_type: z.enum(["new_work", "warranty"]).optional(),
+  notes: z.string().max(1000).optional().nullable(),
+});
+
+const labOrderUpdateSchema = z.object({
+  order_number: z.string().min(1).max(100),
+  received_at: z.string().min(1),
+  partner_id: z.string().uuid(),
+  patient_name: z.string().min(1).max(500),
+  clinic_name: z.string().max(500).optional().nullable(),
+  status: z
+    .enum(["draft", "in_progress", "completed", "delivered", "cancelled"])
+    .optional(),
+  notes: z.string().max(2000).optional().nullable(),
+});
+
+/** Gợi ý số đơn theo ngày nhận: LO-YYYYMMDD-001 … (tránh trùng với các số cùng tiền tố). */
+export async function suggestLabOrderNumber(receivedAt: string): Promise<string> {
   const supabase = createSupabaseAdmin();
-  const row = orderSchema.parse(input);
-  const { error } = await supabase.from("lab_orders").insert({
-    ...row,
-    status: row.status ?? "draft",
-  });
+  const day = receivedAt.trim().slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) {
+    throw new Error("Ngày nhận không hợp lệ.");
+  }
+  const prefix = "LO-" + day.replace(/-/g, "") + "-";
+  const esc = prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const suffixRe = new RegExp("^" + esc + "(\\d+)$");
+  const { data, error } = await supabase
+    .from("lab_orders")
+    .select("order_number")
+    .ilike("order_number", prefix + "%");
   if (error) throw new Error(error.message);
-  revalidatePath("/orders");
+  let maxSeq = 0;
+  for (const r of data ?? []) {
+    const num = r.order_number as string;
+    const m = suffixRe.exec(num);
+    if (m) maxSeq = Math.max(maxSeq, parseInt(m[1]!, 10));
+  }
+  return prefix + String(maxSeq + 1).padStart(3, "0");
 }
 
-export async function updateLabOrder(id: string, input: z.infer<typeof orderSchema>) {
+function isUniqueViolation(err: { message?: string; code?: string } | null): boolean {
+  if (!err) return false;
+  if (err.code === "23505") return true;
+  const m = (err.message ?? "").toLowerCase();
+  return m.includes("duplicate") || m.includes("unique");
+}
+
+/**
+ * Tạo đơn: số đơn cấp tự động trên server; mặc định trạng thái "delivered" nếu không gửi.
+ * Kèm danh sách dòng (có thể rỗng — thêm sau tại trang chi tiết).
+ */
+export async function createLabOrder(
+  header: z.infer<typeof labOrderCreateHeaderSchema>,
+  lines: z.infer<typeof labOrderLineDraftSchema>[] = [],
+): Promise<{ id: string }> {
+  const h = labOrderCreateHeaderSchema.parse(header);
+  const parsedLines = lines.map((l) => labOrderLineDraftSchema.parse(l));
   const supabase = createSupabaseAdmin();
-  const row = orderSchema.parse(input);
+  let lastErr: Error | null = null;
+
+  for (let attempt = 0; attempt < 15; attempt++) {
+    const order_number = await suggestLabOrderNumber(h.received_at);
+    const { data, error } = await supabase
+      .from("lab_orders")
+      .insert({
+        order_number,
+        received_at: h.received_at,
+        partner_id: h.partner_id,
+        patient_name: h.patient_name.trim(),
+        clinic_name: h.clinic_name?.trim() ? h.clinic_name.trim() : null,
+        status: h.status ?? "delivered",
+        notes: h.notes?.trim() ? h.notes.trim() : null,
+      })
+      .select("id")
+      .single();
+
+    if (error) {
+      if (isUniqueViolation(error)) {
+        lastErr = new Error(error.message);
+        continue;
+      }
+      throw new Error(error.message);
+    }
+
+    const id = data!.id as string;
+
+    try {
+      for (const ln of parsedLines) {
+        const { error: le } = await supabase.from("lab_order_lines").insert({
+          order_id: id,
+          product_id: ln.product_id,
+          tooth_positions: ln.tooth_positions.trim(),
+          shade: ln.shade?.trim() ? ln.shade.trim() : null,
+          tooth_count: ln.tooth_count ?? null,
+          quantity: ln.quantity,
+          unit_price: ln.unit_price,
+          discount_percent: ln.discount_percent ?? 0,
+          work_type: ln.work_type ?? "new_work",
+          notes: ln.notes?.trim() ? ln.notes.trim() : null,
+        });
+        if (le) throw new Error(le.message);
+      }
+    } catch (e) {
+      await supabase.from("lab_orders").delete().eq("id", id);
+      throw e;
+    }
+
+    revalidatePath("/orders");
+    revalidatePath("/orders/" + id);
+    return { id };
+  }
+
+  throw lastErr ?? new Error("Không cấp được số đơn duy nhất.");
+}
+
+export async function updateLabOrder(id: string, input: z.infer<typeof labOrderUpdateSchema>) {
+  const supabase = createSupabaseAdmin();
+  const row = labOrderUpdateSchema.parse(input);
+  const { data: cur, error: e0 } = await supabase
+    .from("lab_orders")
+    .select("status")
+    .eq("id", id)
+    .single();
+  if (e0) throw new Error(e0.message);
+  const fromStatus = cur.status as LabOrderStatus;
+  const toStatus = (row.status ?? fromStatus) as LabOrderStatus;
+  if (!isAllowedLabOrderStatusTransition(fromStatus, toStatus)) {
+    throw new Error(labOrderStatusTransitionErrorMessage(fromStatus, toStatus));
+  }
   const { error } = await supabase.from("lab_orders").update(row).eq("id", id);
   if (error) throw new Error(error.message);
   revalidatePath("/orders");
@@ -117,6 +254,16 @@ export async function updateLabOrderStatus(
 ) {
   const supabase = createSupabaseAdmin();
   const { status: st } = statusOnlySchema.parse({ status });
+  const { data: cur, error: e0 } = await supabase
+    .from("lab_orders")
+    .select("status")
+    .eq("id", id)
+    .single();
+  if (e0) throw new Error(e0.message);
+  const fromStatus = cur.status as LabOrderStatus;
+  if (!isAllowedLabOrderStatusTransition(fromStatus, st)) {
+    throw new Error(labOrderStatusTransitionErrorMessage(fromStatus, st));
+  }
   const { error } = await supabase.from("lab_orders").update({ status: st }).eq("id", id);
   if (error) throw new Error(error.message);
   revalidatePath("/orders");
@@ -136,6 +283,8 @@ export type LabOrderLineRow = {
   product_id: string;
   tooth_positions: string;
   shade: string | null;
+  tooth_count: number | null;
+  work_type: "new_work" | "warranty";
   quantity: number;
   unit_price: number;
   discount_percent: number;
@@ -151,7 +300,7 @@ export async function listLabOrderLines(orderId: string): Promise<LabOrderLineRo
   const { data, error } = await supabase
     .from("lab_order_lines")
     .select(
-      "id, order_id, product_id, tooth_positions, shade, quantity, unit_price, discount_percent, line_amount, notes, created_at, products:product_id(code,name)",
+      "id, order_id, product_id, tooth_positions, shade, tooth_count, work_type, quantity, unit_price, discount_percent, line_amount, notes, created_at, products:product_id(code,name)",
     )
     .eq("order_id", orderId)
     .order("created_at", { ascending: true });
@@ -164,6 +313,11 @@ export async function listLabOrderLines(orderId: string): Promise<LabOrderLineRo
       product_id: r["product_id"] as string,
       tooth_positions: r["tooth_positions"] as string,
       shade: (r["shade"] as string | null) ?? null,
+      tooth_count:
+        r["tooth_count"] === null || r["tooth_count"] === undefined
+          ? null
+          : Number(r["tooth_count"]),
+      work_type: (r["work_type"] as LabOrderLineRow["work_type"]) ?? "new_work",
       quantity: Number(r["quantity"]),
       unit_price: Number(r["unit_price"]),
       discount_percent: Number(r["discount_percent"]),
@@ -181,9 +335,11 @@ const lineSchema = z.object({
   product_id: z.string().uuid(),
   tooth_positions: z.string().min(1).max(200),
   shade: z.string().max(100).optional().nullable(),
+  tooth_count: z.coerce.number().int().min(0).optional().nullable(),
   quantity: z.coerce.number().positive(),
   unit_price: z.coerce.number().min(0),
   discount_percent: z.coerce.number().min(0).max(100).optional().nullable(),
+  work_type: z.enum(["new_work", "warranty"]).optional(),
   notes: z.string().max(1000).optional().nullable(),
 });
 
@@ -193,6 +349,8 @@ export async function createLabOrderLine(input: z.infer<typeof lineSchema>) {
   const { error } = await supabase.from("lab_order_lines").insert({
     ...row,
     discount_percent: row.discount_percent ?? 0,
+    tooth_count: row.tooth_count ?? null,
+    work_type: row.work_type ?? "new_work",
   });
   if (error) throw new Error(error.message);
   revalidatePath("/orders");
@@ -253,7 +411,7 @@ export async function getLabOrder(id: string) {
   const { data, error } = await supabase
     .from("lab_orders")
     .select(
-      "id, order_number, received_at, partner_id, patient_name, status, notes, created_at, updated_at, partners:partner_id(code,name)",
+      "id, order_number, received_at, partner_id, patient_name, clinic_name, status, notes, created_at, updated_at, partners:partner_id(code,name)",
     )
     .eq("id", id)
     .single();
@@ -266,7 +424,7 @@ export async function getLabOrderPrintPayload(orderId: string): Promise<LabOrder
   const { data: row, error } = await supabase
     .from("lab_orders")
     .select(
-      "order_number, received_at, patient_name, status, notes, partners:partner_id(code,name)",
+      "order_number, received_at, patient_name, clinic_name, status, notes, partners:partner_id(code,name)",
     )
     .eq("id", orderId)
     .single();
@@ -277,7 +435,7 @@ export async function getLabOrderPrintPayload(orderId: string): Promise<LabOrder
   const { data: lineRows, error: le } = await supabase
     .from("lab_order_lines")
     .select(
-      "tooth_positions, shade, quantity, unit_price, discount_percent, line_amount, notes, products:product_id(code,name,unit)",
+      "tooth_positions, shade, tooth_count, work_type, quantity, unit_price, discount_percent, line_amount, notes, products:product_id(code,name,unit)",
     )
     .eq("order_id", orderId)
     .order("created_at", { ascending: true });
@@ -291,6 +449,11 @@ export async function getLabOrderPrintPayload(orderId: string): Promise<LabOrder
       unit: pr?.unit ?? "",
       tooth_positions: r["tooth_positions"] as string,
       shade: (r["shade"] as string | null) ?? null,
+      tooth_count:
+        r["tooth_count"] === null || r["tooth_count"] === undefined
+          ? null
+          : Number(r["tooth_count"]),
+      work_type: (r["work_type"] as "new_work" | "warranty") ?? "new_work",
       quantity: Number(r["quantity"]),
       unit_price: Number(r["unit_price"]),
       discount_percent: Number(r["discount_percent"]),
@@ -303,6 +466,7 @@ export async function getLabOrderPrintPayload(orderId: string): Promise<LabOrder
     order_number: row["order_number"] as string,
     received_at: row["received_at"] as string,
     patient_name: row["patient_name"] as string,
+    clinic_name: (row["clinic_name"] as string | null) ?? null,
     status: row["status"] as string,
     partner_code: partners?.code ?? null,
     partner_name: partners?.name ?? null,
@@ -317,7 +481,7 @@ export async function listLabOrdersByPartner(partnerId: string, limit = 50): Pro
   const { data, error } = await supabase
     .from("lab_orders")
     .select(
-      "id, order_number, received_at, partner_id, patient_name, status, notes, created_at, updated_at, partners:partner_id(code,name), lab_order_lines(line_amount)",
+      "id, order_number, received_at, partner_id, patient_name, clinic_name, status, notes, created_at, updated_at, partners:partner_id(code,name), lab_order_lines(line_amount)",
     )
     .eq("partner_id", partnerId)
     .order("received_at", { ascending: false })
@@ -337,6 +501,7 @@ export async function listLabOrdersByPartner(partnerId: string, limit = 50): Pro
       received_at: r["received_at"] as string,
       partner_id: r["partner_id"] as string,
       patient_name: r["patient_name"] as string,
+      clinic_name: (r["clinic_name"] as string | null) ?? null,
       status: r["status"] as LabOrderRow["status"],
       notes: (r["notes"] as string | null) ?? null,
       created_at: r["created_at"] as string,

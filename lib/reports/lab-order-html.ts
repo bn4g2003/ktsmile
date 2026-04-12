@@ -1,5 +1,5 @@
 import { formatVnd } from "@/lib/format/currency";
-import { formatOrderStatus } from "@/lib/format/labels";
+import { formatLabOrderLineWorkType, formatOrderStatus } from "@/lib/format/labels";
 import { escapeHtml } from "@/lib/reports/escape-html";
 
 export type LabOrderPrintLine = {
@@ -8,6 +8,8 @@ export type LabOrderPrintLine = {
   unit: string;
   tooth_positions: string;
   shade: string | null;
+  tooth_count: number | null;
+  work_type: string;
   quantity: number;
   unit_price: number;
   discount_percent: number;
@@ -19,6 +21,7 @@ export type LabOrderPrintPayload = {
   order_number: string;
   received_at: string;
   patient_name: string;
+  clinic_name: string | null;
   status: string;
   partner_code: string | null;
   partner_name: string | null;
@@ -46,6 +49,8 @@ export function buildLabOrderBodyHtml(p: LabOrderPrintPayload): string {
           <td>${escapeHtml(l.unit || "—")}</td>
           <td>${escapeHtml(l.tooth_positions)}</td>
           <td>${escapeHtml(l.shade ?? "—")}</td>
+          <td class="num">${escapeHtml(l.tooth_count != null ? String(l.tooth_count) : "—")}</td>
+          <td>${escapeHtml(formatLabOrderLineWorkType(l.work_type))}</td>
           <td class="num">${escapeHtml(fmtQty(l.quantity))}</td>
           <td class="num">${escapeHtml(formatVnd(l.unit_price))}</td>
           <td class="num">${escapeHtml(String(l.discount_percent))}</td>
@@ -61,6 +66,7 @@ export function buildLabOrderBodyHtml(p: LabOrderPrintPayload): string {
     <table class="kv">
       <tbody>
         <tr><th>Khách hàng</th><td>${partnerLine}</td></tr>
+        <tr><th>Nha khoa</th><td>${escapeHtml(p.clinic_name ?? "—")}</td></tr>
         <tr><th>Bệnh nhân</th><td>${escapeHtml(p.patient_name)}</td></tr>
         <tr><th>Trạng thái</th><td>${escapeHtml(formatOrderStatus(p.status))}</td></tr>
         <tr><th>Ghi chú đơn</th><td>${escapeHtml(p.notes ?? "—")}</td></tr>
@@ -76,6 +82,8 @@ export function buildLabOrderBodyHtml(p: LabOrderPrintPayload): string {
           <th>ĐVT</th>
           <th>Vị trí răng</th>
           <th>Màu</th>
+          <th class="num">Số răng</th>
+          <th>Loại</th>
           <th class="num">SL</th>
           <th class="num">Đơn giá</th>
           <th class="num">CK %</th>
@@ -83,10 +91,10 @@ export function buildLabOrderBodyHtml(p: LabOrderPrintPayload): string {
           <th>Ghi chú</th>
         </tr>
       </thead>
-      <tbody>${rows || `<tr><td colspan="11">Chưa có dòng.</td></tr>`}</tbody>
+      <tbody>${rows || `<tr><td colspan="13">Chưa có dòng.</td></tr>`}</tbody>
       <tfoot>
         <tr>
-          <th colspan="9" class="num">Cộng</th>
+          <th colspan="11" class="num">Cộng</th>
           <th class="num">${escapeHtml(formatVnd(total))}</th>
           <th></th>
         </tr>

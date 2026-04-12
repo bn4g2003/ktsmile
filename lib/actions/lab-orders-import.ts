@@ -213,6 +213,7 @@ export async function importLabOrdersFromExcel(formData: FormData): Promise<Impo
           received_at: first.receivedAtIso,
           partner_id: partnerId,
           patient_name: first.patientName,
+          clinic_name: null,
           status: "draft",
           notes: orderNotesFromGroup(lines),
         })

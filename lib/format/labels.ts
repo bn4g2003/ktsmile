@@ -26,8 +26,56 @@ export const labOrderStatusOptions = [
   { value: "cancelled", label: "Đã hủy" },
 ] as const;
 
+export type LabOrderStatus = (typeof labOrderStatusOptions)[number]["value"];
+
+/** Luồng nghiệp vụ: nháp → đang làm → hoàn thành → đã giao; có thể hủy từ các bước trước khi giao. */
+const labOrderStatusTransitions: Record<LabOrderStatus, readonly LabOrderStatus[]> = {
+  draft: ["in_progress", "cancelled"],
+  in_progress: ["completed", "cancelled"],
+  completed: ["delivered", "cancelled"],
+  delivered: [],
+  cancelled: [],
+};
+
+/** Trạng thái có thể chọn khi sửa / đổi nhanh (luôn gồm trạng thái hiện tại). */
+export function allowedLabOrderStatusTargets(current: LabOrderStatus): LabOrderStatus[] {
+  const more = labOrderStatusTransitions[current] ?? [];
+  return [current, ...more];
+}
+
+export function canChangeLabOrderStatusFrom(current: LabOrderStatus): boolean {
+  return (labOrderStatusTransitions[current]?.length ?? 0) > 0;
+}
+
+export function isAllowedLabOrderStatusTransition(from: LabOrderStatus, to: LabOrderStatus): boolean {
+  if (from === to) return true;
+  return (labOrderStatusTransitions[from] ?? []).includes(to);
+}
+
+export const labOrderLineWorkTypeOptions = [
+  { value: "new_work", label: "Làm mới" },
+  { value: "warranty", label: "Bảo hành" },
+] as const;
+
+export type LabOrderLineWorkType = (typeof labOrderLineWorkTypeOptions)[number]["value"];
+
+export function formatLabOrderLineWorkType(t: string) {
+  const m: Record<string, string> = { new_work: "Làm mới", warranty: "Bảo hành" };
+  return m[t] ?? t;
+}
+
 export function formatOrderStatus(s: string) {
   return statusLabels[s] ?? s;
+}
+
+export function labOrderStatusTransitionErrorMessage(from: LabOrderStatus, to: LabOrderStatus): string {
+  return (
+    "Không thể chuyển từ \"" +
+    formatOrderStatus(from) +
+    "\" sang \"" +
+    formatOrderStatus(to) +
+    "\"."
+  );
 }
 
 /** Badge pill (Tailwind) theo trạng thái đơn — tách màu rõ trên nền sáng/tối. */

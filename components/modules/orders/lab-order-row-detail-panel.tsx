@@ -4,7 +4,11 @@ import Link from "next/link";
 import * as React from "react";
 import { DetailPreview } from "@/components/ui/detail-preview";
 import { DetailTabStrip } from "@/components/ui/detail-tab-strip";
-import { formatOrderStatus, orderStatusBadgeClassName } from "@/lib/format/labels";
+import {
+  formatLabOrderLineWorkType,
+  formatOrderStatus,
+  orderStatusBadgeClassName,
+} from "@/lib/format/labels";
 import { listLabOrderLines, type LabOrderLineRow, type LabOrderRow } from "@/lib/actions/lab-orders";
 
 function OrderLinesBlock({ orderId }: { orderId: string }) {
@@ -38,6 +42,8 @@ function OrderLinesBlock({ orderId }: { orderId: string }) {
           <tr className="border-b border-[var(--border-ghost)] bg-[var(--surface-muted)] text-left text-[11px] font-bold uppercase tracking-wide text-[var(--on-surface-faint)]">
             <th className="px-3 py-2">Mã SP</th>
             <th className="px-3 py-2">Răng / vị trí</th>
+            <th className="px-3 py-2 text-center">Số răng</th>
+            <th className="px-3 py-2">Loại</th>
             <th className="px-3 py-2 text-right">SL</th>
             <th className="px-3 py-2 text-right">Đơn giá</th>
             <th className="px-3 py-2 text-right">CK %</th>
@@ -54,6 +60,10 @@ function OrderLinesBlock({ orderId }: { orderId: string }) {
                   <span className="mt-0.5 block text-xs text-[var(--on-surface-muted)]">Màu: {ln.shade}</span>
                 ) : null}
               </td>
+              <td className="px-3 py-2 text-center tabular-nums">
+                {ln.tooth_count != null ? ln.tooth_count : "—"}
+              </td>
+              <td className="px-3 py-2 text-xs">{formatLabOrderLineWorkType(ln.work_type)}</td>
               <td className="px-3 py-2 text-right tabular-nums">{ln.quantity}</td>
               <td className="px-3 py-2 text-right tabular-nums">
                 {ln.unit_price.toLocaleString("vi-VN")}
@@ -94,6 +104,7 @@ export function LabOrderRowDetailPanel({ row }: { row: LabOrderRow }) {
             { label: "Ngày nhận", value: row.received_at },
             { label: "Mã KH", value: row.partner_code },
             { label: "Khách", value: row.partner_name },
+            { label: "Nha khoa", value: row.clinic_name ?? "—" },
             { label: "Bệnh nhân", value: row.patient_name },
             {
               label: "Trạng thái",

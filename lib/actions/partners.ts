@@ -148,3 +148,16 @@ export async function listPartnerPicker() {
   return (data ?? []) as { id: string; code: string; name: string }[];
 }
 
+/** Chỉ khách (phòng khám / labo) — đơn phục hình không chọn NCC. */
+export async function listCustomerPartnerPicker() {
+  const supabase = createSupabaseAdmin();
+  const { data, error } = await supabase
+    .from("partners")
+    .select("id, code, name")
+    .in("partner_type", ["customer_clinic", "customer_labo"])
+    .order("code", { ascending: true })
+    .limit(3000);
+  if (error) throw new Error(error.message);
+  return (data ?? []) as { id: string; code: string; name: string }[];
+}
+
