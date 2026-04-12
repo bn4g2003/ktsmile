@@ -136,7 +136,12 @@ export function OrdersPage() {
       fd.set("file", file);
       const res = await importLabOrdersFromExcel(fd);
       if (res.ok) {
-        alert(res.message ?? "Nhập xong.");
+        const warn = res.errors?.length
+          ? "\n\nCảnh báo (dòng bỏ qua):\n" +
+            res.errors.slice(0, 35).join("\n") +
+            (res.errors.length > 35 ? "\n…" : "")
+          : "";
+        alert((res.message ?? "Nhập xong.") + warn);
         bumpGrid();
       } else {
         const detail = res.errors?.length

@@ -22,7 +22,8 @@ export type ParsedLabOrderLine = {
   sourceRow: number;
 };
 
-function fold(s: string): string {
+/** Xuất để import khớp tên SP với danh mục. */
+export function fold(s: string): string {
   return String(s ?? "")
     .toUpperCase()
     .normalize("NFD")
@@ -34,39 +35,68 @@ function fold(s: string): string {
     .trim();
 }
 
+/**
+ * Tìm cột theo tiêu đề: ưu tiên khớp đúng (sau khi fold), rồi mới `includes`.
+ * Với `includes`, thử needle dài trước để «LAB TRUY XUẤT» không bị nuốt bởi «LAB».
+ */
 function findCol(headers: string[], ...needles: string[]): number {
   const H = headers.map(fold);
-  for (const n of needles) {
-    const f = fold(n);
-    const i = H.findIndex((h) => h === f || h.includes(f));
-    if (i >= 0) return i;
+  const folded = needles.map((n) => fold(n));
+
+  for (let i = 0; i < needles.length; i++) {
+    const f = folded[i]!;
+    const j = H.findIndex((h) => h === f);
+    if (j >= 0) return j;
+  }
+
+  const byLen = [...folded].sort((a, b) => b.length - a.length);
+  for (const f of byLen) {
+    const j = H.findIndex((h) => h.includes(f));
+    if (j >= 0) return j;
   }
   return -1;
+}
+
+function rowLooksLikeLabOrderHeader(row: string[]): boolean {
+  const hasNgayNhan = row.some((h) => h.includes("NGAY") && h.includes("NHAN"));
+  const hasMaKh = row.some(
+    (h) => h === "MA KH" || (h.includes("MA KH") && !h.includes("MA KHACH")),
+  );
+  return hasNgayNhan && hasMaKh;
 }
 
 export function findLabOrderHeaderRow(aoa: unknown[][]): number {
   for (let r = 0; r < aoa.length; r++) {
     const row = (aoa[r] ?? []).map((c) => fold(String(c ?? "")));
-    const joined = row.join(" ");
-    if (joined.includes("NGAY NHAN") && (joined.includes("MA KH") || joined.includes("MA KHACH"))) {
-      return r;
-    }
+    if (rowLooksLikeLabOrderHeader(row)) return r;
   }
   throw new Error(
     "Không tìm thấy dòng tiêu đề. Cần có cột tương đương “NGÀY NHẬN” và “MÃ KH”.",
   );
 }
 
-/** Lấy năm từ ô kiểu “THÁNG 04 2026” phía trên dòng tiêu đề. */
-export function findSheetYearFromPreamble(aoa: unknown[][], headerRow: number): number | null {
+/** Lấy tháng/năm từ ô kiểu «THÁNG 04 2026» phía trên dòng tiêu đề. */
+export function findSheetPeriodFromPreamble(
+  aoa: unknown[][],
+  headerRow: number,
+): { year: number; month: number } | null {
   for (let r = 0; r < headerRow; r++) {
     for (const cell of aoa[r] ?? []) {
       const t = fold(String(cell ?? ""));
       const m = t.match(/THANG\s+(\d{1,2})\s+(\d{4})/);
-      if (m) return Number.parseInt(m[2]!, 10);
+      if (m) {
+        const month = Number.parseInt(m[1]!, 10);
+        const year = Number.parseInt(m[2]!, 10);
+        if (month >= 1 && month <= 12 && year >= 2000 && year <= 2100) return { month, year };
+      }
     }
   }
   return null;
+}
+
+/** @deprecated Dùng findSheetPeriodFromPreamble; giữ để tương thích. */
+export function findSheetYearFromPreamble(aoa: unknown[][], headerRow: number): number | null {
+  return findSheetPeriodFromPreamble(aoa, headerRow)?.year ?? null;
 }
 
 function parseMoney(v: unknown): number {
@@ -131,8 +161,14 @@ export function parseLabOrderSheet(aoa: unknown[][]): ParsedLabOrderLine[] {
   if (!aoa.length) throw new Error("Sheet trống.");
   const headerIdx = findLabOrderHeaderRow(aoa);
   const headerRow = (aoa[headerIdx] ?? []).map((c) => String(c ?? ""));
-  const sheetYear =
-    findSheetYearFromPreamble(aoa, headerIdx) ?? new Date().getFullYear();
+  const period = findSheetPeriodFromPreamble(aoa, headerIdx);
+  const sheetYear = period?.year ?? new Date().getFullYear();
+  const sheetMonth = period?.month ?? new Date().getUTCMonth() + 1;
+  const defaultDateIso =
+    sheetYear +
+    "-" +
+    String(sheetMonth).padStart(2, "0") +
+    "-01";
 
   const iLabTx = findCol(headerRow, "LAB TRUY XUAT", "LAB TRUY XUẤT");
   const iDate = findCol(headerRow, "NGÀY NHẬN", "NGAY NHAN");
@@ -150,16 +186,13 @@ export function parseLabOrderSheet(aoa: unknown[][]): ParsedLabOrderLine[] {
   const iNote = findCol(headerRow, "GHI CHÚ", "GHI CHU");
   const iSku = findCol(headerRow, "MÃ SẢN PHẨM", "MA SAN PHAM");
 
-  if (iDate < 0 || iPartner < 0 || iPatient < 0 || iQty < 0) {
+  if (iPartner < 0) {
+    throw new Error("Thiếu cột MÃ KH (kiểm tra dòng tiêu đề).");
+  }
+  if (iType < 0 && iSku < 0 && iTypeName < 0) {
     throw new Error(
-      "Thiếu cột bắt buộc: NGÀY NHẬN, MÃ KH, BỆNH NHÂN, SỐ LƯỢNG (hoặc tên lệch dấu).",
+      "Cần ít nhất một trong: MÃ LOẠI, MÃ SẢN PHẨM hoặc TÊN LOẠI (để khớp danh mục SP).",
     );
-  }
-  if (iType < 0 && iSku < 0) {
-    throw new Error("Cần ít nhất một cột “MÃ LOẠI” hoặc “MÃ SẢN PHẨM” để xác định sản phẩm.");
-  }
-  if (iPrice < 0) {
-    throw new Error("Thiếu cột “ĐƠN GIÁ”.");
   }
 
   const pick = (row: unknown[], idx: number) => (idx >= 0 ? String(row[idx] ?? "").trim() : "");
@@ -175,41 +208,50 @@ export function parseLabOrderSheet(aoa: unknown[][]): ParsedLabOrderLine[] {
       if (!nonEmpty) continue;
     }
     if (!partner) continue;
-    if (!patient) {
-      throw new Error(`Dòng ${r + 1}: thiếu tên bệnh nhân (MÃ KH: ${partner}).`);
-    }
+
+    /** Nhiều file Excel để trống BN; vẫn nhập đơn, gom dòng cùng KH + ngày + «—». */
+    const patientResolved = patient.replace(/\s+/g, " ").trim() || "—";
 
     let receivedAtIso: string;
-    try {
-      receivedAtIso = parseReceivedDate(row[iDate], sheetYear);
-    } catch (e) {
-      throw new Error(`Dòng ${r + 1}: ${e instanceof Error ? e.message : "Lỗi ngày"}`);
+    if (iDate >= 0) {
+      try {
+        receivedAtIso = parseReceivedDate(row[iDate], sheetYear);
+      } catch {
+        receivedAtIso = defaultDateIso;
+      }
+    } else {
+      receivedAtIso = defaultDateIso;
     }
 
-    const qty = parseQty(row[iQty]);
-    if (!Number.isFinite(qty) || qty <= 0) {
-      throw new Error(`Dòng ${r + 1}: số lượng không hợp lệ.`);
-    }
-    const unitPrice = parseMoney(row[iPrice]);
+    let qty = iQty >= 0 ? parseQty(row[iQty]) : NaN;
+    if (!Number.isFinite(qty) || qty <= 0) qty = 1;
+
+    let unitPrice = iPrice >= 0 ? parseMoney(row[iPrice]) : NaN;
     if (!Number.isFinite(unitPrice) || unitPrice < 0) {
-      throw new Error(`Dòng ${r + 1}: đơn giá không hợp lệ.`);
+      const amount = iAmount >= 0 ? parseMoney(row[iAmount]) : NaN;
+      if (Number.isFinite(amount) && amount >= 0 && qty > 0) {
+        unitPrice = Math.round((amount / qty) * 100) / 100;
+      } else {
+        unitPrice = 0;
+      }
     }
 
     const typeCode = pick(row, iType);
     const sku = pick(row, iSku);
-    if (!typeCode && !sku) {
-      throw new Error(`Dòng ${r + 1}: thiếu mã sản phẩm (MÃ LOẠI / MÃ SẢN PHẨM).`);
+    const nameHint = pick(row, iTypeName);
+    if (!typeCode && !sku && !nameHint.trim()) {
+      continue;
     }
 
     out.push({
       receivedAtIso,
       partnerCode: partner,
-      patientName: patient.replace(/\s+/g, " ").trim(),
+      patientName: patientResolved,
       clinicName: pick(row, iClinic),
       labName: pick(row, iLab),
       labTruyXuat: pick(row, iLabTx),
       productTypeCode: typeCode,
-      productNameHint: pick(row, iTypeName),
+      productNameHint: nameHint,
       quantity: qty,
       unitPrice,
       toothPositions: pick(row, iTooth) || "—",

@@ -3,6 +3,7 @@
 import * as XLSX from "xlsx";
 import { revalidatePath } from "next/cache";
 import {
+  fold,
   groupKey,
   parseLabOrderSheet,
   type ParsedLabOrderLine,
@@ -39,6 +40,32 @@ function productCodeCandidates(line: ParsedLabOrderLine): string[] {
   if (stripped) out.push(stripped);
   if (sku) out.push(sku);
   return [...new Set(out)];
+}
+
+type ProductRow = { id: string; code: string; name: string };
+
+/** Khớp mã; nếu không có thì khớp tên SP (gần đúng). */
+function resolveProductId(
+  line: ParsedLabOrderLine,
+  productByCode: Map<string, string>,
+  products: ProductRow[],
+): string | undefined {
+  for (const code of productCodeCandidates(line)) {
+    const id = productByCode.get(normKey(code));
+    if (id) return id;
+  }
+  const hint = line.productNameHint.trim();
+  if (!hint) return undefined;
+  const hf = fold(hint);
+  for (const pr of products) {
+    if (fold(pr.name) === hf) return pr.id;
+  }
+  if (hf.length < 3) return undefined;
+  for (const pr of products) {
+    const nf = fold(pr.name);
+    if (nf.includes(hf)) return pr.id;
+  }
+  return undefined;
 }
 
 function orderNotesFromGroup(lines: ParsedLabOrderLine[]): string | null {
@@ -115,53 +142,53 @@ export async function importLabOrdersFromExcel(formData: FormData): Promise<Impo
     partnerByCode.set(normKey(p.code as string), p.id as string);
   }
 
-  const { data: productRows, error: pre } = await supabase.from("products").select("id, code");
+  const { data: productRows, error: pre } = await supabase
+    .from("products")
+    .select("id, code, name");
   if (pre) {
     return { ok: false, ordersCreated: 0, linesCreated: 0, message: pre.message };
   }
+  const products = (productRows ?? []) as ProductRow[];
   const productByCode = new Map<string, string>();
-  for (const pr of productRows ?? []) {
-    productByCode.set(normKey(pr.code as string), pr.id as string);
+  for (const pr of products) {
+    productByCode.set(normKey(pr.code), pr.id);
   }
 
-  const errors: string[] = [];
+  const warnings: string[] = [];
   const lineProductId = new Map<ParsedLabOrderLine, string>();
 
   for (const line of parsed) {
     const pk = normKey(line.partnerCode);
     if (!partnerByCode.has(pk)) {
-      errors.push(`Dòng ${line.sourceRow}: không tìm thấy đối tác mã “${line.partnerCode}”.`);
+      warnings.push(`Dòng ${line.sourceRow}: không tìm thấy đối tác mã “${line.partnerCode}”.`);
       continue;
     }
-    let productId: string | undefined;
-    for (const code of productCodeCandidates(line)) {
-      const id = productByCode.get(normKey(code));
-      if (id) {
-        productId = id;
-        break;
-      }
-    }
+    const productId = resolveProductId(line, productByCode, products);
     if (!productId) {
-      errors.push(
-        `Dòng ${line.sourceRow}: không khớp sản phẩm (đã thử: ${productCodeCandidates(line).join(", ") || "—"}).`,
+      const tried = productCodeCandidates(line).join(", ") || "—";
+      warnings.push(
+        `Dòng ${line.sourceRow}: không khớp sản phẩm (mã đã thử: ${tried}; tên: «${line.productNameHint.trim() || "—"}»).`,
       );
       continue;
     }
     lineProductId.set(line, productId);
   }
 
-  if (errors.length) {
+  const validLines = parsed.filter((l) => lineProductId.has(l));
+  if (!validLines.length) {
     return {
       ok: false,
       ordersCreated: 0,
       linesCreated: 0,
-      errors,
-      message: `Có ${errors.length} lỗi. Sửa file hoặc danh mục rồi thử lại.`,
+      errors: warnings.length ? warnings : undefined,
+      message: warnings.length
+        ? "Không nhập được dòng nào — kiểm tra mã KH / SP trong danh mục."
+        : "Không có dòng dữ liệu.",
     };
   }
 
   const groups = new Map<string, ParsedLabOrderLine[]>();
-  for (const line of parsed) {
+  for (const line of validLines) {
     const k = groupKey(line);
     if (!groups.has(k)) groups.set(k, []);
     groups.get(k)!.push(line);
@@ -224,10 +251,12 @@ export async function importLabOrdersFromExcel(formData: FormData): Promise<Impo
   }
 
   revalidatePath("/orders");
+  const baseMsg = "Đã tạo " + ordersCreated + " đơn, " + linesCreated + " dòng chi tiết.";
   return {
     ok: true,
     ordersCreated,
     linesCreated,
-    message: `Đã tạo ${ordersCreated} đơn, ${linesCreated} dòng chi tiết.`,
+    message: warnings.length ? baseMsg + " Đã bỏ qua " + warnings.length + " dòng (xem cảnh báo)." : baseMsg,
+    errors: warnings.length ? warnings : undefined,
   };
 }
