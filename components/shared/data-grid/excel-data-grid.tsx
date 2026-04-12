@@ -287,14 +287,14 @@ export function ExcelDataGrid<T>({
   };
 
   return (
-    <div className="space-y-6">
-      <div className="rounded-[var(--radius-xl)] bg-[var(--surface-card)] p-6 shadow-[var(--shadow-card)]">
+    <div className="space-y-4 sm:space-y-6">
+      <div className="rounded-[var(--radius-xl)] bg-[var(--surface-card)] p-4 shadow-[var(--shadow-card)] sm:p-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div className="min-w-0">
-            <h1 className="text-2xl font-bold tracking-tight text-[var(--on-surface)] sm:text-3xl">
+            <h1 className="text-xl font-bold tracking-tight text-[var(--on-surface)] sm:text-2xl md:text-3xl">
               {title}
             </h1>
-            <p className="mt-1 text-sm text-[var(--on-surface-muted)]">
+            <p className="mt-1 text-xs text-[var(--on-surface-muted)] sm:text-sm">
               Lọc cột, tìm trong bảng, ẩn/hiện cột và xuất Excel.
             </p>
           </div>
@@ -306,10 +306,10 @@ export function ExcelDataGrid<T>({
               className="min-h-10 w-full min-w-0 py-2 text-sm sm:min-w-[min(100%,16rem)] sm:max-w-md lg:w-64 lg:max-w-xs lg:shrink-0"
               aria-label="Tìm kiếm trong bảng"
             />
-            <div className="flex w-full flex-wrap items-center gap-1.5 sm:w-auto sm:flex-1 lg:flex-none">
+            <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-1 sm:flex-wrap sm:items-center sm:gap-1.5 lg:flex-none">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="secondary" type="button" size="sm" className="min-h-10">
+                  <Button variant="secondary" type="button" size="sm" className="min-h-10 w-full sm:w-auto">
                     Cột hiển thị
                   </Button>
                 </DropdownMenuTrigger>
@@ -330,10 +330,18 @@ export function ExcelDataGrid<T>({
                   })}
                 </DropdownMenuContent>
               </DropdownMenu>
-              <Button variant="secondary" type="button" size="sm" className="min-h-10" onClick={() => void exportXlsx()}>
+              <Button
+                variant="secondary"
+                type="button"
+                size="sm"
+                className="min-h-10 w-full sm:w-auto"
+                onClick={() => void exportXlsx()}
+              >
                 Xuất Excel
               </Button>
-              {toolbarExtra}
+              {toolbarExtra ? (
+                <div className="col-span-2 flex flex-wrap gap-2 sm:col-span-1 sm:contents">{toolbarExtra}</div>
+              ) : null}
             </div>
           </div>
         </div>
@@ -348,56 +356,67 @@ export function ExcelDataGrid<T>({
         ) : null}
 
         {hasColumnFilters ? (
-          <div
-            className="mt-4 md:hidden rounded-[var(--radius-lg)] bg-[var(--surface-muted)] p-4 shadow-[inset_0_0_0_1px_var(--border-ghost)]"
-            aria-label="Bộ lọc cột"
-          >
-            <p className="mb-3 text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--on-surface-faint)]">
-              Bộ lọc
-            </p>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {table.getVisibleLeafColumns().map((col) => {
-                const fk = col.columnDef.meta?.filterKey;
-                const ft = col.columnDef.meta?.filterType ?? "text";
-                if (!fk || ft === "none") return null;
-                const label = dataGridColumnLabel(col);
-                return (
-                  <div key={col.id} className="min-w-0 space-y-1.5">
-                    <label
-                      htmlFor={"dg-filter-" + String(col.id)}
-                      className="block text-xs font-semibold text-[var(--on-surface-muted)]"
-                    >
-                      {label}
-                    </label>
-                    {ft === "select" ? (
-                      <Select
-                        id={"dg-filter-" + String(col.id)}
-                        value={filters[fk] ?? ""}
-                        onChange={(e) => setFilter(fk, e.target.value)}
-                        aria-label={"Lọc " + fk}
+          <details className="group mt-4 md:hidden rounded-[var(--radius-lg)] bg-[var(--surface-muted)] shadow-[inset_0_0_0_1px_var(--border-ghost)] [&_summary::-webkit-details-marker]:hidden">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-3 text-left">
+              <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--on-surface-faint)]">
+                Bộ lọc
+              </span>
+              <svg
+                className="h-4 w-4 shrink-0 text-[var(--on-surface-muted)] transition-transform duration-200 group-open:rotate-180"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+                aria-hidden
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+              </svg>
+            </summary>
+            <div className="border-t border-[var(--border-ghost)] px-4 pb-4 pt-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {table.getVisibleLeafColumns().map((col) => {
+                  const fk = col.columnDef.meta?.filterKey;
+                  const ft = col.columnDef.meta?.filterType ?? "text";
+                  if (!fk || ft === "none") return null;
+                  const label = dataGridColumnLabel(col);
+                  return (
+                    <div key={col.id} className="min-w-0 space-y-1.5">
+                      <label
+                        htmlFor={"dg-filter-" + String(col.id)}
+                        className="block text-xs font-semibold text-[var(--on-surface-muted)]"
                       >
-                        <option value="">Tất cả</option>
-                        {(col.columnDef.meta?.filterOptions ?? []).map((o) => (
-                          <option key={o.value} value={o.value}>
-                            {o.label}
-                          </option>
-                        ))}
-                      </Select>
-                    ) : (
-                      <Input
-                        id={"dg-filter-" + String(col.id)}
-                        value={filters[fk] ?? ""}
-                        onChange={(e) => setFilter(fk, e.target.value)}
-                        placeholder="Lọc…"
-                        aria-label={"Lọc " + fk}
-                        className="min-h-10 w-full"
-                      />
-                    )}
-                  </div>
-                );
-              })}
+                        {label}
+                      </label>
+                      {ft === "select" ? (
+                        <Select
+                          id={"dg-filter-" + String(col.id)}
+                          value={filters[fk] ?? ""}
+                          onChange={(e) => setFilter(fk, e.target.value)}
+                          aria-label={"Lọc " + fk}
+                        >
+                          <option value="">Tất cả</option>
+                          {(col.columnDef.meta?.filterOptions ?? []).map((o) => (
+                            <option key={o.value} value={o.value}>
+                              {o.label}
+                            </option>
+                          ))}
+                        </Select>
+                      ) : (
+                        <Input
+                          id={"dg-filter-" + String(col.id)}
+                          value={filters[fk] ?? ""}
+                          onChange={(e) => setFilter(fk, e.target.value)}
+                          placeholder="Lọc…"
+                          aria-label={"Lọc " + fk}
+                          className="min-h-10 w-full"
+                        />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          </details>
         ) : null}
 
         <div className="mt-6 space-y-3 md:space-y-0">
@@ -562,8 +581,8 @@ export function ExcelDataGrid<T>({
         </div>
       </div>
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-xs text-[var(--on-surface-muted)] sm:text-sm">
+      <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="min-w-0 text-xs text-[var(--on-surface-muted)] sm:text-sm">
           {total === 0
             ? "0"
             : String((page - 1) * pageSize + 1) +

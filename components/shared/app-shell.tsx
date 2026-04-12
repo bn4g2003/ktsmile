@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import * as React from "react";
 import { demoLogout } from "@/lib/actions/demo-auth";
 import { DEMO_LOGIN_EMAIL } from "@/lib/auth/demo-session";
 import { cn } from "@/lib/utils/cn";
@@ -21,7 +22,6 @@ const groups: { title: string; items: { href: string; label: string }[] }[] = [
       { href: "/master/products", label: "Sản phẩm" },
       { href: "/master/employees", label: "Nhân sự" },
       { href: "/master/prices", label: "Giá theo KH" },
-      { href: "/master/contracts", label: "Hợp đồng" },
     ],
   },
   {
@@ -43,10 +43,40 @@ const groups: { title: string; items: { href: string; label: string }[] }[] = [
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const [navOpen, setNavOpen] = React.useState(false);
+
+  React.useEffect(() => {
+    setNavOpen(false);
+  }, [pathname]);
+
+  React.useEffect(() => {
+    if (!navOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setNavOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [navOpen]);
 
   return (
     <div className="min-h-screen">
-      <aside className="fixed inset-y-0 left-0 z-50 flex w-[260px] flex-col bg-[var(--surface-sidebar)] shadow-[var(--shadow-sidebar)]">
+      <div
+        role="presentation"
+        className={cn(
+          "fixed inset-0 z-40 bg-black/40 transition-opacity duration-200 md:hidden",
+          navOpen ? "opacity-100" : "pointer-events-none opacity-0",
+        )}
+        onClick={() => setNavOpen(false)}
+        aria-hidden
+      />
+      <aside
+        className={cn(
+          "fixed inset-y-0 left-0 z-50 flex w-[min(100%,260px)] max-w-[85vw] flex-col bg-[var(--surface-sidebar)] shadow-[var(--shadow-sidebar)] transition-transform duration-200 ease-out",
+          navOpen ? "translate-x-0" : "-translate-x-full",
+          "md:translate-x-0",
+        )}
+        aria-label="Điều hướng chính"
+      >
         <div className="border-b border-[var(--border-ghost)] px-5 py-6">
           <Link href="/" className="flex items-center gap-3">
             <BrandLogo size={44} priority />
@@ -110,9 +140,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      <div className="flex min-h-screen min-w-0 flex-1 flex-col pl-[260px]">
-        <AppHeader />
-        <main className="flex-1 px-6 pb-10 pt-6">
+      <div className="flex min-h-screen min-w-0 flex-1 flex-col pl-0 md:pl-[260px]">
+        <AppHeader onOpenNav={() => setNavOpen(true)} />
+        <main className="flex-1 px-4 pb-8 pt-4 sm:px-6 sm:pb-10 sm:pt-6">
           <div className="mx-auto max-w-[min(100%,112rem)]">{children}</div>
         </main>
       </div>

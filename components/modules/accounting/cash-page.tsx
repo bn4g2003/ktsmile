@@ -21,7 +21,6 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { DetailPreview } from "@/components/ui/detail-preview";
 import { Textarea } from "@/components/ui/textarea";
-import { listContractPicker } from "@/lib/actions/contracts";
 import { listPartnerPicker } from "@/lib/actions/partners";
 import { formatCashDirection } from "@/lib/format/labels";
 import { CashFlowChartsSection } from "@/components/modules/accounting/cash-flow-charts-section";
@@ -48,9 +47,6 @@ export function CashPage() {
   const [open, setOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<CashRow | null>(null);
   const [partners, setPartners] = React.useState<{ id: string; code: string; name: string }[]>([]);
-  const [contracts, setContracts] = React.useState<
-    { id: string; contract_number: string; title: string; partner_id: string }[]
-  >([]);
   const [pending, setPending] = React.useState(false);
   const [err, setErr] = React.useState<string | null>(null);
   const [tdate, setTdate] = React.useState("");
@@ -63,23 +59,11 @@ export function CashPage() {
   const [desc, setDesc] = React.useState("");
   const [refType, setRefType] = React.useState("");
   const [refId, setRefId] = React.useState("");
-  const [contractId, setContractId] = React.useState("");
   const [showCharts, setShowCharts] = React.useState(false);
 
   React.useEffect(() => {
     void listPartnerPicker().then(setPartners).catch(() => {});
   }, []);
-
-  React.useEffect(() => {
-    void listContractPicker(partnerId || null)
-      .then(setContracts)
-      .catch(() => setContracts([]));
-  }, [partnerId]);
-
-  React.useEffect(() => {
-    if (!contractId) return;
-    if (!contracts.some((c) => c.id === contractId)) setContractId("");
-  }, [contracts, contractId]);
 
   const reset = () => {
     setEditing(null);
@@ -93,7 +77,6 @@ export function CashPage() {
     setDesc("");
     setRefType("");
     setRefId("");
-    setContractId("");
     setErr(null);
   };
 
@@ -114,7 +97,6 @@ export function CashPage() {
     setDesc(row.description ?? "");
     setRefType(row.reference_type ?? "");
     setRefId(row.reference_id ?? "");
-    setContractId(row.contract_id ?? "");
     setErr(null);
     setOpen(true);
   };
@@ -135,7 +117,6 @@ export function CashPage() {
         description: desc.trim() || null,
         reference_type: refType.trim() || null,
         reference_id: refId.trim() || null,
-        contract_id: direction === "receipt" ? contractId || null : null,
       };
       if (editing) await updateCashTransaction(editing.id, payload);
       else await createCashTransaction(payload);
@@ -189,16 +170,6 @@ export function CashPage() {
       { accessorKey: "partner_code", header: "Mã ĐT" },
       { accessorKey: "partner_name", header: "Đối tượng" },
       {
-        accessorKey: "contract_number",
-        header: "Hợp đồng",
-        cell: ({ row }) => {
-          const n = row.original.contract_number;
-          const t = row.original.contract_title;
-          if (!n) return "—";
-          return t ? `${n} — ${t}` : n;
-        },
-      },
-      {
         id: "actions",
         header: "Thao tác",
         enableHiding: false,
@@ -226,13 +197,6 @@ export function CashPage() {
           { label: "Số tiền", value: row.amount },
           { label: "Mã ĐT", value: row.partner_code },
           { label: "Đối tượng", value: row.partner_name },
-          {
-            label: "Hợp đồng",
-            value:
-              row.contract_number != null
-                ? `${row.contract_number}${row.contract_title ? " — " + row.contract_title : ""}`
-                : "—",
-          },
           { label: "Diễn giải", value: row.description, span: "full" },
           { label: "Reference type", value: row.reference_type },
           { label: "Reference id", value: row.reference_id },
@@ -304,11 +268,7 @@ export function CashPage() {
               <Select
                 id="c-dir"
                 value={direction}
-                onChange={(e) => {
-                  const d = e.target.value as typeof direction;
-                  setDirection(d);
-                  if (d === "payment") setContractId("");
-                }}
+                onChange={(e) => setDirection(e.target.value as typeof direction)}
               >
                 {dirOpts.map((o) => (
                   <option key={o.value} value={o.value}>
@@ -335,14 +295,7 @@ export function CashPage() {
             </div>
             <div className="grid gap-2">
               <Label htmlFor="c-p">Đối tượng</Label>
-              <Select
-                id="c-p"
-                value={partnerId}
-                onChange={(e) => {
-                  setPartnerId(e.target.value);
-                  setContractId("");
-                }}
-              >
+              <Select id="c-p" value={partnerId} onChange={(e) => setPartnerId(e.target.value)}>
                 <option value="">—</option>
                 {partners.map((p) => (
                   <option key={p.id} value={p.id}>
@@ -351,27 +304,6 @@ export function CashPage() {
                 ))}
               </Select>
             </div>
-            {direction === "receipt" ? (
-              <div className="grid gap-2 sm:col-span-2">
-                <Label htmlFor="c-contract">Hợp đồng (phiếu thu)</Label>
-                <Select
-                  id="c-contract"
-                  value={contractId}
-                  onChange={(e) => setContractId(e.target.value)}
-                  disabled={!partnerId}
-                >
-                  <option value="">— Không gắn —</option>
-                  {contracts.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.contract_number} — {c.title}
-                    </option>
-                  ))}
-                </Select>
-                {!partnerId ? (
-                  <p className="text-xs text-[var(--on-surface-muted)]">Chọn đối tượng để lọc hợp đồng.</p>
-                ) : null}
-              </div>
-            ) : null}
             <div className="grid gap-2 sm:col-span-2">
               <Label htmlFor="c-desc">Diễn giải</Label>
               <Textarea id="c-desc" value={desc} onChange={(e) => setDesc(e.target.value)} />

@@ -4,11 +4,25 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-export function AppHeader() {
+export function AppHeader({ onOpenNav }: { onOpenNav?: () => void }) {
   return (
-    <header className="sticky top-0 z-40 border-b border-transparent bg-[color-mix(in_srgb,var(--surface-canvas)_88%,#fff)] px-6 py-4 backdrop-blur-md">
+    <header className="sticky top-0 z-40 border-b border-transparent bg-[color-mix(in_srgb,var(--surface-canvas)_88%,#fff)] px-4 py-3 backdrop-blur-md sm:px-6 sm:py-4">
       <div className="mx-auto flex max-w-[min(100%,112rem)] flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4">
-        <div className="relative min-w-0 w-full max-w-md flex-1 sm:min-w-[12rem]">
+        <div className="flex min-w-0 w-full items-center gap-2 sm:contents">
+          {onOpenNav ? (
+            <Button
+              variant="ghost"
+              type="button"
+              className="min-h-11 min-w-11 shrink-0 px-0 md:hidden"
+              onClick={onOpenNav}
+              aria-label="Mở menu điều hướng"
+            >
+              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75} aria-hidden>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </Button>
+          ) : null}
+          <div className="relative min-w-0 flex-1 sm:max-w-md sm:flex-1 sm:min-w-[12rem]">
           <span className="pointer-events-none absolute left-4 top-1/2 z-10 -translate-y-1/2 text-[var(--on-surface-faint)]">
             <svg
               className="h-4 w-4"
@@ -25,14 +39,15 @@ export function AppHeader() {
               />
             </svg>
           </span>
-          <Input
-            variant="search"
-            className="w-full pl-11"
-            placeholder="Tìm kiếm đơn hàng, đối tác…"
-            aria-label="Tìm kiếm toàn cục"
-          />
+            <Input
+              variant="search"
+              className="w-full min-w-0 pl-11"
+              placeholder="Tìm kiếm đơn hàng, đối tác…"
+              aria-label="Tìm kiếm toàn cục"
+            />
+          </div>
         </div>
-        <div className="ml-auto flex items-center gap-2">
+        <div className="flex w-full shrink-0 items-center justify-end gap-2 sm:ml-auto sm:w-auto">
           <Button variant="ghost" type="button" className="min-h-11 min-w-11 px-0" aria-label="Thông báo">
             <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
               <path
@@ -42,7 +57,7 @@ export function AppHeader() {
               />
             </svg>
           </Button>
-          <Button variant="secondary" type="button" className="hidden sm:inline-flex" asChild>
+          <Button variant="secondary" type="button" className="hidden min-h-10 sm:inline-flex" asChild>
             <Link href="/orders">Đơn hàng</Link>
           </Button>
         </div>

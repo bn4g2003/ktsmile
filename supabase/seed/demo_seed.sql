@@ -7,8 +7,6 @@ where partner_id in (select id from public.partners where code like 'DEMO-%');
 
 delete from public.cash_transactions where doc_number like 'DEMO.%';
 
-delete from public.partner_contracts where contract_number like 'DEMO-%';
-
 delete from public.stock_lines
 where document_id in (select id from public.stock_documents where document_number like 'DEMO-%');
 
@@ -50,11 +48,6 @@ values
   ('c3000000-0000-4000-8000-000000000001', 'DEMO-NV01', N'Trần Kỹ thuật', N'KTV chạy máy', 12000000.00),
   ('c3000000-0000-4000-8000-000000000002', 'DEMO-NV02', N'Lê Thiết kế', N'KTV thiết kế', 11500000.00);
 
-insert into public.partner_contracts (id, partner_id, contract_number, title, signed_date, valid_from, status, notes)
-values
-  ('g9000000-0000-4000-8000-000000000001', 'a1000000-0000-4000-8000-000000000001', 'DEMO-HD-2025-01',
-   N'Hợp đồng khung cung cấp phục hình', current_date - 30, current_date - 30, 'active', N'Dữ liệu mẫu');
-
 insert into public.lab_orders (id, order_number, received_at, partner_id, patient_name, status, notes)
 values
   ('d4000000-0000-4000-8000-000000000001', 'DEMO-ORD-001', current_date - 2,
@@ -88,12 +81,12 @@ values
   ('f7000000-0000-4000-8000-000000000003', 'f6000000-0000-4000-8000-000000000002',
    'b2000000-0000-4000-8000-000000000001', 2, 600000.00);
 
-insert into public.cash_transactions (id, transaction_date, doc_number, payment_channel, direction, business_category, amount, partner_id, description, contract_id)
+insert into public.cash_transactions (id, transaction_date, doc_number, payment_channel, direction, business_category, amount, partner_id, description)
 values
   ('a8000000-0000-4000-8000-000000000001', current_date - 1, 'DEMO.T.001', 'mbbank', 'receipt', N'Thu bán hàng', 5000000.00,
-   'a1000000-0000-4000-8000-000000000001', N'Ứng tiền đơn', 'g9000000-0000-4000-8000-000000000001'),
+   'a1000000-0000-4000-8000-000000000001', N'Ứng tiền đơn'),
   ('a8000000-0000-4000-8000-000000000002', current_date - 1, 'DEMO.C.001', 'cash', 'payment', N'Chi mua hàng', 3000000.00,
-   'a1000000-0000-4000-8000-000000000003', N'Thanh toán NCC', null);
+   'a1000000-0000-4000-8000-000000000003', N'Thanh toán NCC');
 
 insert into public.partner_opening_balances (partner_id, year, month, opening_balance, notes)
 values
