@@ -28,19 +28,25 @@ import { listCustomerPartnerPicker } from "@/lib/actions/partners";
 import { listProductPicker } from "@/lib/actions/products";
 import {
   allowedLabOrderStatusTargets,
+  archConnectionOptions,
   canChangeLabOrderStatusFrom,
   coordReviewStatusOptions,
   formatCoordReviewStatus,
   formatOrderStatus,
+  labOrderCategoryOptions,
   labOrderLineWorkTypeOptions,
   labOrderStatusOptions,
   orderStatusBadgeClassName,
 } from "@/lib/format/labels";
+import type { LabAccessoryKey } from "@/lib/lab/order-accessories";
+import { LAB_ORDER_ACCESSORY_DEFS, parseAccessoriesJson } from "@/lib/lab/order-accessories";
+import { LabToothPicker } from "@/components/modules/orders/lab-tooth-picker";
 import { LabOrderPrintButton } from "@/components/shared/reports/lab-order-print-button";
 import { importLabOrdersFromExcel } from "@/lib/actions/lab-orders-import";
 import {
   createLabOrder,
   deleteLabOrder,
+  getLabOrder,
   getPartnerDefaultDiscount,
   getSuggestedLinePrice,
   listLabOrders,
@@ -48,6 +54,39 @@ import {
   updateLabOrderStatus,
   type LabOrderRow,
 } from "@/lib/actions/lab-orders";
+
+function toDateTimeLocal(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return (
+    d.getFullYear() +
+    "-" +
+    pad(d.getMonth() + 1) +
+    "-" +
+    pad(d.getDate()) +
+    "T" +
+    pad(d.getHours()) +
+    ":" +
+    pad(d.getMinutes())
+  );
+}
+
+function fromDateTimeLocal(s: string): string | null {
+  const t = s.trim();
+  if (!t) return null;
+  const d = new Date(t);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toISOString();
+}
+
+function emptyAccessoryQty(): Record<LabAccessoryKey, string> {
+  return Object.fromEntries(LAB_ORDER_ACCESSORY_DEFS.map((d) => [d.key, ""])) as Record<
+    LabAccessoryKey,
+    string
+  >;
+}
 
 type DraftLine = {
   key: string;
@@ -60,6 +99,7 @@ type DraftLine = {
   disc: string;
   disc_vnd: string;
   work_type: "new_work" | "warranty";
+  arch_connection: "unit" | "bridge";
   notes: string;
 };
 
@@ -79,6 +119,7 @@ function newDraftLine(): DraftLine {
     disc: "0",
     disc_vnd: "0",
     work_type: "new_work",
+    arch_connection: "unit",
     notes: "",
   };
 }
@@ -105,6 +146,28 @@ export function OrdersPage() {
   const [patientName, setPatientName] = React.useState("");
   const [status, setStatus] = React.useState<LabOrderRow["status"]>("delivered");
   const [notes, setNotes] = React.useState("");
+  const [orderCategory, setOrderCategory] = React.useState<
+    "new_work" | "warranty" | "repair"
+  >("new_work");
+  const [senderName, setSenderName] = React.useState("");
+  const [senderPhone, setSenderPhone] = React.useState("");
+  const [deliveryAddress, setDeliveryAddress] = React.useState("");
+  const [patientAgeStr, setPatientAgeStr] = React.useState("");
+  const [patientGender, setPatientGender] = React.useState<"" | "male" | "female" | "unspecified">(
+    "",
+  );
+  const [dueCompletionLocal, setDueCompletionLocal] = React.useState("");
+  const [dueDeliveryLocal, setDueDeliveryLocal] = React.useState("");
+  const [clinicalIndication, setClinicalIndication] = React.useState("");
+  const [marginAbove, setMarginAbove] = React.useState(false);
+  const [marginAt, setMarginAt] = React.useState(false);
+  const [marginSub, setMarginSub] = React.useState(false);
+  const [marginShoulder, setMarginShoulder] = React.useState(false);
+  const [notesAccounting, setNotesAccounting] = React.useState("");
+  const [notesCoordination, setNotesCoordination] = React.useState("");
+  const [accessoryQty, setAccessoryQty] = React.useState<Record<LabAccessoryKey, string>>(
+    emptyAccessoryQty,
+  );
   const [draftLines, setDraftLines] = React.useState<DraftLine[]>([newDraftLine()]);
   const fileImportRef = React.useRef<HTMLInputElement>(null);
   const [importBusy, setImportBusy] = React.useState(false);
@@ -134,6 +197,25 @@ export function OrdersPage() {
     }
   }, [partnerId]);
 
+  const resetProductionFields = React.useCallback(() => {
+    setOrderCategory("new_work");
+    setSenderName("");
+    setSenderPhone("");
+    setDeliveryAddress("");
+    setPatientAgeStr("");
+    setPatientGender("");
+    setDueCompletionLocal("");
+    setDueDeliveryLocal("");
+    setClinicalIndication("");
+    setMarginAbove(false);
+    setMarginAt(false);
+    setMarginSub(false);
+    setMarginShoulder(false);
+    setNotesAccounting("");
+    setNotesCoordination("");
+    setAccessoryQty(emptyAccessoryQty());
+  }, []);
+
   const reset = () => {
     setEditing(null);
     setOrderNumber("");
@@ -143,6 +225,7 @@ export function OrdersPage() {
     setPatientName("");
     setStatus("delivered");
     setNotes("");
+    resetProductionFields();
     setDraftLines([newDraftLine()]);
     setErr(null);
   };
@@ -161,9 +244,100 @@ export function OrdersPage() {
     setPatientName(row.patient_name);
     setStatus(row.status);
     setNotes(row.notes ?? "");
+    resetProductionFields();
     setErr(null);
     setOpen(true);
   };
+
+  React.useEffect(() => {
+    if (!open || !editing?.id) return;
+    let cancelled = false;
+    void getLabOrder(editing.id)
+      .then((full) => {
+        if (cancelled) return;
+        const r = full as Record<string, unknown>;
+        const cat = r["order_category"] as string | undefined;
+        setOrderCategory(
+          cat === "warranty" || cat === "repair" || cat === "new_work" ? cat : "new_work",
+        );
+        setSenderName(String(r["sender_name"] ?? ""));
+        setSenderPhone(String(r["sender_phone"] ?? ""));
+        setDeliveryAddress(String(r["delivery_address"] ?? ""));
+        const pa = r["patient_age"];
+        setPatientAgeStr(pa === null || pa === undefined ? "" : String(pa));
+        const pg = r["patient_gender"] as string | null | undefined;
+        setPatientGender(
+          pg === "male" || pg === "female" || pg === "unspecified" ? pg : "",
+        );
+        setDueCompletionLocal(toDateTimeLocal(r["due_completion_at"] as string | null));
+        setDueDeliveryLocal(toDateTimeLocal(r["due_delivery_at"] as string | null));
+        setClinicalIndication(String(r["clinical_indication"] ?? ""));
+        setMarginAbove(Boolean(r["margin_above_gingiva"]));
+        setMarginAt(Boolean(r["margin_at_gingiva"]));
+        setMarginSub(Boolean(r["margin_subgingival"]));
+        setMarginShoulder(Boolean(r["margin_shoulder"]));
+        setNotesAccounting(String(r["notes_accounting"] ?? ""));
+        setNotesCoordination(String(r["notes_coordination"] ?? ""));
+        const acc = parseAccessoriesJson(r["accessories"]);
+        setAccessoryQty(
+          Object.fromEntries(
+            LAB_ORDER_ACCESSORY_DEFS.map((d) => [d.key, acc[d.key] ? String(acc[d.key]) : ""]),
+          ) as Record<LabAccessoryKey, string>,
+        );
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [open, editing?.id]);
+
+  const buildProductionHeader = React.useCallback(() => {
+    const acc: Record<string, number> = {};
+    for (const d of LAB_ORDER_ACCESSORY_DEFS) {
+      const n = Number(accessoryQty[d.key]);
+      if (Number.isFinite(n) && n > 0) acc[d.key] = Math.floor(n);
+    }
+    let patient_age: number | null | undefined = undefined;
+    if (patientAgeStr.trim() !== "") {
+      const a = Number.parseInt(patientAgeStr.trim(), 10);
+      patient_age = Number.isNaN(a) ? null : a;
+    }
+    return {
+      order_category: orderCategory,
+      sender_name: senderName.trim() || null,
+      sender_phone: senderPhone.trim() || null,
+      delivery_address: deliveryAddress.trim() || null,
+      patient_age,
+      patient_gender: patientGender === "" ? null : patientGender,
+      due_completion_at: fromDateTimeLocal(dueCompletionLocal),
+      due_delivery_at: fromDateTimeLocal(dueDeliveryLocal),
+      clinical_indication: clinicalIndication.trim() || null,
+      margin_above_gingiva: marginAbove,
+      margin_at_gingiva: marginAt,
+      margin_subgingival: marginSub,
+      margin_shoulder: marginShoulder,
+      notes_accounting: notesAccounting.trim() || null,
+      notes_coordination: notesCoordination.trim() || null,
+      accessories: Object.keys(acc).length ? acc : undefined,
+    };
+  }, [
+    orderCategory,
+    senderName,
+    senderPhone,
+    deliveryAddress,
+    patientAgeStr,
+    patientGender,
+    dueCompletionLocal,
+    dueDeliveryLocal,
+    clinicalIndication,
+    marginAbove,
+    marginAt,
+    marginSub,
+    marginShoulder,
+    notesAccounting,
+    notesCoordination,
+    accessoryQty,
+  ]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -183,7 +357,13 @@ export function OrdersPage() {
           clinic_name: clinicName.trim() || null,
           notes: notes.trim() || null,
           status,
+          ...buildProductionHeader(),
         };
+        if (base.patient_age === null) {
+          setErr("Tuổi bệnh nhân không hợp lệ.");
+          setPending(false);
+          return;
+        }
         await updateLabOrder(editing.id, base);
         setOpen(false);
         reset();
@@ -209,6 +389,12 @@ export function OrdersPage() {
             return;
           }
         }
+        const ph = buildProductionHeader();
+        if (ph.patient_age === null) {
+          setErr("Tuổi bệnh nhân không hợp lệ.");
+          setPending(false);
+          return;
+        }
         const linesPayload = draftLines
           .filter((l) => l.productId && l.tooth_positions.trim())
           .map((l) => ({
@@ -222,6 +408,7 @@ export function OrdersPage() {
             discount_percent: Number(l.disc) || 0,
             discount_amount: Number(l.disc_vnd) || 0,
             work_type: l.work_type,
+            arch_connection: l.arch_connection,
             notes: l.notes.trim() || null,
           }));
         const { id } = await createLabOrder(
@@ -232,6 +419,7 @@ export function OrdersPage() {
             clinic_name: clinicName.trim() || null,
             status,
             notes: notes.trim() || null,
+            ...ph,
           },
           linesPayload,
         );
@@ -535,6 +723,189 @@ export function OrdersPage() {
               <Textarea id="lo-notes" value={notes} onChange={(e) => setNotes(e.target.value)} />
             </div>
 
+            <div className="space-y-4 border-t border-[var(--border-ghost)] pt-4 sm:col-span-2">
+              <p className="text-sm font-semibold text-[var(--on-surface)]">Theo mẫu đơn sản xuất</p>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="grid gap-2">
+                  <Label htmlFor="lo-cat">Loại hàng</Label>
+                  <Select
+                    id="lo-cat"
+                    value={orderCategory}
+                    onChange={(e) =>
+                      setOrderCategory(e.target.value as "new_work" | "warranty" | "repair")
+                    }
+                  >
+                    {labOrderCategoryOptions.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="lo-gender">Giới tính (bệnh nhân)</Label>
+                  <Select
+                    id="lo-gender"
+                    value={patientGender}
+                    onChange={(e) =>
+                      setPatientGender(e.target.value as "" | "male" | "female" | "unspecified")
+                    }
+                  >
+                    <option value="">—</option>
+                    <option value="male">Nam</option>
+                    <option value="female">Nữ</option>
+                    <option value="unspecified">Không ghi</option>
+                  </Select>
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="lo-age">Tuổi</Label>
+                  <Input
+                    id="lo-age"
+                    type="number"
+                    min={0}
+                    max={150}
+                    step={1}
+                    value={patientAgeStr}
+                    onChange={(e) => setPatientAgeStr(e.target.value)}
+                    placeholder="Tuỳ chọn"
+                  />
+                </div>
+                <div className="grid gap-2 sm:col-span-2">
+                  <Label htmlFor="lo-sender">Người gửi</Label>
+                  <Input
+                    id="lo-sender"
+                    value={senderName}
+                    onChange={(e) => setSenderName(e.target.value)}
+                    placeholder="Họ tên"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="lo-sender-ph">Điện thoại người gửi</Label>
+                  <Input
+                    id="lo-sender-ph"
+                    value={senderPhone}
+                    onChange={(e) => setSenderPhone(e.target.value)}
+                  />
+                </div>
+                <div className="grid gap-2 sm:col-span-2">
+                  <Label htmlFor="lo-addr">Địa chỉ giao / nhận</Label>
+                  <Input
+                    id="lo-addr"
+                    value={deliveryAddress}
+                    onChange={(e) => setDeliveryAddress(e.target.value)}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="lo-due-done">Hẹn hoàn thành</Label>
+                  <Input
+                    id="lo-due-done"
+                    type="datetime-local"
+                    value={dueCompletionLocal}
+                    onChange={(e) => setDueCompletionLocal(e.target.value)}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="lo-due-del">Hẹn giao</Label>
+                  <Input
+                    id="lo-due-del"
+                    type="datetime-local"
+                    value={dueDeliveryLocal}
+                    onChange={(e) => setDueDeliveryLocal(e.target.value)}
+                  />
+                </div>
+                <div className="grid gap-2 sm:col-span-2">
+                  <Label htmlFor="lo-ind">Chỉ định lâm sàng</Label>
+                  <Textarea
+                    id="lo-ind"
+                    value={clinicalIndication}
+                    onChange={(e) => setClinicalIndication(e.target.value)}
+                    rows={3}
+                    placeholder="Mô tả chỉ định cho lab…"
+                  />
+                </div>
+                <div className="grid gap-2 sm:col-span-2">
+                  <Label>Viền margin</Label>
+                  <div className="flex flex-wrap gap-4 text-sm">
+                    <label className="flex cursor-pointer items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={marginAbove}
+                        onChange={(e) => setMarginAbove(e.target.checked)}
+                        className="h-4 w-4 rounded border-[var(--border-ghost)]"
+                      />
+                      Trên nướu
+                    </label>
+                    <label className="flex cursor-pointer items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={marginAt}
+                        onChange={(e) => setMarginAt(e.target.checked)}
+                        className="h-4 w-4 rounded border-[var(--border-ghost)]"
+                      />
+                      Ngang nướu
+                    </label>
+                    <label className="flex cursor-pointer items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={marginSub}
+                        onChange={(e) => setMarginSub(e.target.checked)}
+                        className="h-4 w-4 rounded border-[var(--border-ghost)]"
+                      />
+                      Dưới nướu
+                    </label>
+                    <label className="flex cursor-pointer items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={marginShoulder}
+                        onChange={(e) => setMarginShoulder(e.target.checked)}
+                        className="h-4 w-4 rounded border-[var(--border-ghost)]"
+                      />
+                      Bờ vai
+                    </label>
+                  </div>
+                </div>
+                <div className="grid gap-2 sm:col-span-2">
+                  <Label htmlFor="lo-note-acc">Ghi chú cho kế toán</Label>
+                  <Textarea
+                    id="lo-note-acc"
+                    value={notesAccounting}
+                    onChange={(e) => setNotesAccounting(e.target.value)}
+                    rows={2}
+                  />
+                </div>
+                <div className="grid gap-2 sm:col-span-2">
+                  <Label htmlFor="lo-note-coord">Ghi chú cho điều phối</Label>
+                  <Textarea
+                    id="lo-note-coord"
+                    value={notesCoordination}
+                    onChange={(e) => setNotesCoordination(e.target.value)}
+                    rows={2}
+                  />
+                </div>
+                <div className="grid gap-2 sm:col-span-2">
+                  <Label>Phụ kiện kèm</Label>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {LAB_ORDER_ACCESSORY_DEFS.map((d) => (
+                      <div key={d.key} className="flex flex-wrap items-center gap-2">
+                        <span className="min-w-0 flex-1 text-sm">{d.label}</span>
+                        <Input
+                          type="number"
+                          min={0}
+                          step={1}
+                          className="w-20"
+                          value={accessoryQty[d.key]}
+                          onChange={(e) =>
+                            setAccessoryQty((prev) => ({ ...prev, [d.key]: e.target.value }))
+                          }
+                          placeholder="0"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {!editing ? (
               <div className="space-y-3 border-t border-[var(--border-ghost)] pt-4 sm:col-span-2">
                 <div className="flex flex-wrap items-center justify-between gap-2">
@@ -597,9 +968,18 @@ export function OrdersPage() {
                           ))}
                         </Select>
                       </div>
-                      <div className="grid gap-2">
-                        <Label>Vị trí răng</Label>
+                      <div className="grid gap-2 sm:col-span-2 lg:col-span-3">
+                        <Label>Vị trí răng (FDI)</Label>
+                        <LabToothPicker
+                          value={line.tooth_positions}
+                          onChange={(v) =>
+                            setDraftLines((prev) =>
+                              prev.map((l) => (l.key === line.key ? { ...l, tooth_positions: v } : l)),
+                            )
+                          }
+                        />
                         <Input
+                          className="mt-1 font-mono text-xs"
                           value={line.tooth_positions}
                           onChange={(e) =>
                             setDraftLines((prev) =>
@@ -608,7 +988,7 @@ export function OrdersPage() {
                               ),
                             )
                           }
-                          placeholder="VD: 11-21, 36"
+                          placeholder="Hoặc nhập tay: 11, 21, 36"
                         />
                       </div>
                       <div className="grid gap-2">
@@ -655,6 +1035,30 @@ export function OrdersPage() {
                           }
                         >
                           {labOrderLineWorkTypeOptions.map((o) => (
+                            <option key={o.value} value={o.value}>
+                              {o.label}
+                            </option>
+                          ))}
+                        </Select>
+                      </div>
+                      <div className="grid gap-2">
+                        <Label>Răng rời / Cầu</Label>
+                        <Select
+                          value={line.arch_connection}
+                          onChange={(e) =>
+                            setDraftLines((prev) =>
+                              prev.map((l) =>
+                                l.key === line.key
+                                  ? {
+                                      ...l,
+                                      arch_connection: e.target.value as DraftLine["arch_connection"],
+                                    }
+                                  : l,
+                              ),
+                            )
+                          }
+                        >
+                          {archConnectionOptions.map((o) => (
                             <option key={o.value} value={o.value}>
                               {o.label}
                             </option>

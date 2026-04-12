@@ -114,7 +114,11 @@ comment on column public.lab_orders.payment_notice_doc_number is 'Số giấy b�
 
 -- ---------------------------------------------------------------------------
 -- Dòng đơn: thêm giảm giá cố định VNĐ (cộng với %)
+-- (drop view trước vì phụ thuộc cột line_amount)
 -- ---------------------------------------------------------------------------
+drop view if exists public.v_orders_by_partner_month;
+drop view if exists public.v_partner_order_totals;
+
 alter table public.lab_order_lines
   add column if not exists discount_amount numeric(14, 2) not null default 0
     check (discount_amount >= 0);
@@ -139,6 +143,28 @@ end
 $chk$;
 
 comment on column public.lab_order_lines.discount_amount is 'Giảm giá cố định VNĐ trên dòng (sau khi áp dụng % CK)';
+
+create or replace view public.v_partner_order_totals as
+select
+  lo.partner_id,
+  sum(lol.line_amount) as total_order_amount
+from public.lab_orders lo
+join public.lab_order_lines lol on lol.order_id = lo.id
+where lo.status <> 'cancelled'
+group by lo.partner_id;
+
+create or replace view public.v_orders_by_partner_month as
+select
+  lo.partner_id,
+  date_trunc('month', lo.received_at) as month,
+  sum(lol.line_amount) as order_amount
+from public.lab_orders lo
+join public.lab_order_lines lol on lol.order_id = lo.id
+where lo.status <> 'cancelled'
+group by lo.partner_id, date_trunc('month', lo.received_at);
+
+comment on view public.v_partner_order_totals is 'Tổng giá trị đơn (theo partner) để đối chiếu công nợ';
+comment on view public.v_orders_by_partner_month is 'Giá trị đơn theo partner và tháng (received_at)';
 
 -- ---------------------------------------------------------------------------
 -- Sổ quỹ: người nộp tiền (phiếu thu)

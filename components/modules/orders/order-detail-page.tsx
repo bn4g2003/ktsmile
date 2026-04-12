@@ -50,12 +50,17 @@ import {
   type LabOrderLineRow,
   type LabOrderRow,
 } from "@/lib/actions/lab-orders";
+import { LabToothPicker } from "@/components/modules/orders/lab-tooth-picker";
 import {
   allowedLabOrderStatusTargets,
+  archConnectionOptions,
   canChangeLabOrderStatusFrom,
+  formatArchConnection,
   formatCoordReviewStatus,
+  formatLabOrderCategory,
   formatLabOrderLineWorkType,
   formatOrderStatus,
+  formatPatientGender,
   labOrderLineWorkTypeOptions,
   orderStatusBadgeClassName,
 } from "@/lib/format/labels";
@@ -83,6 +88,7 @@ export function OrderDetailPage() {
   const [notes, setNotes] = React.useState("");
   const [toothCount, setToothCount] = React.useState("");
   const [workType, setWorkType] = React.useState<"new_work" | "warranty">("new_work");
+  const [archConnection, setArchConnection] = React.useState<"unit" | "bridge">("unit");
   const [quickOpen, setQuickOpen] = React.useState(false);
   const [quickStatus, setQuickStatus] = React.useState<LabOrderRow["status"]>("draft");
   const [quickPending, setQuickPending] = React.useState(false);
@@ -188,6 +194,7 @@ export function OrderDetailPage() {
     setNotes("");
     setToothCount("");
     setWorkType("new_work");
+    setArchConnection("unit");
     setErr(null);
   };
 
@@ -203,6 +210,7 @@ export function OrderDetailPage() {
     setShade(row.shade ?? "");
     setToothCount(row.tooth_count != null ? String(row.tooth_count) : "");
     setWorkType(row.work_type);
+    setArchConnection(row.arch_connection ?? "unit");
     setQty(String(row.quantity));
     setPrice(String(row.unit_price));
     setDisc(String(row.discount_percent));
@@ -232,6 +240,7 @@ export function OrderDetailPage() {
         discount_percent: Number(disc) || 0,
         discount_amount: Number(discVnd) || 0,
         work_type: workType,
+        arch_connection: archConnection,
         notes: notes.trim() || null,
       };
       if (editing) await updateLabOrderLine(editing.id, payload);
@@ -275,6 +284,11 @@ export function OrderDetailPage() {
         header: "Loại",
         cell: ({ getValue }) => formatLabOrderLineWorkType(String(getValue())),
       },
+      {
+        accessorKey: "arch_connection",
+        header: "Rời/Cầu",
+        cell: ({ getValue }) => formatArchConnection(String(getValue() ?? "unit")),
+      },
       { accessorKey: "quantity", header: "SL" },
       { accessorKey: "unit_price", header: "Đơn giá" },
       { accessorKey: "discount_percent", header: "CK %" },
@@ -310,6 +324,7 @@ export function OrderDetailPage() {
           { label: "Màu", value: row.shade },
           { label: "Số răng", value: row.tooth_count != null ? row.tooth_count : "—" },
           { label: "Loại", value: formatLabOrderLineWorkType(row.work_type) },
+          { label: "Rời/Cầu", value: formatArchConnection(row.arch_connection ?? "unit") },
           { label: "Số lượng", value: row.quantity },
           { label: "Đơn giá", value: row.unit_price },
           { label: "CK %", value: row.discount_percent },
@@ -389,6 +404,27 @@ export function OrderDetailPage() {
                 ) : null}{" "}
                 · BN: {String(header.patient_name)} · Ngày nhận: {String(header.received_at)}
               </p>
+              {header.order_category || header.sender_name || header.sender_phone ? (
+                <p className="text-xs text-[var(--on-surface-muted)]">
+                  {header.order_category ? (
+                    <>Loại hàng: {formatLabOrderCategory(String(header.order_category))} · </>
+                  ) : null}
+                  {header.sender_name || header.sender_phone ? (
+                    <>
+                      Người gửi: {[header.sender_name, header.sender_phone].filter(Boolean).join(" · ")}
+                    </>
+                  ) : null}
+                </p>
+              ) : null}
+              {header.patient_age != null || header.patient_gender ? (
+                <p className="text-xs text-[var(--on-surface-muted)]">
+                  {header.patient_age != null ? `Tuổi: ${String(header.patient_age)}` : null}
+                  {header.patient_age != null && header.patient_gender ? " · " : null}
+                  {header.patient_gender
+                    ? formatPatientGender(String(header.patient_gender))
+                    : null}
+                </p>
+              ) : null}
             </div>
             <div className="flex flex-wrap gap-2">
               <LabOrderPrintButton orderId={id} label="In / lưu PDF (trình duyệt)" />
@@ -626,9 +662,17 @@ export function OrderDetailPage() {
                 ))}
               </Select>
             </div>
-            <div className="grid gap-2">
-              <Label htmlFor="ln-tooth">Vị trí răng</Label>
-              <Input id="ln-tooth" value={tooth} onChange={(e) => setTooth(e.target.value)} required />
+            <div className="grid gap-2 sm:col-span-2">
+              <Label htmlFor="ln-tooth">Vị trí răng (FDI)</Label>
+              <LabToothPicker value={tooth} onChange={setTooth} />
+              <Input
+                id="ln-tooth"
+                className="font-mono text-xs"
+                value={tooth}
+                onChange={(e) => setTooth(e.target.value)}
+                placeholder="Hoặc nhập tay"
+                required
+              />
             </div>
             <div className="grid gap-2">
               <Label htmlFor="ln-shade">Màu</Label>
@@ -654,6 +698,20 @@ export function OrderDetailPage() {
                 onChange={(e) => setWorkType(e.target.value as "new_work" | "warranty")}
               >
                 {labOrderLineWorkTypeOptions.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="ln-arch">Răng rời / Cầu</Label>
+              <Select
+                id="ln-arch"
+                value={archConnection}
+                onChange={(e) => setArchConnection(e.target.value as "unit" | "bridge")}
+              >
+                {archConnectionOptions.map((o) => (
                   <option key={o.value} value={o.value}>
                     {o.label}
                   </option>

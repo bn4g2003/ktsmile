@@ -12,6 +12,7 @@ import {
   labOrderStatusTransitionErrorMessage,
 } from "@/lib/format/labels";
 import { computeOrderGrandTotal } from "@/lib/billing/order-grand-total";
+import { LAB_ORDER_ACCESSORY_DEFS, parseAccessoriesJson } from "@/lib/lab/order-accessories";
 
 export type LabOrderRow = {
   id: string;
@@ -36,13 +37,16 @@ export type LabOrderRow = {
   payment_notice_doc_number: string | null;
   payment_notice_issued_at: string | null;
   grand_total: number;
+  order_category?: string;
+  sender_name?: string | null;
+  sender_phone?: string | null;
 };
 
 export async function listLabOrders(args: ListArgs): Promise<ListResult<LabOrderRow>> {
   const supabase = createSupabaseAdmin();
   const { page, pageSize, globalSearch, filters } = args;
   let q = supabase.from("lab_orders").select(
-    "id, order_number, received_at, partner_id, patient_name, clinic_name, status, notes, created_at, updated_at, coord_review_status, doctor_prescription_id, billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, payment_notice_doc_number, payment_notice_issued_at, partners:partner_id(code,name), doctor_prescriptions(slip_code), lab_order_lines(line_amount)",
+    "id, order_number, received_at, partner_id, patient_name, clinic_name, status, notes, created_at, updated_at, order_category, sender_name, coord_review_status, doctor_prescription_id, billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, payment_notice_doc_number, payment_notice_issued_at, partners:partner_id(code,name), doctor_prescriptions(slip_code), lab_order_lines(line_amount)",
     { count: "exact" },
   );
 
@@ -119,22 +123,53 @@ export async function listLabOrders(args: ListArgs): Promise<ListResult<LabOrder
         billing_order_discount_amount: bAmt,
         billing_other_fees: bFees,
       }),
+      order_category: (r["order_category"] as string | undefined) ?? "new_work",
+      sender_name: (r["sender_name"] as string | null) ?? null,
     };
   });
 
   return { rows, total: count ?? 0 };
 }
 
-const labOrderCreateHeaderSchema = z.object({
-  received_at: z.string().min(1),
-  partner_id: z.string().uuid(),
-  patient_name: z.string().min(1).max(500),
-  clinic_name: z.string().max(500).optional().nullable(),
-  status: z
-    .enum(["draft", "in_progress", "completed", "delivered", "cancelled"])
+const labOrderProductionHeaderSchema = z.object({
+  sender_name: z.string().max(200).optional().nullable(),
+  sender_phone: z.string().max(50).optional().nullable(),
+  delivery_address: z.string().max(1000).optional().nullable(),
+  patient_age: z
+    .preprocess(
+      (v) =>
+        v === "" || v === undefined || v === null || (typeof v === "number" && Number.isNaN(v))
+          ? null
+          : v,
+      z.coerce.number().int().min(0).max(150).nullable(),
+    )
     .optional(),
-  notes: z.string().max(2000).optional().nullable(),
+  patient_gender: z.enum(["male", "female", "unspecified"]).optional().nullable(),
+  order_category: z.enum(["new_work", "warranty", "repair"]).optional(),
+  due_completion_at: z.string().max(40).optional().nullable(),
+  due_delivery_at: z.string().max(40).optional().nullable(),
+  clinical_indication: z.string().max(8000).optional().nullable(),
+  margin_above_gingiva: z.boolean().optional(),
+  margin_at_gingiva: z.boolean().optional(),
+  margin_subgingival: z.boolean().optional(),
+  margin_shoulder: z.boolean().optional(),
+  notes_accounting: z.string().max(2000).optional().nullable(),
+  notes_coordination: z.string().max(2000).optional().nullable(),
+  accessories: z.record(z.string(), z.number().int().min(0)).optional(),
 });
+
+const labOrderCreateHeaderSchema = z
+  .object({
+    received_at: z.string().min(1),
+    partner_id: z.string().uuid(),
+    patient_name: z.string().min(1).max(500),
+    clinic_name: z.string().max(500).optional().nullable(),
+    status: z
+      .enum(["draft", "in_progress", "completed", "delivered", "cancelled"])
+      .optional(),
+    notes: z.string().max(2000).optional().nullable(),
+  })
+  .merge(labOrderProductionHeaderSchema);
 
 const labOrderLineDraftSchema = z.object({
   product_id: z.string().uuid(),
@@ -146,20 +181,50 @@ const labOrderLineDraftSchema = z.object({
   discount_percent: z.coerce.number().min(0).max(100).optional().nullable(),
   discount_amount: z.coerce.number().min(0).optional().nullable(),
   work_type: z.enum(["new_work", "warranty"]).optional(),
+  arch_connection: z.enum(["unit", "bridge"]).optional(),
   notes: z.string().max(1000).optional().nullable(),
 });
 
-const labOrderUpdateSchema = z.object({
-  order_number: z.string().min(1).max(100),
-  received_at: z.string().min(1),
-  partner_id: z.string().uuid(),
-  patient_name: z.string().min(1).max(500),
-  clinic_name: z.string().max(500).optional().nullable(),
-  status: z
-    .enum(["draft", "in_progress", "completed", "delivered", "cancelled"])
-    .optional(),
-  notes: z.string().max(2000).optional().nullable(),
-});
+const labOrderUpdateSchema = z
+  .object({
+    order_number: z.string().min(1).max(100),
+    received_at: z.string().min(1),
+    partner_id: z.string().uuid(),
+    patient_name: z.string().min(1).max(500),
+    clinic_name: z.string().max(500).optional().nullable(),
+    status: z
+      .enum(["draft", "in_progress", "completed", "delivered", "cancelled"])
+      .optional(),
+    notes: z.string().max(2000).optional().nullable(),
+  })
+  .merge(labOrderProductionHeaderSchema);
+
+function productionColumnsFromHeader(h: z.infer<typeof labOrderProductionHeaderSchema>): Record<string, unknown> {
+  const accessories: Record<string, number> = {};
+  if (h.accessories) {
+    for (const [k, v] of Object.entries(h.accessories)) {
+      if (typeof v === "number" && v > 0) accessories[k] = Math.floor(v);
+    }
+  }
+  return {
+    sender_name: h.sender_name?.trim() ? h.sender_name.trim() : null,
+    sender_phone: h.sender_phone?.trim() ? h.sender_phone.trim() : null,
+    delivery_address: h.delivery_address?.trim() ? h.delivery_address.trim() : null,
+    patient_age: h.patient_age ?? null,
+    patient_gender: h.patient_gender ?? null,
+    order_category: h.order_category ?? "new_work",
+    due_completion_at: h.due_completion_at?.trim() ? h.due_completion_at.trim() : null,
+    due_delivery_at: h.due_delivery_at?.trim() ? h.due_delivery_at.trim() : null,
+    clinical_indication: h.clinical_indication?.trim() ? h.clinical_indication.trim() : null,
+    margin_above_gingiva: h.margin_above_gingiva ?? false,
+    margin_at_gingiva: h.margin_at_gingiva ?? false,
+    margin_subgingival: h.margin_subgingival ?? false,
+    margin_shoulder: h.margin_shoulder ?? false,
+    notes_accounting: h.notes_accounting?.trim() ? h.notes_accounting.trim() : null,
+    notes_coordination: h.notes_coordination?.trim() ? h.notes_coordination.trim() : null,
+    accessories,
+  };
+}
 
 /** Gợi ý số đơn theo ngày nhận: LO-YYYYMMDD-001 … (tránh trùng với các số cùng tiền tố). */
 export async function suggestLabOrderNumber(receivedAt: string): Promise<string> {
@@ -218,6 +283,7 @@ export async function createLabOrder(
         status: h.status ?? "delivered",
         notes: h.notes?.trim() ? h.notes.trim() : null,
         coord_review_status: "pending",
+        ...productionColumnsFromHeader(h),
       })
       .select("id")
       .single();
@@ -245,6 +311,7 @@ export async function createLabOrder(
           discount_percent: ln.discount_percent ?? 0,
           discount_amount: ln.discount_amount ?? 0,
           work_type: ln.work_type ?? "new_work",
+          arch_connection: ln.arch_connection ?? "unit",
           notes: ln.notes?.trim() ? ln.notes.trim() : null,
         });
         if (le) throw new Error(le.message);
@@ -276,7 +343,29 @@ export async function updateLabOrder(id: string, input: z.infer<typeof labOrderU
   if (!isAllowedLabOrderStatusTransition(fromStatus, toStatus)) {
     throw new Error(labOrderStatusTransitionErrorMessage(fromStatus, toStatus));
   }
-  const { error } = await supabase.from("lab_orders").update(row).eq("id", id);
+  const prod = labOrderProductionHeaderSchema.parse(row);
+  const {
+    order_number,
+    received_at,
+    partner_id,
+    patient_name,
+    clinic_name,
+    status,
+    notes,
+  } = row;
+  const { error } = await supabase
+    .from("lab_orders")
+    .update({
+      order_number,
+      received_at,
+      partner_id,
+      patient_name,
+      clinic_name,
+      status,
+      notes,
+      ...productionColumnsFromHeader(prod),
+    })
+    .eq("id", id);
   if (error) throw new Error(error.message);
   revalidatePath("/orders");
   revalidatePath("/orders/" + id);
@@ -323,6 +412,7 @@ export type LabOrderLineRow = {
   shade: string | null;
   tooth_count: number | null;
   work_type: "new_work" | "warranty";
+  arch_connection: "unit" | "bridge";
   quantity: number;
   unit_price: number;
   discount_percent: number;
@@ -339,7 +429,7 @@ export async function listLabOrderLines(orderId: string): Promise<LabOrderLineRo
   const { data, error } = await supabase
     .from("lab_order_lines")
     .select(
-      "id, order_id, product_id, tooth_positions, shade, tooth_count, work_type, quantity, unit_price, discount_percent, discount_amount, line_amount, notes, created_at, products:product_id(code,name)",
+      "id, order_id, product_id, tooth_positions, shade, tooth_count, work_type, arch_connection, quantity, unit_price, discount_percent, discount_amount, line_amount, notes, created_at, products:product_id(code,name)",
     )
     .eq("order_id", orderId)
     .order("created_at", { ascending: true });
@@ -357,6 +447,7 @@ export async function listLabOrderLines(orderId: string): Promise<LabOrderLineRo
           ? null
           : Number(r["tooth_count"]),
       work_type: (r["work_type"] as LabOrderLineRow["work_type"]) ?? "new_work",
+      arch_connection: (r["arch_connection"] as LabOrderLineRow["arch_connection"]) ?? "unit",
       quantity: Number(r["quantity"]),
       unit_price: Number(r["unit_price"]),
       discount_percent: Number(r["discount_percent"]),
@@ -381,6 +472,7 @@ const lineSchema = z.object({
   discount_percent: z.coerce.number().min(0).max(100).optional().nullable(),
   discount_amount: z.coerce.number().min(0).optional().nullable(),
   work_type: z.enum(["new_work", "warranty"]).optional(),
+  arch_connection: z.enum(["unit", "bridge"]).optional(),
   notes: z.string().max(1000).optional().nullable(),
 });
 
@@ -393,6 +485,7 @@ export async function createLabOrderLine(input: z.infer<typeof lineSchema>) {
     discount_amount: row.discount_amount ?? 0,
     tooth_count: row.tooth_count ?? null,
     work_type: row.work_type ?? "new_work",
+    arch_connection: row.arch_connection ?? "unit",
   });
   if (error) throw new Error(error.message);
   revalidatePath("/orders");
@@ -453,7 +546,7 @@ export async function getLabOrder(id: string) {
   const { data, error } = await supabase
     .from("lab_orders")
     .select(
-      "id, order_number, received_at, partner_id, patient_name, clinic_name, status, notes, created_at, updated_at, coord_review_status, coord_reviewed_at, doctor_prescription_id, billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, payment_notice_doc_number, payment_notice_issued_at, partners:partner_id(code,name), doctor_prescriptions(slip_code, slip_date)",
+      "id, order_number, received_at, partner_id, patient_name, clinic_name, status, notes, created_at, updated_at, coord_review_status, coord_reviewed_at, doctor_prescription_id, billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, payment_notice_doc_number, payment_notice_issued_at, sender_name, sender_phone, delivery_address, patient_age, patient_gender, order_category, due_completion_at, due_delivery_at, clinical_indication, margin_above_gingiva, margin_at_gingiva, margin_subgingival, margin_shoulder, notes_accounting, notes_coordination, accessories, partners:partner_id(code,name), doctor_prescriptions(slip_code, slip_date)",
     )
     .eq("id", id)
     .single();
@@ -461,23 +554,43 @@ export async function getLabOrder(id: string) {
   return data as Record<string, unknown>;
 }
 
+function accessoriesSummaryFromRow(accessoriesRaw: unknown): string | null {
+  const acc = parseAccessoriesJson(accessoriesRaw);
+  const parts: string[] = [];
+  for (const d of LAB_ORDER_ACCESSORY_DEFS) {
+    const q = acc[d.key];
+    if (q && q > 0) parts.push(q > 1 ? d.label + " ×" + q : d.label);
+  }
+  return parts.length ? parts.join(", ") : null;
+}
+
+function marginSummaryFromRow(r: Record<string, unknown>): string | null {
+  const bits: string[] = [];
+  if (r["margin_above_gingiva"]) bits.push("Trên nướu");
+  if (r["margin_at_gingiva"]) bits.push("Ngang nướu");
+  if (r["margin_subgingival"]) bits.push("Dưới nướu");
+  if (r["margin_shoulder"]) bits.push("Bờ vai");
+  return bits.length ? bits.join(", ") : null;
+}
+
 export async function getLabOrderPrintPayload(orderId: string): Promise<LabOrderPrintPayload> {
   const supabase = createSupabaseAdmin();
   const { data: row, error } = await supabase
     .from("lab_orders")
     .select(
-      "order_number, received_at, patient_name, clinic_name, status, notes, partners:partner_id(code,name)",
+      "order_number, received_at, patient_name, clinic_name, status, notes, sender_name, sender_phone, delivery_address, patient_age, patient_gender, order_category, due_completion_at, due_delivery_at, clinical_indication, margin_above_gingiva, margin_at_gingiva, margin_subgingival, margin_shoulder, notes_accounting, notes_coordination, accessories, partners:partner_id(code,name)",
     )
     .eq("id", orderId)
     .single();
   if (error || !row) throw new Error(error?.message ?? "Không tìm thấy đơn.");
 
-  const partners = row["partners"] as { code?: string; name?: string } | null;
+  const rec = row as Record<string, unknown>;
+  const partners = rec["partners"] as { code?: string; name?: string } | null;
 
   const { data: lineRows, error: le } = await supabase
     .from("lab_order_lines")
     .select(
-      "tooth_positions, shade, tooth_count, work_type, quantity, unit_price, discount_percent, discount_amount, line_amount, notes, products:product_id(code,name,unit)",
+      "tooth_positions, shade, tooth_count, work_type, arch_connection, quantity, unit_price, discount_percent, discount_amount, line_amount, notes, products:product_id(code,name,unit)",
     )
     .eq("order_id", orderId)
     .order("created_at", { ascending: true });
@@ -496,6 +609,7 @@ export async function getLabOrderPrintPayload(orderId: string): Promise<LabOrder
           ? null
           : Number(r["tooth_count"]),
       work_type: (r["work_type"] as "new_work" | "warranty") ?? "new_work",
+      arch_connection: (r["arch_connection"] as string) ?? "unit",
       quantity: Number(r["quantity"]),
       unit_price: Number(r["unit_price"]),
       discount_percent: Number(r["discount_percent"]),
@@ -505,15 +619,32 @@ export async function getLabOrderPrintPayload(orderId: string): Promise<LabOrder
     };
   });
 
+  const pg = rec["patient_gender"] as string | null | undefined;
   return {
-    order_number: row["order_number"] as string,
-    received_at: row["received_at"] as string,
-    patient_name: row["patient_name"] as string,
-    clinic_name: (row["clinic_name"] as string | null) ?? null,
-    status: row["status"] as string,
+    order_number: rec["order_number"] as string,
+    received_at: rec["received_at"] as string,
+    patient_name: rec["patient_name"] as string,
+    clinic_name: (rec["clinic_name"] as string | null) ?? null,
+    status: rec["status"] as string,
     partner_code: partners?.code ?? null,
     partner_name: partners?.name ?? null,
-    notes: (row["notes"] as string | null) ?? null,
+    notes: (rec["notes"] as string | null) ?? null,
+    order_category: (rec["order_category"] as string | undefined) ?? undefined,
+    sender_name: (rec["sender_name"] as string | null) ?? null,
+    sender_phone: (rec["sender_phone"] as string | null) ?? null,
+    delivery_address: (rec["delivery_address"] as string | null) ?? null,
+    patient_age:
+      rec["patient_age"] === null || rec["patient_age"] === undefined
+        ? null
+        : Number(rec["patient_age"]),
+    patient_gender: pg ?? null,
+    due_completion_at: (rec["due_completion_at"] as string | null) ?? null,
+    due_delivery_at: (rec["due_delivery_at"] as string | null) ?? null,
+    clinical_indication: (rec["clinical_indication"] as string | null) ?? null,
+    margin_summary: marginSummaryFromRow(rec),
+    notes_accounting: (rec["notes_accounting"] as string | null) ?? null,
+    notes_coordination: (rec["notes_coordination"] as string | null) ?? null,
+    accessories_summary: accessoriesSummaryFromRow(rec["accessories"]),
     lines,
   };
 }
@@ -524,7 +655,7 @@ export async function listLabOrdersByPartner(partnerId: string, limit = 50): Pro
   const { data, error } = await supabase
     .from("lab_orders")
     .select(
-      "id, order_number, received_at, partner_id, patient_name, clinic_name, status, notes, created_at, updated_at, coord_review_status, doctor_prescription_id, billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, payment_notice_doc_number, payment_notice_issued_at, partners:partner_id(code,name), doctor_prescriptions(slip_code), lab_order_lines(line_amount)",
+      "id, order_number, received_at, partner_id, patient_name, clinic_name, status, notes, created_at, updated_at, order_category, sender_name, coord_review_status, doctor_prescription_id, billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, payment_notice_doc_number, payment_notice_issued_at, partners:partner_id(code,name), doctor_prescriptions(slip_code), lab_order_lines(line_amount)",
     )
     .eq("partner_id", partnerId)
     .order("received_at", { ascending: false })
@@ -573,6 +704,8 @@ export async function listLabOrdersByPartner(partnerId: string, limit = 50): Pro
         billing_order_discount_amount: bAmt,
         billing_other_fees: bFees,
       }),
+      order_category: (r["order_category"] as string | undefined) ?? "new_work",
+      sender_name: (r["sender_name"] as string | null) ?? null,
     };
   });
 }

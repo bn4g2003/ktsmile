@@ -1,5 +1,5 @@
 import { formatVnd } from "@/lib/format/currency";
-import { formatLabOrderLineWorkType, formatOrderStatus } from "@/lib/format/labels";
+import { formatArchConnection, formatLabOrderCategory, formatLabOrderLineWorkType, formatOrderStatus, formatPatientGender } from "@/lib/format/labels";
 import { escapeHtml } from "@/lib/reports/escape-html";
 
 export type LabOrderPrintLine = {
@@ -10,6 +10,7 @@ export type LabOrderPrintLine = {
   shade: string | null;
   tooth_count: number | null;
   work_type: string;
+  arch_connection: string;
   quantity: number;
   unit_price: number;
   discount_percent: number;
@@ -27,6 +28,19 @@ export type LabOrderPrintPayload = {
   partner_code: string | null;
   partner_name: string | null;
   notes: string | null;
+  order_category?: string;
+  sender_name?: string | null;
+  sender_phone?: string | null;
+  delivery_address?: string | null;
+  patient_age?: number | null;
+  patient_gender?: string | null;
+  due_completion_at?: string | null;
+  due_delivery_at?: string | null;
+  clinical_indication?: string | null;
+  margin_summary?: string | null;
+  notes_accounting?: string | null;
+  notes_coordination?: string | null;
+  accessories_summary?: string | null;
   lines: LabOrderPrintLine[];
 };
 
@@ -52,6 +66,7 @@ export function buildLabOrderBodyHtml(p: LabOrderPrintPayload): string {
           <td>${escapeHtml(l.shade ?? "—")}</td>
           <td class="num">${escapeHtml(l.tooth_count != null ? String(l.tooth_count) : "—")}</td>
           <td>${escapeHtml(formatLabOrderLineWorkType(l.work_type))}</td>
+          <td>${escapeHtml(formatArchConnection(l.arch_connection ?? "unit"))}</td>
           <td class="num">${escapeHtml(fmtQty(l.quantity))}</td>
           <td class="num">${escapeHtml(formatVnd(l.unit_price))}</td>
           <td class="num">${escapeHtml(String(l.discount_percent))}</td>
@@ -62,6 +77,12 @@ export function buildLabOrderBodyHtml(p: LabOrderPrintPayload): string {
     )
     .join("");
   const total = p.lines.reduce((s, l) => s + l.line_amount, 0);
+  const cat = p.order_category ? formatLabOrderCategory(p.order_category) : null;
+  const ageG =
+    p.patient_age != null || p.patient_gender
+      ? (p.patient_age != null ? String(p.patient_age) + " tuổi" : "") +
+        (p.patient_gender ? (p.patient_age != null ? " · " : "") + formatPatientGender(p.patient_gender) : "")
+      : null;
   return `
     <h1>Đơn hàng phục hình</h1>
     <p class="muted">Số đơn: <strong>${escapeHtml(p.order_number)}</strong> · Ngày nhận: ${escapeHtml(p.received_at)} · ${escapeHtml(gen)}</p>
@@ -70,6 +91,17 @@ export function buildLabOrderBodyHtml(p: LabOrderPrintPayload): string {
         <tr><th>Khách hàng</th><td>${partnerLine}</td></tr>
         <tr><th>Nha khoa</th><td>${escapeHtml(p.clinic_name ?? "—")}</td></tr>
         <tr><th>Bệnh nhân</th><td>${escapeHtml(p.patient_name)}</td></tr>
+        ${cat ? `<tr><th>Loại hàng</th><td>${escapeHtml(cat)}</td></tr>` : ""}
+        ${ageG ? `<tr><th>Tuổi / giới</th><td>${escapeHtml(ageG)}</td></tr>` : ""}
+        ${p.sender_name || p.sender_phone ? `<tr><th>Người gửi</th><td>${escapeHtml([p.sender_name, p.sender_phone].filter(Boolean).join(" · ") || "—")}</td></tr>` : ""}
+        ${p.delivery_address ? `<tr><th>Địa chỉ</th><td>${escapeHtml(p.delivery_address)}</td></tr>` : ""}
+        ${p.due_completion_at ? `<tr><th>Hẹn hoàn thành</th><td>${escapeHtml(new Date(p.due_completion_at).toLocaleString("vi-VN"))}</td></tr>` : ""}
+        ${p.due_delivery_at ? `<tr><th>Hẹn giao</th><td>${escapeHtml(new Date(p.due_delivery_at).toLocaleString("vi-VN"))}</td></tr>` : ""}
+        ${p.clinical_indication ? `<tr><th>Chỉ định</th><td>${escapeHtml(p.clinical_indication)}</td></tr>` : ""}
+        ${p.margin_summary ? `<tr><th>Viền</th><td>${escapeHtml(p.margin_summary)}</td></tr>` : ""}
+        ${p.accessories_summary ? `<tr><th>Phụ kiện</th><td>${escapeHtml(p.accessories_summary)}</td></tr>` : ""}
+        ${p.notes_accounting ? `<tr><th>Ghi chú kế toán</th><td>${escapeHtml(p.notes_accounting)}</td></tr>` : ""}
+        ${p.notes_coordination ? `<tr><th>Ghi chú điều phối</th><td>${escapeHtml(p.notes_coordination)}</td></tr>` : ""}
         <tr><th>Trạng thái</th><td>${escapeHtml(formatOrderStatus(p.status))}</td></tr>
         <tr><th>Ghi chú đơn</th><td>${escapeHtml(p.notes ?? "—")}</td></tr>
       </tbody>
@@ -85,7 +117,8 @@ export function buildLabOrderBodyHtml(p: LabOrderPrintPayload): string {
           <th>Vị trí răng</th>
           <th>Màu</th>
           <th class="num">Số răng</th>
-          <th>Loại</th>
+          <th>Loại SP</th>
+          <th>Rời/Cầu</th>
           <th class="num">SL</th>
           <th class="num">Đơn giá</th>
           <th class="num">CK %</th>
@@ -94,10 +127,10 @@ export function buildLabOrderBodyHtml(p: LabOrderPrintPayload): string {
           <th>Ghi chú</th>
         </tr>
       </thead>
-      <tbody>${rows || `<tr><td colspan="14">Chưa có dòng.</td></tr>`}</tbody>
+      <tbody>${rows || `<tr><td colspan="15">Chưa có dòng.</td></tr>`}</tbody>
       <tfoot>
         <tr>
-          <th colspan="12" class="num">Cộng</th>
+          <th colspan="13" class="num">Cộng</th>
           <th class="num">${escapeHtml(formatVnd(total))}</th>
           <th></th>
         </tr>

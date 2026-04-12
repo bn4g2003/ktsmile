@@ -155,3 +155,39 @@ const coordReviewLabels: Record<string, string> = {
 export function formatCoordReviewStatus(s: string) {
   return coordReviewLabels[s] ?? s;
 }
+
+export const labOrderCategoryOptions = [
+  { value: "new_work", label: "Hàng mới" },
+  { value: "warranty", label: "Bảo hành" },
+  { value: "repair", label: "Sửa chữa" },
+] as const;
+
+export type LabOrderCategory = (typeof labOrderCategoryOptions)[number]["value"];
+
+export function formatLabOrderCategory(c: string) {
+  const m: Record<string, string> = { new_work: "Hàng mới", warranty: "Bảo hành", repair: "Sửa chữa" };
+  return m[c] ?? c;
+}
+
+export const archConnectionOptions = [
+  { value: "unit", label: "Rời" },
+  { value: "bridge", label: "Cầu" },
+] as const;
+
+export type ArchConnection = (typeof archConnectionOptions)[number]["value"];
+
+export function formatArchConnection(v: string) {
+  const m: Record<string, string> = { unit: "Rời", bridge: "Cầu" };
+  return m[v] ?? v;
+}
+
+const genderLabels: Record<string, string> = {
+  male: "Nam",
+  female: "Nữ",
+  unspecified: "Không ghi",
+};
+
+export function formatPatientGender(g: string | null | undefined) {
+  if (!g) return "—";
+  return genderLabels[g] ?? g;
+}

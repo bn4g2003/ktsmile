@@ -234,6 +234,7 @@ export async function importLabOrdersFromExcel(formData: FormData): Promise<Impo
         unit_price: l.unitPrice,
         discount_percent: 0,
         discount_amount: 0,
+        arch_connection: "unit" as const,
         notes: lineNotes(l),
       }));
 
