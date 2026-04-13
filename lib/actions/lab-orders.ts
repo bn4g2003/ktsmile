@@ -171,6 +171,26 @@ export async function listLabOrders(args: ListArgs): Promise<ListResult<LabOrder
       q = q.ilike("order_number", "%" + filters.order_number.trim() + "%");
     if (filters.received_from?.trim()) q = q.gte("received_at", filters.received_from.trim());
     if (filters.received_to?.trim()) q = q.lte("received_at", filters.received_to.trim());
+    // Lọc theo tên bệnh nhân, nha khoa (cột trực tiếp trên lab_orders)
+    if (filters.patient_name?.trim())
+      q = q.ilike("patient_name", "%" + filters.patient_name.trim() + "%");
+    if (filters.clinic_name?.trim())
+      q = q.ilike("clinic_name", "%" + filters.clinic_name.trim() + "%");
+    // Lọc theo mã KH, tên KH (cần join với partners)
+    if (filters.partner_code?.trim() || filters.partner_name?.trim()) {
+      // Sử dụng subquery hoặc filter trên partners embed
+      // PostgREST hỗ trợ lọc trên bảng quan hệ qua cú pháp đặc biệt
+      if (filters.partner_code?.trim()) {
+        q = q.in("partner_id", `(select id from partners where code ilike '%${filters.partner_code.trim()}%')`);
+      }
+      if (filters.partner_name?.trim()) {
+        q = q.in("partner_id", `(select id from partners where name ilike '%${filters.partner_name.trim()}%')`);
+      }
+    }
+    // Lọc theo phiếu BS
+    if (filters.prescription_slip_code?.trim()) {
+      q = q.in("doctor_prescription_id", `(select id from doctor_prescriptions where slip_code ilike '%${filters.prescription_slip_code.trim()}%')`);
+    }
     const skipCoordReviewFilter = tier === "legacyCore" || tier === "scalarsLegacy";
     if (!skipCoordReviewFilter) {
       const cr = decodeMultiFilter(filters.coord_review_status);

@@ -523,10 +523,10 @@ export function OrdersPage() {
         meta: { filterKey: "received_to", filterType: "text" },
         cell: () => "",
       },
-      { accessorKey: "partner_code", header: "Mã KH" },
-      { accessorKey: "partner_name", header: "Khách" },
-      { accessorKey: "clinic_name", header: "Nha khoa" },
-      { accessorKey: "patient_name", header: "Bệnh nhân" },
+      { accessorKey: "partner_code", header: "Mã KH", meta: { filterKey: "partner_code", filterType: "text" } },
+      { accessorKey: "partner_name", header: "Khách", meta: { filterKey: "partner_name", filterType: "text" } },
+      { accessorKey: "clinic_name", header: "Nha khoa", meta: { filterKey: "clinic_name", filterType: "text" } },
+      { accessorKey: "patient_name", header: "Bệnh nhân", meta: { filterKey: "patient_name", filterType: "text" } },
       {
         accessorKey: "coord_review_status",
         header: "Đối chiếu",
@@ -540,6 +540,7 @@ export function OrdersPage() {
       {
         accessorKey: "prescription_slip_code",
         header: "Phiếu BS",
+        meta: { filterKey: "prescription_slip_code", filterType: "text" },
         cell: ({ getValue }) => (getValue() ? String(getValue()) : "—"),
       },
       {
@@ -572,7 +573,7 @@ export function OrdersPage() {
           </div>
         ),
       },
-      { accessorKey: "total_amount", header: "Tổng tiền" },
+      { accessorKey: "total_amount", header: "Tổng tiền", meta: { filterKey: "total_amount", filterType: "text" } },
       {
         id: "actions",
         header: "Thao tác",
@@ -728,7 +729,7 @@ export function OrdersPage() {
             </div>
 
             <div className="space-y-4 border-t border-[var(--border-ghost)] pt-4 sm:col-span-2">
-              <p className="text-sm font-semibold text-[var(--on-surface)]">Theo mẫu đơn sản xuất</p>
+              <p className="text-sm font-semibold text-[var(--on-surface)]">Thông tin bệnh nhân</p>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="grid gap-2">
                   <Label htmlFor="lo-cat">Loại hàng</Label>
