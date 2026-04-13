@@ -306,14 +306,13 @@ export function OrdersPage() {
       const y = Number.parseInt(patientYearOfBirth.trim(), 10);
       patient_year_of_birth = Number.isNaN(y) ? null : y;
     }
-    // Tự động set ngày hẹn giao = ngày hoàn thành + 1 ngày
+    // Tự động set ngày hẹn giao = 8h30 sáng ngày nhận + 1 ngày
     let due_delivery_at: string | null = null;
-    if (dueCompletionLocal) {
-      const completionDate = new Date(dueCompletionLocal);
-      if (!Number.isNaN(completionDate.getTime())) {
-        const deliveryDate = new Date(completionDate);
-        deliveryDate.setDate(deliveryDate.getDate() + 1);
-        due_delivery_at = deliveryDate.toISOString();
+    if (receivedAt) {
+      const d = new Date(receivedAt + "T08:30:00");
+      if (!Number.isNaN(d.getTime())) {
+        d.setDate(d.getDate() + 1);
+        due_delivery_at = d.toISOString();
       }
     }
     return {
@@ -321,7 +320,7 @@ export function OrdersPage() {
       patient_year_of_birth,
       patient_gender: patientGender === "" ? null : patientGender,
       due_completion_at: fromDateTimeLocal(dueCompletionLocal),
-      due_delivery_at: due_delivery_at ?? fromDateTimeLocal(dueDeliveryLocal),
+      due_delivery_at: due_delivery_at,
       clinical_indication: clinicalIndication.trim() || null,
       margin_above_gingiva: marginAbove,
       margin_at_gingiva: marginAt,
@@ -793,16 +792,9 @@ export function OrdersPage() {
                     value={dueCompletionLocal}
                     onChange={(e) => setDueCompletionLocal(e.target.value)}
                   />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="lo-due-del">Hẹn giao (tự động = hoàn thành + 1 ngày)</Label>
-                  <Input
-                    id="lo-due-del"
-                    type="datetime-local"
-                    value={dueDeliveryLocal}
-                    onChange={(e) => setDueDeliveryLocal(e.target.value)}
-                    placeholder="Tự động từ ngày hoàn thành"
-                  />
+                  <p className="text-[11px] text-[var(--on-surface-faint)]">
+                    Ngày hẹn giao sẽ được tự động thiết lập là 8:30 sáng của ngày hôm sau ngày nhận đơn.
+                  </p>
                 </div>
                 <div className="grid gap-2 sm:col-span-2">
                   <Label htmlFor="lo-ind">Chỉ định lâm sàng</Label>
