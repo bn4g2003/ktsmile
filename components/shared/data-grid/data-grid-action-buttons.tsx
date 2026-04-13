@@ -133,7 +133,7 @@ export function DataGridRowActionsMenu({
   children: React.ReactNode;
 }) {
   return (
-    <DropdownMenu>
+    <DropdownMenu modal={false}>
       <DropdownMenuTrigger asChild>
         <button
           type="button"

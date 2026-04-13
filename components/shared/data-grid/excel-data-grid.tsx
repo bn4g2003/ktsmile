@@ -474,7 +474,7 @@ export function ExcelDataGrid<T>({
               </Button>
             </div>
             <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-1 sm:flex-wrap sm:items-center sm:gap-1.5 lg:flex-none">
-              <DropdownMenu>
+              <DropdownMenu modal={false}>
                 <DropdownMenuTrigger asChild>
                   <Button variant="secondary" type="button" size="sm" className="min-h-10 w-full sm:w-auto">
                     Cột hiển thị
@@ -621,12 +621,17 @@ export function ExcelDataGrid<T>({
                         ))}
                       </dl>
                       {actionCells.length > 0 ? (
-                        <div className="mt-3 flex flex-wrap gap-2 border-t border-[var(--border-ghost)] pt-3">
-                          {actionCells.map((cell) => (
-                            <div key={cell.id} className="min-w-0">
-                              {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                            </div>
-                          ))}
+                        <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-[var(--border-ghost)] pt-3.5">
+                          {actionCells.map((cell) => {
+                            // On mobile, we try to render the action content directly if possible,
+                            // but since it's often a DropdownMenu, we'll keep it but ensure it's well-contained.
+                            // To avoid the white screen, we ensure the render happens in a safe container.
+                            return (
+                              <div key={cell.id} className="min-w-0 contents">
+                                {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                              </div>
+                            );
+                          })}
                         </div>
                       ) : null}
                     </li>
