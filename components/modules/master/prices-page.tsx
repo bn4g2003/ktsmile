@@ -32,7 +32,8 @@ export function PricesPage() {
       setLoading(true);
       const res = await getPriceMatrix();
       setData(res);
-      if (res.partners.length > 0 && !selectedPartnerId) {
+      // Auto-select first partner on desktop if none selected
+      if (res.partners.length > 0 && !selectedPartnerId && window.innerWidth >= 1024) {
         setSelectedPartnerId(res.partners[0].id);
       }
     } catch (e) {
@@ -101,9 +102,12 @@ export function PricesPage() {
   if (!data) return null;
 
   return (
-    <div className="flex h-[calc(100vh-theme(spacing.16))] bg-[var(--surface-canvas)]">
+    <div className="flex flex-col lg:flex-row h-[calc(100vh-theme(spacing.16))] bg-[var(--surface-canvas)] overflow-hidden">
       {/* Sidebar: List of Partners */}
-      <div className="flex w-80 flex-col border-r border-[var(--border-ghost)] bg-[var(--surface-sidebar)] shadow-sm">
+      <div className={cn(
+        "flex w-full lg:w-80 flex-col border-r border-[var(--border-ghost)] bg-[var(--surface-sidebar)] shadow-sm shrink-0",
+        selectedPartnerId ? "hidden lg:flex" : "flex"
+      )}>
         <div className="p-4 border-b border-[var(--border-ghost)] space-y-3">
           <h2 className="text-lg font-bold text-[var(--on-surface)]">Khách hàng</h2>
           <Input 
@@ -138,32 +142,47 @@ export function PricesPage() {
       </div>
 
       {/* Main Content: Price Grid for Selected Partner */}
-      <div className="flex-1 overflow-hidden flex flex-col">
+      <div className={cn(
+        "flex-1 overflow-hidden flex flex-col min-w-0",
+        !selectedPartnerId ? "hidden lg:flex" : "flex"
+      )}>
         {selectedPartner ? (
           <>
             <div className="p-4 bg-white border-b border-[var(--border-ghost)] flex items-center justify-between shadow-sm z-10">
-              <div>
-                <h1 className="text-xl font-bold text-[var(--on-surface)]">
-                  Bảng giá: {selectedPartner.name}
-                </h1>
-                <p className="text-xs text-[var(--on-surface-muted)] flex items-center gap-2">
-                  <span className="bg-[var(--surface-muted)] px-1.5 py-0.5 rounded border border-[var(--border-ghost)]">{selectedPartner.code}</span>
-                  • Thiết lập giá riêng hoặc % giảm giá so với giá gốc.
-                </p>
+              <div className="flex items-center gap-3">
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => setSelectedPartnerId(null)}
+                  className="lg:hidden h-8 w-8 p-0"
+                >
+                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                </Button>
+                <div>
+                  <h1 className="text-xl font-bold text-[var(--on-surface)] leading-tight">
+                    {selectedPartner.name}
+                  </h1>
+                  <p className="text-[10px] text-[var(--on-surface-muted)] flex items-center gap-1.5 mt-0.5">
+                    <span className="bg-[var(--surface-muted)] px-1 py-0 rounded border border-[var(--border-ghost)] uppercase font-bold">{selectedPartner.code}</span>
+                    <span className="hidden sm:inline">• Thiết lập giá riêng hoặc % chiết khấu</span>
+                  </p>
+                </div>
               </div>
-              <Button variant="secondary" size="sm" onClick={fetchData}>Làm mới</Button>
+              <Button variant="secondary" size="sm" onClick={fetchData} className="shrink-0 h-8 px-2 sm:px-3 text-xs sm:text-sm">Làm mới</Button>
             </div>
 
-            <div className="flex-1 overflow-auto p-6">
-              <div className="rounded-[var(--radius-lg)] border border-[var(--border-ghost)] bg-white shadow-[var(--shadow-card)] overflow-hidden">
-                <table className="w-full text-sm border-collapse">
+            <div className="flex-1 overflow-auto p-3 sm:p-6">
+              <div className="rounded-[var(--radius-lg)] border border-[var(--border-ghost)] bg-white shadow-[var(--shadow-card)] overflow-x-auto">
+                <table className="w-full min-w-[700px] text-sm border-collapse">
                   <thead>
                     <tr className="border-b border-[var(--border-ghost)] bg-[var(--surface-row-b)] text-left">
-                      <th className="px-6 py-4 font-bold text-[var(--on-surface-muted)] uppercase tracking-wider text-[11px]">Sản phẩm</th>
-                      <th className="px-6 py-4 font-bold text-[var(--on-surface-muted)] uppercase tracking-wider text-[11px] text-right">Giá gốc</th>
-                      <th className="px-6 py-4 font-bold text-[var(--accent-purple)] uppercase tracking-wider text-[11px] text-center w-32 border-x border-[var(--border-ghost)] bg-[color-mix(in_srgb,var(--accent-purple)_5%,transparent)]">% Giảm</th>
-                      <th className="px-6 py-4 font-bold text-[var(--primary)] uppercase tracking-wider text-[11px] text-center w-48">Giá riêng (KH)</th>
-                      <th className="px-6 py-4 font-bold text-[var(--on-surface-muted)] uppercase tracking-wider text-[11px] text-center">Trạng thái</th>
+                      <th className="px-4 py-3 font-bold text-[var(--on-surface-muted)] uppercase tracking-wider text-[10px]">Sản phẩm</th>
+                      <th className="px-4 py-3 font-bold text-[var(--on-surface-muted)] uppercase tracking-wider text-[10px] text-right">Gốc</th>
+                      <th className="px-4 py-3 font-bold text-[var(--accent-purple)] uppercase tracking-wider text-[10px] text-center w-24 border-x border-[var(--border-ghost)] bg-[color-mix(in_srgb,var(--accent-purple)_5%,transparent)]">% Giảm</th>
+                      <th className="px-4 py-3 font-bold text-[var(--primary)] uppercase tracking-wider text-[10px] text-center w-36">Giá riêng</th>
+                      <th className="px-4 py-3 font-bold text-[var(--on-surface-muted)] uppercase tracking-wider text-[10px] text-center w-24">Tình trạng</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[var(--border-ghost)]">
@@ -173,28 +192,26 @@ export function PricesPage() {
                       );
                       const isUpdating = updatingId === `${selectedPartner.id}-${product.id}`;
                       
-                      // Tính % giảm hiện tại nếu có override
                       const currentDiscount = override 
                         ? Math.round((1 - override.unit_price / product.unit_price) * 100) 
                         : 0;
 
                       return (
                         <tr key={product.id} className="hover:bg-[var(--surface-muted)] transition-colors group">
-                          <td className="px-6 py-3">
-                            <div className="font-bold text-[var(--on-surface)] group-hover:text-[var(--primary)] transition-colors">{product.name}</div>
-                            <div className="text-[10px] text-[var(--on-surface-faint)] uppercase font-medium">{product.code}</div>
+                          <td className="px-4 py-3">
+                            <div className="font-bold text-[var(--on-surface)] group-hover:text-[var(--primary)] transition-colors leading-tight">{product.name}</div>
+                            <div className="text-[9px] text-[var(--on-surface-faint)] uppercase font-semibold mt-0.5">{product.code}</div>
                           </td>
-                          <td className="px-6 py-3 text-right font-medium tabular-nums text-[var(--on-surface-muted)]">
+                          <td className="px-4 py-3 text-right font-medium tabular-nums text-[var(--on-surface-muted)]">
                             {product.unit_price.toLocaleString("vi-VN")}
                           </td>
                           
-                          {/* Percent Discount Column */}
-                          <td className="px-6 py-3 border-x border-[var(--border-ghost)] bg-[color-mix(in_srgb,var(--accent-purple)_2%,transparent)]">
-                            <div className="flex items-center gap-1.5 focus-within:ring-1 ring-[var(--accent-purple)] rounded-md transition-all">
+                          <td className="px-3 py-2 border-x border-[var(--border-ghost)] bg-[color-mix(in_srgb,var(--accent-purple)_2%,transparent)]">
+                            <div className="flex items-center gap-1 focus-within:ring-1 ring-[var(--accent-purple)] rounded-md transition-all">
                               <Input
                                 type="number"
                                 placeholder="0"
-                                className="h-8 text-sm text-center border-none bg-transparent focus:ring-0 tabular-nums font-semibold text-[var(--accent-purple)] placeholder:text-[var(--on-surface-faint)]"
+                                className="h-7 text-xs text-center border-none bg-transparent focus:ring-0 tabular-nums font-semibold text-[var(--accent-purple)] placeholder:text-[var(--on-surface-faint)] px-1"
                                 defaultValue={override ? currentDiscount : ""}
                                 onBlur={(e) => {
                                   const pct = parseFloat(e.target.value);
@@ -209,18 +226,17 @@ export function PricesPage() {
                                 }}
                                 disabled={isUpdating}
                               />
-                              <span className="text-[10px] font-bold text-[var(--accent-purple)] pr-1">%</span>
+                              <span className="text-[9px] font-bold text-[var(--accent-purple)] pr-0.5">%</span>
                             </div>
                           </td>
 
-                          {/* Price Column */}
-                          <td className="px-6 py-3">
+                          <td className="px-3 py-2">
                             <Input
                               type="number"
-                              defaultValue={override ? override.unit_price : ""}
+                              defaultValue={override ? override.unit_price.toString() : ""}
                               placeholder={product.unit_price.toString()}
                               className={cn(
-                                "h-8 text-sm text-center tabular-nums transition-all border-dashed",
+                                "h-7 text-xs text-center tabular-nums transition-all border-dashed px-1",
                                 override 
                                   ? "border-[var(--primary)] font-bold text-[var(--primary)] bg-[color-mix(in_srgb,var(--primary)_5%,transparent)]" 
                                   : "border-[var(--border-ghost)]"
@@ -236,15 +252,15 @@ export function PricesPage() {
                             />
                           </td>
 
-                          <td className="px-6 py-3 text-center">
+                          <td className="px-3 py-2 text-center">
                             {isUpdating ? (
                               <div className="flex justify-center">
-                                <span className="h-4 w-4 rounded-full border-2 border-[var(--primary)] border-t-transparent animate-spin" />
+                                <span className="h-3.5 w-3.5 rounded-full border-2 border-[var(--primary)] border-t-transparent animate-spin" />
                               </div>
                             ) : override ? (
-                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-bold uppercase ring-1 ring-emerald-300/30">Giá Riêng</span>
+                              <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-bold uppercase ring-1 ring-emerald-300/30 whitespace-nowrap">Riêng</span>
                             ) : (
-                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-400 font-bold uppercase ring-1 ring-slate-200">Gốc</span>
+                              <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-400 font-bold uppercase ring-1 ring-slate-200 whitespace-nowrap">Gốc</span>
                             )}
                           </td>
                         </tr>
@@ -256,8 +272,8 @@ export function PricesPage() {
             </div>
           </>
         ) : (
-          <div className="flex-1 flex items-center justify-center text-[var(--on-surface-muted)]">
-            Chọn một khách hàng ở danh sách bên trái để bắt đầu.
+          <div className="flex-1 flex items-center justify-center text-[var(--on-surface-muted)] text-sm px-8 text-center">
+            Chọn một khách hàng ở danh sách bên trái để xem và thiết lập giá.
           </div>
         )}
       </div>
