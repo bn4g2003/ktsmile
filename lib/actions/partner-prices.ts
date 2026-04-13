@@ -142,3 +142,22 @@ export async function deletePartnerPrice(id: string) {
   if (error) throw new Error(error.message);
   revalidatePath("/master/prices");
 }
+
+export async function getPriceMatrix() {
+  const supabase = createSupabaseAdmin();
+  const [pRes, prRes, oRes] = await Promise.all([
+    supabase.from("partners").select("id, code, name").eq("is_active", true).order("name").limit(5000),
+    supabase.from("products").select("id, code, name, unit_price").eq("is_active", true).order("name").limit(5000),
+    supabase.from("partner_product_prices").select("id, partner_id, product_id, unit_price").limit(10000),
+  ]);
+
+  if (pRes.error) throw new Error(pRes.error.message);
+  if (prRes.error) throw new Error(prRes.error.message);
+  if (oRes.error) throw new Error(oRes.error.message);
+
+  return {
+    partners: pRes.data || [],
+    products: prRes.data || [],
+    overrides: oRes.data || [],
+  };
+}
