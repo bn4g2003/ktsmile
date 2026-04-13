@@ -278,7 +278,7 @@ export function InventoryDocumentsPage() {
     <>
       <ExcelDataGrid<StockDocumentRow>
         moduleId="stock_documents"
-        title="Phiếu nhập / xuất kho"
+        title="Phiếu nhập / xuất kho Vật tư & Phôi"
         columns={columns}
         list={listStockDocuments}
         reloadSignal={gridReload}
@@ -300,7 +300,7 @@ export function InventoryDocumentsPage() {
         <DialogContent size="xl" className="max-h-[90vh]">
           <DialogHeader>
             <DialogTitle>{editing ? "Sửa phiếu" : "Thêm phiếu"}</DialogTitle>
-            <DialogDescription>Chi tiết vật tư thêm ở trang dòng phiếu.</DialogDescription>
+            <DialogDescription>Chi tiết vật tư/phôi sứ thêm ở trang dòng phiếu.</DialogDescription>
           </DialogHeader>
           <form onSubmit={(e) => void submit(e)} className="grid gap-4 sm:grid-cols-2">
             {err ? <p className="text-sm text-[#b91c1c] sm:col-span-2">{err}</p> : null}

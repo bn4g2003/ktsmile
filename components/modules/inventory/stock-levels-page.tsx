@@ -120,7 +120,7 @@ export function StockLevelsPage() {
     <>
       <ExcelDataGrid<ProductStockRow>
         moduleId="v_product_stock"
-        title="Tồn kho (Nhập − Xuất)"
+        title="Tồn kho Vật tư & Phôi"
         columns={columns}
         list={listProductStock}
         reloadSignal={gridReload}
@@ -136,9 +136,9 @@ export function StockLevelsPage() {
       <Dialog open={openRequest} onOpenChange={setOpenRequest}>
         <DialogContent size="xl" className="max-h-[90vh]">
           <DialogHeader>
-            <DialogTitle>Yêu cầu xuất kho</DialogTitle>
+            <DialogTitle>Yêu cầu xuất kho vật tư</DialogTitle>
             <DialogDescription>
-              Phiếu xuất được tạo ở trạng thái nháp; tồn kho chỉ thay đổi sau khi ghi nhận trên trang chi tiết phiếu.
+              Phiếu xuất được tạo ở trạng thái nháp; tồn kho vật tư/phôi chỉ thay đổi sau khi ghi nhận trên trang chi tiết phiếu. Thành phẩm xuất bán trực tiếp không qua kho này.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={(e) => void submitRequest(e)} className="grid gap-4 sm:grid-cols-2">
