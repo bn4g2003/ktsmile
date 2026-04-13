@@ -404,22 +404,15 @@ export function OrderDetailPage() {
                 ) : null}{" "}
                 · BN: {String(header.patient_name)} · Ngày nhận: {String(header.received_at)}
               </p>
-              {header.order_category || header.sender_name || header.sender_phone ? (
+              {header.order_category ? (
                 <p className="text-xs text-[var(--on-surface-muted)]">
-                  {header.order_category ? (
-                    <>Loại hàng: {formatLabOrderCategory(String(header.order_category))} · </>
-                  ) : null}
-                  {header.sender_name || header.sender_phone ? (
-                    <>
-                      Người gửi: {[header.sender_name, header.sender_phone].filter(Boolean).join(" · ")}
-                    </>
-                  ) : null}
+                  Loại hàng: {formatLabOrderCategory(String(header.order_category))}
                 </p>
               ) : null}
-              {header.patient_age != null || header.patient_gender ? (
+              {header.patient_year_of_birth != null || header.patient_gender ? (
                 <p className="text-xs text-[var(--on-surface-muted)]">
-                  {header.patient_age != null ? `Tuổi: ${String(header.patient_age)}` : null}
-                  {header.patient_age != null && header.patient_gender ? " · " : null}
+                  {header.patient_year_of_birth != null ? `Năm sinh: ${String(header.patient_year_of_birth)}` : null}
+                  {header.patient_year_of_birth != null && header.patient_gender ? " · " : null}
                   {header.patient_gender
                     ? formatPatientGender(String(header.patient_gender))
                     : null}

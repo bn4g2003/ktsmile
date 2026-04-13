@@ -29,10 +29,7 @@ export type LabOrderPrintPayload = {
   partner_name: string | null;
   notes: string | null;
   order_category?: string;
-  sender_name?: string | null;
-  sender_phone?: string | null;
-  delivery_address?: string | null;
-  patient_age?: number | null;
+  patient_year_of_birth?: number | null;
   patient_gender?: string | null;
   due_completion_at?: string | null;
   due_delivery_at?: string | null;
@@ -78,10 +75,10 @@ export function buildLabOrderBodyHtml(p: LabOrderPrintPayload): string {
     .join("");
   const total = p.lines.reduce((s, l) => s + l.line_amount, 0);
   const cat = p.order_category ? formatLabOrderCategory(p.order_category) : null;
-  const ageG =
-    p.patient_age != null || p.patient_gender
-      ? (p.patient_age != null ? String(p.patient_age) + " tuổi" : "") +
-        (p.patient_gender ? (p.patient_age != null ? " · " : "") + formatPatientGender(p.patient_gender) : "")
+  const yearG =
+    p.patient_year_of_birth != null || p.patient_gender
+      ? (p.patient_year_of_birth != null ? String(p.patient_year_of_birth) : "") +
+        (p.patient_gender ? (p.patient_year_of_birth != null ? " · " : "") + formatPatientGender(p.patient_gender) : "")
       : null;
   return `
     <h1>Đơn hàng phục hình</h1>
@@ -92,9 +89,7 @@ export function buildLabOrderBodyHtml(p: LabOrderPrintPayload): string {
         <tr><th>Nha khoa</th><td>${escapeHtml(p.clinic_name ?? "—")}</td></tr>
         <tr><th>Bệnh nhân</th><td>${escapeHtml(p.patient_name)}</td></tr>
         ${cat ? `<tr><th>Loại hàng</th><td>${escapeHtml(cat)}</td></tr>` : ""}
-        ${ageG ? `<tr><th>Tuổi / giới</th><td>${escapeHtml(ageG)}</td></tr>` : ""}
-        ${p.sender_name || p.sender_phone ? `<tr><th>Người gửi</th><td>${escapeHtml([p.sender_name, p.sender_phone].filter(Boolean).join(" · ") || "—")}</td></tr>` : ""}
-        ${p.delivery_address ? `<tr><th>Địa chỉ</th><td>${escapeHtml(p.delivery_address)}</td></tr>` : ""}
+        ${yearG ? `<tr><th>Năm sinh / giới</th><td>${escapeHtml(yearG)}</td></tr>` : ""}
         ${p.due_completion_at ? `<tr><th>Hẹn hoàn thành</th><td>${escapeHtml(new Date(p.due_completion_at).toLocaleString("vi-VN"))}</td></tr>` : ""}
         ${p.due_delivery_at ? `<tr><th>Hẹn giao</th><td>${escapeHtml(new Date(p.due_delivery_at).toLocaleString("vi-VN"))}</td></tr>` : ""}
         ${p.clinical_indication ? `<tr><th>Chỉ định</th><td>${escapeHtml(p.clinical_indication)}</td></tr>` : ""}

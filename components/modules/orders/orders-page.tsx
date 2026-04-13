@@ -151,10 +151,7 @@ export function OrdersPage() {
   const [orderCategory, setOrderCategory] = React.useState<
     "new_work" | "warranty" | "repair"
   >("new_work");
-  const [senderName, setSenderName] = React.useState("");
-  const [senderPhone, setSenderPhone] = React.useState("");
-  const [deliveryAddress, setDeliveryAddress] = React.useState("");
-  const [patientAgeStr, setPatientAgeStr] = React.useState("");
+  const [patientYearOfBirth, setPatientYearOfBirth] = React.useState("");
   const [patientGender, setPatientGender] = React.useState<"" | "male" | "female" | "unspecified">(
     "",
   );
@@ -201,10 +198,7 @@ export function OrdersPage() {
 
   const resetProductionFields = React.useCallback(() => {
     setOrderCategory("new_work");
-    setSenderName("");
-    setSenderPhone("");
-    setDeliveryAddress("");
-    setPatientAgeStr("");
+    setPatientYearOfBirth("");
     setPatientGender("");
     setDueCompletionLocal("");
     setDueDeliveryLocal("");
@@ -262,11 +256,8 @@ export function OrdersPage() {
         setOrderCategory(
           cat === "warranty" || cat === "repair" || cat === "new_work" ? cat : "new_work",
         );
-        setSenderName(String(r["sender_name"] ?? ""));
-        setSenderPhone(String(r["sender_phone"] ?? ""));
-        setDeliveryAddress(String(r["delivery_address"] ?? ""));
-        const pa = r["patient_age"];
-        setPatientAgeStr(pa === null || pa === undefined ? "" : String(pa));
+        const pyob = r["patient_year_of_birth"];
+        setPatientYearOfBirth(pyob === null || pyob === undefined ? "" : String(pyob));
         const pg = r["patient_gender"] as string | null | undefined;
         setPatientGender(
           pg === "male" || pg === "female" || pg === "unspecified" ? pg : "",
@@ -299,20 +290,27 @@ export function OrdersPage() {
       const n = Number(accessoryQty[d.key]);
       if (Number.isFinite(n) && n > 0) acc[d.key] = Math.floor(n);
     }
-    let patient_age: number | null | undefined = undefined;
-    if (patientAgeStr.trim() !== "") {
-      const a = Number.parseInt(patientAgeStr.trim(), 10);
-      patient_age = Number.isNaN(a) ? null : a;
+    let patient_year_of_birth: number | null | undefined = undefined;
+    if (patientYearOfBirth.trim() !== "") {
+      const y = Number.parseInt(patientYearOfBirth.trim(), 10);
+      patient_year_of_birth = Number.isNaN(y) ? null : y;
+    }
+    // Tự động set ngày hẹn giao = ngày hoàn thành + 1 ngày
+    let due_delivery_at: string | null = null;
+    if (dueCompletionLocal) {
+      const completionDate = new Date(dueCompletionLocal);
+      if (!Number.isNaN(completionDate.getTime())) {
+        const deliveryDate = new Date(completionDate);
+        deliveryDate.setDate(deliveryDate.getDate() + 1);
+        due_delivery_at = deliveryDate.toISOString();
+      }
     }
     return {
       order_category: orderCategory,
-      sender_name: senderName.trim() || null,
-      sender_phone: senderPhone.trim() || null,
-      delivery_address: deliveryAddress.trim() || null,
-      patient_age,
+      patient_year_of_birth,
       patient_gender: patientGender === "" ? null : patientGender,
       due_completion_at: fromDateTimeLocal(dueCompletionLocal),
-      due_delivery_at: fromDateTimeLocal(dueDeliveryLocal),
+      due_delivery_at: due_delivery_at ?? fromDateTimeLocal(dueDeliveryLocal),
       clinical_indication: clinicalIndication.trim() || null,
       margin_above_gingiva: marginAbove,
       margin_at_gingiva: marginAt,
@@ -324,10 +322,7 @@ export function OrdersPage() {
     };
   }, [
     orderCategory,
-    senderName,
-    senderPhone,
-    deliveryAddress,
-    patientAgeStr,
+    patientYearOfBirth,
     patientGender,
     dueCompletionLocal,
     dueDeliveryLocal,
@@ -361,8 +356,8 @@ export function OrdersPage() {
           status,
           ...buildProductionHeader(),
         };
-        if (base.patient_age === null) {
-          setErr("Tuổi bệnh nhân không hợp lệ.");
+        if (base.patient_year_of_birth === null && patientYearOfBirth.trim() !== "") {
+          setErr("Năm sinh bệnh nhân không hợp lệ.");
           setPending(false);
           return;
         }
@@ -392,8 +387,8 @@ export function OrdersPage() {
           }
         }
         const ph = buildProductionHeader();
-        if (ph.patient_age === null) {
-          setErr("Tuổi bệnh nhân không hợp lệ.");
+        if (ph.patient_year_of_birth === null && patientYearOfBirth.trim() !== "") {
+          setErr("Năm sinh bệnh nhân không hợp lệ.");
           setPending(false);
           return;
         }
@@ -659,7 +654,7 @@ export function OrdersPage() {
                   id="lo-num"
                   className="rounded-[var(--radius-sm)] border border-[var(--border-ghost)] bg-[var(--surface-muted)] px-3.5 py-2 text-sm text-[var(--on-surface-muted)]"
                 >
-                  Tự động theo ngày nhận (LO-YYYYMMDD-xxx) khi bấm Lưu
+                  Tự động theo mã KH + ngày (MãKH-YYMMDD-xxx) khi bấm Lưu
                 </p>
               )}
             </div>
@@ -767,41 +762,16 @@ export function OrdersPage() {
                   </Select>
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="lo-age">Tuổi</Label>
+                  <Label htmlFor="lo-yob">Năm sinh</Label>
                   <Input
-                    id="lo-age"
+                    id="lo-yob"
                     type="number"
-                    min={0}
-                    max={150}
+                    min={1900}
+                    max={new Date().getFullYear()}
                     step={1}
-                    value={patientAgeStr}
-                    onChange={(e) => setPatientAgeStr(e.target.value)}
+                    value={patientYearOfBirth}
+                    onChange={(e) => setPatientYearOfBirth(e.target.value)}
                     placeholder="Tuỳ chọn"
-                  />
-                </div>
-                <div className="grid gap-2 sm:col-span-2">
-                  <Label htmlFor="lo-sender">Người gửi</Label>
-                  <Input
-                    id="lo-sender"
-                    value={senderName}
-                    onChange={(e) => setSenderName(e.target.value)}
-                    placeholder="Họ tên"
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="lo-sender-ph">Điện thoại người gửi</Label>
-                  <Input
-                    id="lo-sender-ph"
-                    value={senderPhone}
-                    onChange={(e) => setSenderPhone(e.target.value)}
-                  />
-                </div>
-                <div className="grid gap-2 sm:col-span-2">
-                  <Label htmlFor="lo-addr">Địa chỉ giao / nhận</Label>
-                  <Input
-                    id="lo-addr"
-                    value={deliveryAddress}
-                    onChange={(e) => setDeliveryAddress(e.target.value)}
                   />
                 </div>
                 <div className="grid gap-2">
@@ -814,12 +784,13 @@ export function OrdersPage() {
                   />
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="lo-due-del">Hẹn giao</Label>
+                  <Label htmlFor="lo-due-del">Hẹn giao (tự động = hoàn thành + 1 ngày)</Label>
                   <Input
                     id="lo-due-del"
                     type="datetime-local"
                     value={dueDeliveryLocal}
                     onChange={(e) => setDueDeliveryLocal(e.target.value)}
+                    placeholder="Tự động từ ngày hoàn thành"
                   />
                 </div>
                 <div className="grid gap-2 sm:col-span-2">

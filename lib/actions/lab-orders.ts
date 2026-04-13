@@ -39,13 +39,11 @@ export type LabOrderRow = {
   payment_notice_issued_at: string | null;
   grand_total: number;
   order_category?: string;
-  sender_name?: string | null;
-  sender_phone?: string | null;
 };
 
 /* Gợi ý FK theo tên constraint (tránh PGRST201 khi PostgREST không chọn đúng quan hệ). */
 const LAB_ORDERS_LIST_SELECT_FULL =
-  "id, order_number, received_at, partner_id, patient_name, clinic_name, status, notes, created_at, updated_at, order_category, sender_name, coord_review_status, doctor_prescription_id, billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, payment_notice_doc_number, payment_notice_issued_at, partners!lab_orders_partner_id_fkey(code,name), doctor_prescriptions!lab_orders_doctor_prescription_id_fkey(slip_code), lab_order_lines!lab_order_lines_order_id_fkey(line_amount)";
+  "id, order_number, received_at, partner_id, patient_name, clinic_name, status, notes, created_at, updated_at, order_category, patient_year_of_birth, coord_review_status, doctor_prescription_id, billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, payment_notice_doc_number, payment_notice_issued_at, partners!lab_orders_partner_id_fkey(code,name), doctor_prescriptions!lab_orders_doctor_prescription_id_fkey(slip_code), lab_order_lines!lab_order_lines_order_id_fkey(line_amount)";
 
 /** Trước migration 20260420 (order_category, sender_name, …). */
 const LAB_ORDERS_LIST_SELECT_NO_PROD_UI =
@@ -60,7 +58,7 @@ const LAB_ORDERS_LIST_SELECT_LEGACY_CORE =
  * Cộng dòng = 0 cho đến khi schema/API ổn định.
  */
 const LAB_ORDERS_LIST_SELECT_SCALARS_FULL =
-  "id, order_number, received_at, partner_id, patient_name, clinic_name, status, notes, created_at, updated_at, order_category, sender_name, coord_review_status, doctor_prescription_id, billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, payment_notice_doc_number, payment_notice_issued_at";
+  "id, order_number, received_at, partner_id, patient_name, clinic_name, status, notes, created_at, updated_at, order_category, patient_year_of_birth, coord_review_status, doctor_prescription_id, billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, payment_notice_doc_number, payment_notice_issued_at";
 
 /** Scalar tối thiểu (trước migration billing / đối chiếu). */
 const LAB_ORDERS_LIST_SELECT_SCALARS_LEGACY =
@@ -68,7 +66,7 @@ const LAB_ORDERS_LIST_SELECT_SCALARS_LEGACY =
 
 /** Khi embed phiếu BS vẫn lỗi — bỏ doctor_prescriptions, giữ tổng dòng. */
 const LAB_ORDERS_LIST_SELECT_NO_RX_EMBED =
-  "id, order_number, received_at, partner_id, patient_name, clinic_name, status, notes, created_at, updated_at, order_category, sender_name, coord_review_status, doctor_prescription_id, billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, payment_notice_doc_number, payment_notice_issued_at, partners!lab_orders_partner_id_fkey(code,name), lab_order_lines!lab_order_lines_order_id_fkey(line_amount)";
+  "id, order_number, received_at, partner_id, patient_name, clinic_name, status, notes, created_at, updated_at, order_category, patient_year_of_birth, coord_review_status, doctor_prescription_id, billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, payment_notice_doc_number, payment_notice_issued_at, partners!lab_orders_partner_id_fkey(code,name), lab_order_lines!lab_order_lines_order_id_fkey(line_amount)";
 
 const LAB_ORDERS_LIST_SELECT_NO_PROD_UI_NO_RX =
   "id, order_number, received_at, partner_id, patient_name, clinic_name, status, notes, created_at, updated_at, coord_review_status, doctor_prescription_id, billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, payment_notice_doc_number, payment_notice_issued_at, partners!lab_orders_partner_id_fkey(code,name), lab_order_lines!lab_order_lines_order_id_fkey(line_amount)";
@@ -116,7 +114,6 @@ function mapLabOrderListRow(r: Record<string, unknown>): LabOrderRow {
       billing_other_fees: bFees,
     }),
     order_category: (r["order_category"] as string | undefined) ?? "new_work",
-    sender_name: (r["sender_name"] as string | null) ?? null,
   };
 }
 
@@ -205,16 +202,13 @@ export async function listLabOrders(args: ListArgs): Promise<ListResult<LabOrder
 }
 
 const labOrderProductionHeaderSchema = z.object({
-  sender_name: z.string().max(200).optional().nullable(),
-  sender_phone: z.string().max(50).optional().nullable(),
-  delivery_address: z.string().max(1000).optional().nullable(),
-  patient_age: z
+  patient_year_of_birth: z
     .preprocess(
       (v) =>
         v === "" || v === undefined || v === null || (typeof v === "number" && Number.isNaN(v))
           ? null
           : v,
-      z.coerce.number().int().min(0).max(150).nullable(),
+      z.coerce.number().int().min(1900).max(new Date().getFullYear()).nullable(),
     )
     .optional(),
   patient_gender: z.enum(["male", "female", "unspecified"]).optional().nullable(),
@@ -280,10 +274,7 @@ function productionColumnsFromHeader(h: z.infer<typeof labOrderProductionHeaderS
     }
   }
   return {
-    sender_name: h.sender_name?.trim() ? h.sender_name.trim() : null,
-    sender_phone: h.sender_phone?.trim() ? h.sender_phone.trim() : null,
-    delivery_address: h.delivery_address?.trim() ? h.delivery_address.trim() : null,
-    patient_age: h.patient_age ?? null,
+    patient_year_of_birth: h.patient_year_of_birth ?? null,
     patient_gender: h.patient_gender ?? null,
     order_category: h.order_category ?? "new_work",
     due_completion_at: h.due_completion_at?.trim() ? h.due_completion_at.trim() : null,
@@ -299,16 +290,19 @@ function productionColumnsFromHeader(h: z.infer<typeof labOrderProductionHeaderS
   };
 }
 
-/** Gợi ý số đơn theo ngày nhận: LO-YYYYMMDD-001 … (tránh trùng với các số cùng tiền tố). */
-export async function suggestLabOrderNumber(receivedAt: string): Promise<string> {
+/** Gợi ý số đơn theo định dạng: MãKH-YYMMDD-xxx (ví dụ: Labhcm01-130426-001) */
+export async function suggestLabOrderNumber(partnerCode: string, receivedAt: string): Promise<string> {
   const supabase = createSupabaseAdmin();
   const day = receivedAt.trim().slice(0, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) {
     throw new Error("Ngày nhận không hợp lệ.");
   }
-  const prefix = "LO-" + day.replace(/-/g, "") + "-";
+  // Format: YYMMDD (2 số năm + 2 số tháng + 2 số ngày)
+  const datePart = day.slice(2, 4) + day.slice(5, 7) + day.slice(8, 10);
+  const codePrefix = (partnerCode || "UNK").toLowerCase();
+  const prefix = codePrefix + "-" + datePart + "-";
   const esc = prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const suffixRe = new RegExp("^" + esc + "(\\d+)$");
+  const suffixRe = new RegExp("^" + esc + "(\\d+)$", "i");
   const { data, error } = await supabase
     .from("lab_orders")
     .select("order_number")
@@ -331,7 +325,7 @@ function isUniqueViolation(err: { message?: string; code?: string } | null): boo
 }
 
 /**
- * Tạo đơn: số đơn cấp tự động trên server; mặc định trạng thái "delivered" nếu không gửi.
+ * Tạo đơn: số đơn cấp tự động trên server theo định dạng MãKH-YYMMDD-xxx; mặc định trạng thái "delivered" nếu không gửi.
  * Kèm danh sách dòng (có thể rỗng — thêm sau tại trang chi tiết).
  */
 export async function createLabOrder(
@@ -343,8 +337,19 @@ export async function createLabOrder(
   const supabase = createSupabaseAdmin();
   let lastErr: Error | null = null;
 
+  // Lấy mã khách hàng
+  const { data: partner, error: pe } = await supabase
+    .from("partners")
+    .select("code")
+    .eq("id", h.partner_id)
+    .single();
+  if (pe || !partner) {
+    throw new Error("Không tìm thấy khách hàng.");
+  }
+  const partnerCode = (partner as { code: string }).code;
+
   for (let attempt = 0; attempt < 15; attempt++) {
-    const order_number = await suggestLabOrderNumber(h.received_at);
+    const order_number = await suggestLabOrderNumber(partnerCode, h.received_at);
     const { data, error } = await supabase
       .from("lab_orders")
       .insert({
@@ -619,7 +624,7 @@ export async function getLabOrder(id: string) {
   const { data, error } = await supabase
     .from("lab_orders")
     .select(
-      "id, order_number, received_at, partner_id, patient_name, clinic_name, status, notes, created_at, updated_at, coord_review_status, coord_reviewed_at, doctor_prescription_id, billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, payment_notice_doc_number, payment_notice_issued_at, sender_name, sender_phone, delivery_address, patient_age, patient_gender, order_category, due_completion_at, due_delivery_at, clinical_indication, margin_above_gingiva, margin_at_gingiva, margin_subgingival, margin_shoulder, notes_accounting, notes_coordination, accessories, partners!lab_orders_partner_id_fkey(code,name), doctor_prescriptions!lab_orders_doctor_prescription_id_fkey(slip_code, slip_date)",
+      "id, order_number, received_at, partner_id, patient_name, clinic_name, status, notes, created_at, updated_at, coord_review_status, coord_reviewed_at, doctor_prescription_id, billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, payment_notice_doc_number, payment_notice_issued_at, patient_year_of_birth, patient_gender, order_category, due_completion_at, due_delivery_at, clinical_indication, margin_above_gingiva, margin_at_gingiva, margin_subgingival, margin_shoulder, notes_accounting, notes_coordination, accessories, partners!lab_orders_partner_id_fkey(code,name), doctor_prescriptions!lab_orders_doctor_prescription_id_fkey(slip_code, slip_date)",
     )
     .eq("id", id)
     .single();
@@ -651,7 +656,7 @@ export async function getLabOrderPrintPayload(orderId: string): Promise<LabOrder
   const { data: row, error } = await supabase
     .from("lab_orders")
     .select(
-      "order_number, received_at, patient_name, clinic_name, status, notes, sender_name, sender_phone, delivery_address, patient_age, patient_gender, order_category, due_completion_at, due_delivery_at, clinical_indication, margin_above_gingiva, margin_at_gingiva, margin_subgingival, margin_shoulder, notes_accounting, notes_coordination, accessories, partners!lab_orders_partner_id_fkey(code,name)",
+      "order_number, received_at, patient_name, clinic_name, status, notes, patient_year_of_birth, patient_gender, order_category, due_completion_at, due_delivery_at, clinical_indication, margin_above_gingiva, margin_at_gingiva, margin_subgingival, margin_shoulder, notes_accounting, notes_coordination, accessories, partners!lab_orders_partner_id_fkey(code,name)",
     )
     .eq("id", orderId)
     .single();
@@ -703,13 +708,10 @@ export async function getLabOrderPrintPayload(orderId: string): Promise<LabOrder
     partner_name: partners?.name ?? null,
     notes: (rec["notes"] as string | null) ?? null,
     order_category: (rec["order_category"] as string | undefined) ?? undefined,
-    sender_name: (rec["sender_name"] as string | null) ?? null,
-    sender_phone: (rec["sender_phone"] as string | null) ?? null,
-    delivery_address: (rec["delivery_address"] as string | null) ?? null,
-    patient_age:
-      rec["patient_age"] === null || rec["patient_age"] === undefined
+    patient_year_of_birth:
+      rec["patient_year_of_birth"] === null || rec["patient_year_of_birth"] === undefined
         ? null
-        : Number(rec["patient_age"]),
+        : Number(rec["patient_year_of_birth"]),
     patient_gender: pg ?? null,
     due_completion_at: (rec["due_completion_at"] as string | null) ?? null,
     due_delivery_at: (rec["due_delivery_at"] as string | null) ?? null,
