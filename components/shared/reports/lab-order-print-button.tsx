@@ -18,13 +18,17 @@ type LabOrderPrintButtonProps = {
   className?: string;
 };
 
-export function LabOrderPrintButton({
-  orderId,
-  label = "In / lưu PDF",
-  size = "sm",
-  variant = "secondary",
-  className,
-}: LabOrderPrintButtonProps) {
+export const LabOrderPrintButton = React.forwardRef<HTMLButtonElement, LabOrderPrintButtonProps>(
+  function LabOrderPrintButton(
+    {
+      orderId,
+      label = "In / lưu PDF",
+      size = "sm",
+      variant = "secondary",
+      className,
+    },
+    ref,
+  ) {
   const [busy, setBusy] = React.useState(false);
   const onClick = () => {
     const w = openBlankPrintTab();
@@ -50,6 +54,7 @@ export function LabOrderPrintButton({
   };
   return (
     <Button
+      ref={ref}
       type="button"
       variant={variant}
       size={size}
@@ -60,4 +65,5 @@ export function LabOrderPrintButton({
       {busy ? "Đang tải…" : label}
     </Button>
   );
-}
+  },
+);

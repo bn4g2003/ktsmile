@@ -5,8 +5,8 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { ExcelDataGrid } from "@/components/shared/data-grid/excel-data-grid";
 import {
-  DataGridDeleteButton,
-  DataGridEditButton,
+  DataGridMenuDeleteItem,
+  DataGridMenuEditItem,
 } from "@/components/shared/data-grid/data-grid-action-buttons";
 import { Button } from "@/components/ui/button";
 import {
@@ -172,8 +172,8 @@ export function EmployeesPage() {
         meta: { filterType: "none" },
         cell: ({ row }) => (
           <>
-            <DataGridEditButton type="button" onClick={() => openEdit(row.original)} />
-            <DataGridDeleteButton type="button" onClick={() => void onDelete(row.original)} />
+            <DataGridMenuEditItem onSelect={() => openEdit(row.original)}>Sửa</DataGridMenuEditItem>
+            <DataGridMenuDeleteItem onSelect={() => void onDelete(row.original)}>Xóa</DataGridMenuDeleteItem>
           </>
         ),
       },

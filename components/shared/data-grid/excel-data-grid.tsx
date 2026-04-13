@@ -11,8 +11,8 @@ import {
 } from "@tanstack/react-table";
 import * as React from "react";
 import {
-  DataGridActionGroup,
-  DataGridViewButton,
+  DataGridMenuViewItem,
+  DataGridRowActionsMenu,
 } from "@/components/shared/data-grid/data-grid-action-buttons";
 import { Button } from "@/components/ui/button";
 import {
@@ -330,11 +330,9 @@ export function ExcelDataGrid<T>({
           enableHiding: false,
           meta: { filterType: "none" as const },
           cell: ({ row }: CellContext<T, unknown>) => (
-            <DataGridActionGroup>
-              <DataGridViewButton type="button" onClick={() => setViewRow(row.original)}>
-                Xem
-              </DataGridViewButton>
-            </DataGridActionGroup>
+            <DataGridRowActionsMenu>
+              <DataGridMenuViewItem onSelect={() => setViewRow(row.original)}>Xem</DataGridMenuViewItem>
+            </DataGridRowActionsMenu>
           ),
         },
       ];
@@ -345,12 +343,10 @@ export function ExcelDataGrid<T>({
       return {
         ...col,
         cell: (info: CellContext<T, unknown>) => (
-          <DataGridActionGroup>
-            <DataGridViewButton type="button" onClick={() => setViewRow(info.row.original)}>
-              Xem
-            </DataGridViewButton>
+          <DataGridRowActionsMenu>
+            <DataGridMenuViewItem onSelect={() => setViewRow(info.row.original)}>Xem</DataGridMenuViewItem>
             {prevCell ? flexRender(prevCell, info) : null}
-          </DataGridActionGroup>
+          </DataGridRowActionsMenu>
         ),
       };
     });

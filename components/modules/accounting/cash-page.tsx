@@ -5,10 +5,12 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { ExcelDataGrid } from "@/components/shared/data-grid/excel-data-grid";
 import {
-  DataGridDeleteButton,
-  DataGridEditButton,
+  DataGridMenuDeleteItem,
+  DataGridMenuEditItem,
+  dataGridPrintMenuItemButtonClassName,
 } from "@/components/shared/data-grid/data-grid-action-buttons";
 import { Button } from "@/components/ui/button";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import {
   Dialog,
   DialogContent,
@@ -183,10 +185,17 @@ export function CashPage() {
         cell: ({ row }) => (
           <>
             {row.original.direction === "receipt" ? (
-              <CashReceiptPrintButton transactionId={row.original.id} label="In PT" />
+              <DropdownMenuItem asChild>
+                <CashReceiptPrintButton
+                  transactionId={row.original.id}
+                  label="In PT"
+                  variant="ghost"
+                  className={dataGridPrintMenuItemButtonClassName}
+                />
+              </DropdownMenuItem>
             ) : null}
-            <DataGridEditButton type="button" onClick={() => openEdit(row.original)} />
-            <DataGridDeleteButton type="button" onClick={() => void onDelete(row.original)} />
+            <DataGridMenuEditItem onSelect={() => openEdit(row.original)}>Sửa</DataGridMenuEditItem>
+            <DataGridMenuDeleteItem onSelect={() => void onDelete(row.original)}>Xóa</DataGridMenuDeleteItem>
           </>
         ),
       },

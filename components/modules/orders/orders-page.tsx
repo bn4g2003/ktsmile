@@ -6,11 +6,13 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { ExcelDataGrid } from "@/components/shared/data-grid/excel-data-grid";
 import {
-  DataGridAuxLink,
-  DataGridDeleteButton,
-  DataGridEditButton,
+  DataGridMenuDeleteItem,
+  DataGridMenuEditItem,
+  DataGridMenuLinkItem,
+  dataGridPrintMenuItemButtonClassName,
 } from "@/components/shared/data-grid/data-grid-action-buttons";
 import { Button } from "@/components/ui/button";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import {
   Dialog,
   DialogContent,
@@ -583,10 +585,17 @@ export function OrdersPage() {
         meta: { filterType: "none" },
         cell: ({ row }) => (
           <>
-            <LabOrderPrintButton orderId={row.original.id} label="PDF" />
-            <DataGridEditButton type="button" onClick={() => openEdit(row.original)} />
-            <DataGridDeleteButton type="button" onClick={() => void onDelete(row.original)} />
-            <DataGridAuxLink href={"/orders/" + row.original.id}>Dòng SP</DataGridAuxLink>
+            <DropdownMenuItem asChild>
+              <LabOrderPrintButton
+                orderId={row.original.id}
+                label="PDF"
+                variant="ghost"
+                className={dataGridPrintMenuItemButtonClassName}
+              />
+            </DropdownMenuItem>
+            <DataGridMenuEditItem onSelect={() => openEdit(row.original)}>Sửa</DataGridMenuEditItem>
+            <DataGridMenuDeleteItem onSelect={() => void onDelete(row.original)}>Xóa</DataGridMenuDeleteItem>
+            <DataGridMenuLinkItem href={"/orders/" + row.original.id}>Dòng SP</DataGridMenuLinkItem>
           </>
         ),
       },

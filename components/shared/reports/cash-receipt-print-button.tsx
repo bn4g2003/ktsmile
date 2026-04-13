@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Button } from "@/components/ui/button";
+import { Button, type ButtonProps } from "@/components/ui/button";
 import { getCashReceiptPrintPayload } from "@/lib/actions/cash";
 import {
   buildPrintShell,
@@ -13,9 +13,22 @@ import { buildCashReceiptBodyHtml, cashReceiptPrintTitle } from "@/lib/reports/c
 type CashReceiptPrintButtonProps = {
   transactionId: string;
   label?: string;
+  className?: string;
+  variant?: ButtonProps["variant"];
+  size?: ButtonProps["size"];
 };
 
-export function CashReceiptPrintButton({ transactionId, label = "In phiếu thu" }: CashReceiptPrintButtonProps) {
+export const CashReceiptPrintButton = React.forwardRef<HTMLButtonElement, CashReceiptPrintButtonProps>(
+  function CashReceiptPrintButton(
+    {
+      transactionId,
+      label = "In phiếu thu",
+      className,
+      variant = "secondary",
+      size = "sm",
+    },
+    ref,
+  ) {
   const [busy, setBusy] = React.useState(false);
   const onClick = () => {
     const w = openBlankPrintTab();
@@ -40,8 +53,17 @@ export function CashReceiptPrintButton({ transactionId, label = "In phiếu thu"
     })();
   };
   return (
-    <Button type="button" variant="secondary" size="sm" disabled={busy} onClick={onClick}>
+    <Button
+      ref={ref}
+      type="button"
+      variant={variant}
+      size={size}
+      className={className}
+      disabled={busy}
+      onClick={onClick}
+    >
       {busy ? "Đang tải…" : label}
     </Button>
   );
-}
+  },
+);

@@ -1,9 +1,21 @@
+"use client";
+
 import Link from "next/link";
 import * as React from "react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils/cn";
 
 const compact =
   "inline-flex h-7 min-h-7 shrink-0 items-center justify-center rounded-[var(--radius-pill)] px-2.5 text-[11px] font-semibold leading-none transition active:scale-[0.98] disabled:pointer-events-none disabled:opacity-45";
+
+/** Gắn vào nút in khi đặt trong `DropdownMenuItem asChild`. */
+export const dataGridPrintMenuItemButtonClassName =
+  "h-auto min-h-[var(--touch-min)] w-full justify-start rounded-[var(--radius-sm)] px-2 py-2 text-left text-sm font-normal shadow-none ring-0 hover:bg-[color-mix(in_srgb,var(--primary)_10%,transparent)]";
 
 /** Xem — xanh navy (primary), nền nhạt */
 export function DataGridViewButton({
@@ -107,5 +119,105 @@ export function DataGridActionGroup({
     >
       {children}
     </div>
+  );
+}
+
+/** Nút ⋯ mở menu: dùng chung cho cột thao tác (nội dung menu là children). */
+export function DataGridRowActionsMenu({
+  className,
+  align = "end",
+  children,
+}: {
+  className?: string;
+  align?: "start" | "end" | "center";
+  children: React.ReactNode;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className={cn(
+            compact,
+            "bg-[var(--surface-card)] text-[var(--on-surface-muted)] ring-1 ring-[var(--border-ghost)] hover:bg-[var(--surface-muted)] hover:text-[var(--on-surface)]",
+            className,
+          )}
+          aria-label="Mở menu thao tác"
+        >
+          ⋯
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align={align} className="min-w-[11rem]">
+        {children}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+export function DataGridMenuViewItem({
+  className,
+  children = "Xem",
+  ...props
+}: React.ComponentProps<typeof DropdownMenuItem>) {
+  return (
+    <DropdownMenuItem
+      className={cn("font-medium text-[var(--primary)]", className)}
+      {...props}
+    >
+      {children}
+    </DropdownMenuItem>
+  );
+}
+
+export function DataGridMenuEditItem({
+  className,
+  children = "Sửa",
+  ...props
+}: React.ComponentProps<typeof DropdownMenuItem>) {
+  return (
+    <DropdownMenuItem
+      className={cn("font-medium text-[#9a3412]", className)}
+      {...props}
+    >
+      {children}
+    </DropdownMenuItem>
+  );
+}
+
+export function DataGridMenuDeleteItem({
+  className,
+  children = "Xóa",
+  ...props
+}: React.ComponentProps<typeof DropdownMenuItem>) {
+  return (
+    <DropdownMenuItem
+      className={cn("font-medium text-[#b91c1c]", className)}
+      {...props}
+    >
+      {children}
+    </DropdownMenuItem>
+  );
+}
+
+/** Mục điều hướng trong menu (vd. Dòng SP). */
+export function DataGridMenuLinkItem({
+  href,
+  className,
+  children,
+  ...props
+}: React.ComponentProps<typeof Link>) {
+  return (
+    <DropdownMenuItem asChild>
+      <Link
+        href={href}
+        className={cn(
+          "cursor-pointer font-medium text-[var(--on-surface-muted)] no-underline data-[highlighted]:text-[var(--on-surface)]",
+          className,
+        )}
+        {...props}
+      >
+        {children}
+      </Link>
+    </DropdownMenuItem>
   );
 }

@@ -21,13 +21,17 @@ type StockVoucherPrintButtonProps = {
   className?: string;
 };
 
-export function StockVoucherPrintButton({
-  documentId,
-  label = "In / lưu PDF",
-  size = "sm",
-  variant = "secondary",
-  className,
-}: StockVoucherPrintButtonProps) {
+export const StockVoucherPrintButton = React.forwardRef<HTMLButtonElement, StockVoucherPrintButtonProps>(
+  function StockVoucherPrintButton(
+    {
+      documentId,
+      label = "In / lưu PDF",
+      size = "sm",
+      variant = "secondary",
+      className,
+    },
+    ref,
+  ) {
   const [busy, setBusy] = React.useState(false);
   const onClick = () => {
     const w = openBlankPrintTab();
@@ -53,6 +57,7 @@ export function StockVoucherPrintButton({
   };
   return (
     <Button
+      ref={ref}
       type="button"
       variant={variant}
       size={size}
@@ -63,4 +68,5 @@ export function StockVoucherPrintButton({
       {busy ? "Đang tải…" : label}
     </Button>
   );
-}
+  },
+);
