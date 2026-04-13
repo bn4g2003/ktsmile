@@ -39,19 +39,22 @@ export type LabOrderRow = {
   payment_notice_issued_at: string | null;
   grand_total: number;
   order_category?: string;
+  // Thông tin tổng hợp từ dòng chi tiết
+  tooth_positions_summary?: string | null;
+  tooth_count_total?: number | null;
 };
 
 /* Gợi ý FK theo tên constraint (tránh PGRST201 khi PostgREST không chọn đúng quan hệ). */
 const LAB_ORDERS_LIST_SELECT_FULL =
-  "id, order_number, received_at, partner_id, patient_name, clinic_name, status, notes, created_at, updated_at, order_category, patient_year_of_birth, coord_review_status, doctor_prescription_id, billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, payment_notice_doc_number, payment_notice_issued_at, partners!lab_orders_partner_id_fkey(code,name), doctor_prescriptions!lab_orders_doctor_prescription_id_fkey(slip_code), lab_order_lines!lab_order_lines_order_id_fkey(line_amount)";
+  "id, order_number, received_at, partner_id, patient_name, clinic_name, status, notes, created_at, updated_at, order_category, patient_year_of_birth, coord_review_status, doctor_prescription_id, billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, payment_notice_doc_number, payment_notice_issued_at, partners!lab_orders_partner_id_fkey(code,name), doctor_prescriptions!lab_orders_doctor_prescription_id_fkey(slip_code), lab_order_lines!lab_order_lines_order_id_fkey(line_amount,tooth_positions,tooth_count)";
 
 /** Trước migration 20260420 (order_category, sender_name, …). */
 const LAB_ORDERS_LIST_SELECT_NO_PROD_UI =
-  "id, order_number, received_at, partner_id, patient_name, clinic_name, status, notes, created_at, updated_at, coord_review_status, doctor_prescription_id, billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, payment_notice_doc_number, payment_notice_issued_at, partners!lab_orders_partner_id_fkey(code,name), doctor_prescriptions!lab_orders_doctor_prescription_id_fkey(slip_code), lab_order_lines!lab_order_lines_order_id_fkey(line_amount)";
+  "id, order_number, received_at, partner_id, patient_name, clinic_name, status, notes, created_at, updated_at, coord_review_status, doctor_prescription_id, billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, payment_notice_doc_number, payment_notice_issued_at, partners!lab_orders_partner_id_fkey(code,name), doctor_prescriptions!lab_orders_doctor_prescription_id_fkey(slip_code), lab_order_lines!lab_order_lines_order_id_fkey(line_amount,tooth_positions,tooth_count)";
 
 /** Trước migration 20260419 (phiếu BS, đối chiếu, GBTT trên đơn). */
 const LAB_ORDERS_LIST_SELECT_LEGACY_CORE =
-  "id, order_number, received_at, partner_id, patient_name, clinic_name, status, notes, created_at, updated_at, partners!lab_orders_partner_id_fkey(code,name), lab_order_lines!lab_order_lines_order_id_fkey(line_amount)";
+  "id, order_number, received_at, partner_id, patient_name, clinic_name, status, notes, created_at, updated_at, partners!lab_orders_partner_id_fkey(code,name), lab_order_lines!lab_order_lines_order_id_fkey(line_amount,tooth_positions,tooth_count)";
 
 /**
  * Chỉ cột lab_orders (không embed) — khi PostgREST lỗi quan hệ/lồng lab_order_lines hoặc partners.
@@ -66,19 +69,33 @@ const LAB_ORDERS_LIST_SELECT_SCALARS_LEGACY =
 
 /** Khi embed phiếu BS vẫn lỗi — bỏ doctor_prescriptions, giữ tổng dòng. */
 const LAB_ORDERS_LIST_SELECT_NO_RX_EMBED =
-  "id, order_number, received_at, partner_id, patient_name, clinic_name, status, notes, created_at, updated_at, order_category, patient_year_of_birth, coord_review_status, doctor_prescription_id, billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, payment_notice_doc_number, payment_notice_issued_at, partners!lab_orders_partner_id_fkey(code,name), lab_order_lines!lab_order_lines_order_id_fkey(line_amount)";
+  "id, order_number, received_at, partner_id, patient_name, clinic_name, status, notes, created_at, updated_at, order_category, patient_year_of_birth, coord_review_status, doctor_prescription_id, billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, payment_notice_doc_number, payment_notice_issued_at, partners!lab_orders_partner_id_fkey(code,name), lab_order_lines!lab_order_lines_order_id_fkey(line_amount,tooth_positions,tooth_count)";
 
 const LAB_ORDERS_LIST_SELECT_NO_PROD_UI_NO_RX =
-  "id, order_number, received_at, partner_id, patient_name, clinic_name, status, notes, created_at, updated_at, coord_review_status, doctor_prescription_id, billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, payment_notice_doc_number, payment_notice_issued_at, partners!lab_orders_partner_id_fkey(code,name), lab_order_lines!lab_order_lines_order_id_fkey(line_amount)";
+  "id, order_number, received_at, partner_id, patient_name, clinic_name, status, notes, created_at, updated_at, coord_review_status, doctor_prescription_id, billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, payment_notice_doc_number, payment_notice_issued_at, partners!lab_orders_partner_id_fkey(code,name), lab_order_lines!lab_order_lines_order_id_fkey(line_amount,tooth_positions,tooth_count)";
 
 function mapLabOrderListRow(r: Record<string, unknown>): LabOrderRow {
   const partners = r["partners"] as { code?: string; name?: string } | null;
   const rawRx = r["doctor_prescriptions"] as { slip_code?: string | null } | { slip_code?: string | null }[] | null;
   const rx = Array.isArray(rawRx) ? rawRx[0] : rawRx;
-  const lines = r["lab_order_lines"] as { line_amount?: string | number }[] | null;
+  const lines = r["lab_order_lines"] as { line_amount?: string | number; tooth_positions?: string; tooth_count?: number | null }[] | null;
   let total = 0;
+  // Tổng hợp vị trí răng và số lượng răng
+  const toothPositionsSet = new Set<string>();
+  let toothCountTotal = 0;
   for (const line of lines ?? []) {
     total += finiteNumber(line.line_amount);
+    // Thu thập vị trí răng
+    if (line.tooth_positions?.trim()) {
+      const positions = line.tooth_positions.split(",").map((p) => p.trim()).filter(Boolean);
+      for (const pos of positions) {
+        toothPositionsSet.add(pos);
+      }
+    }
+    // Cộng số lượng răng
+    if (line.tooth_count != null && typeof line.tooth_count === "number") {
+      toothCountTotal += line.tooth_count;
+    }
   }
   const crs = r["coord_review_status"] as string | undefined;
   const subtotal = Math.round(total * 100) / 100;
@@ -114,6 +131,13 @@ function mapLabOrderListRow(r: Record<string, unknown>): LabOrderRow {
       billing_other_fees: bFees,
     }),
     order_category: (r["order_category"] as string | undefined) ?? "new_work",
+    tooth_positions_summary: toothPositionsSet.size > 0 ? [...toothPositionsSet].sort((a, b) => {
+      // Sắp xếp theo số răng (FDI notation)
+      const numA = parseInt(a.replace(/\D/g, ""), 10) || 0;
+      const numB = parseInt(b.replace(/\D/g, ""), 10) || 0;
+      return numA - numB;
+    }).join(", ") : null,
+    tooth_count_total: toothCountTotal > 0 ? toothCountTotal : null,
   };
 }
 

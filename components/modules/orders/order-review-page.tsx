@@ -186,7 +186,8 @@ export function OrderReviewPage() {
                 <th className="px-2 py-2">Số đơn</th>
                 <th className="px-2 py-2">Khách</th>
                 <th className="px-2 py-2">BN / Nha khoa</th>
-                <th className="px-2 py-2">Phiếu BS</th>
+                <th className="px-2 py-2">Vị trí răng</th>
+                <th className="px-2 py-2 text-center">SL răng</th>
                 <th className="px-2 py-2">Đối chiếu</th>
                 <th className="px-2 py-2 text-right">Tổng</th>
                 <th className="px-2 py-2">Thao tác</th>
@@ -195,7 +196,7 @@ export function OrderReviewPage() {
             <tbody>
               {grouped.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-3 py-6 text-center text-[var(--on-surface-muted)]">
+                  <td colSpan={10} className="px-3 py-6 text-center text-[var(--on-surface-muted)]">
                     Không có đơn trong khoảng lọc ({total} tổng hệ thống).
                   </td>
                 </tr>
@@ -204,7 +205,7 @@ export function OrderReviewPage() {
                   <React.Fragment key={r.id}>
                     {showHeader ? (
                       <tr className="bg-[color-mix(in_srgb,var(--primary)_8%,transparent)]">
-                        <td colSpan={9} className="px-3 py-2 text-xs font-bold text-[var(--on-surface)]">
+                        <td colSpan={10} className="px-3 py-2 text-xs font-bold text-[var(--on-surface)]">
                           Ngày {day} ({rows.filter((x) => dayKey(x.received_at) === day).length} đơn)
                         </td>
                       </tr>
@@ -230,7 +231,8 @@ export function OrderReviewPage() {
                           <div className="text-xs text-[var(--on-surface-muted)]">{r.clinic_name}</div>
                         ) : null}
                       </td>
-                      <td className="px-2 py-2 text-xs">{r.prescription_slip_code ?? (r.doctor_prescription_id ? "—" : "Chưa gắn")}</td>
+                      <td className="max-w-[12rem] px-2 py-2 text-xs font-mono">{r.tooth_positions_summary ?? "—"}</td>
+                      <td className="px-2 py-2 text-center tabular-nums">{r.tooth_count_total ?? "—"}</td>
                       <td className="px-2 py-2 text-xs">{formatCoordReviewStatus(r.coord_review_status)}</td>
                       <td className="px-2 py-2 text-right tabular-nums">{r.total_amount.toLocaleString("vi-VN")}</td>
                       <td className="px-2 py-2">
