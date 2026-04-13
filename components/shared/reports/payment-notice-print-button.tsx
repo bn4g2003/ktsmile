@@ -17,12 +17,14 @@ type PaymentNoticePrintButtonProps = {
   orderId: string;
   label?: string;
   className?: string;
+  variant?: React.ComponentProps<typeof Button>["variant"];
 };
 
 export function PaymentNoticePrintButton({
   orderId,
   label = "In GBTT",
   className,
+  variant,
 }: PaymentNoticePrintButtonProps) {
   const [busy, setBusy] = React.useState(false);
   const onClick = () => {
@@ -48,7 +50,14 @@ export function PaymentNoticePrintButton({
     })();
   };
   return (
-    <Button type="button" variant="secondary" size="sm" className={className} disabled={busy} onClick={onClick}>
+    <Button
+      type="button"
+      variant={variant || "secondary"}
+      size="sm"
+      className={className}
+      disabled={busy}
+      onClick={onClick}
+    >
       {busy ? "Đang tải…" : label}
     </Button>
   );

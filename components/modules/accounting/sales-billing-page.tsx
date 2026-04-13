@@ -10,8 +10,14 @@ import {
 } from "@/lib/actions/billing";
 import { listLabOrders, type LabOrderRow } from "@/lib/actions/lab-orders";
 import { ExcelDataGrid } from "@/components/shared/data-grid/excel-data-grid";
+import {
+  DataGridRowActionsMenu,
+} from "@/components/shared/data-grid/data-grid-action-buttons";
 import { PaymentNoticePrintButton } from "@/components/shared/reports/payment-notice-print-button";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
 import {
   Dialog,
   DialogContent,
@@ -127,22 +133,25 @@ export function SalesBillingPage() {
         enableHiding: false,
         meta: { filterType: "none" },
         cell: ({ row }) => (
-          <div className="flex flex-wrap gap-1">
-            <Button type="button" variant="secondary" size="sm" className="h-7 px-2 text-xs" onClick={() => openBilling(row.original)}>
+          <DataGridRowActionsMenu>
+            <DropdownMenuItem onSelect={() => openBilling(row.original)}>
               CK / phí
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="h-7 px-2 text-xs"
+            </DropdownMenuItem>
+            <DropdownMenuItem
               disabled={issuePending === row.original.id}
-              onClick={() => void issueNotice(row.original.id)}
+              onSelect={() => void issueNotice(row.original.id)}
             >
               {issuePending === row.original.id ? "…" : "Cấp số GBTT"}
-            </Button>
-            <PaymentNoticePrintButton orderId={row.original.id} label="In GBTT" />
-          </div>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <PaymentNoticePrintButton
+                orderId={row.original.id}
+                label="In GBTT"
+                variant="ghost"
+                className="w-full justify-start rounded-none px-2 py-1.5 text-xs font-normal h-auto ring-0 shadow-none hover:bg-transparent"
+              />
+            </DropdownMenuItem>
+          </DataGridRowActionsMenu>
         ),
       },
     ],
