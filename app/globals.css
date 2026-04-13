@@ -37,6 +37,7 @@
 
 html {
   color-scheme: light;
+  overflow-x: hidden;
 }
 
 body {
@@ -44,6 +45,7 @@ body {
   color: var(--on-surface);
   font-family: var(--font-vn), system-ui, sans-serif;
   min-height: 100vh;
+  overflow-x: hidden;
 }
 
 *:focus-visible {

@@ -512,6 +512,7 @@ export function OrdersPage() {
       {
         accessorKey: "order_number",
         header: "Số đơn",
+        size: 200,
         meta: { filterKey: "order_number", filterType: "text" },
         cell: ({ row, getValue }) => (
           <Link
@@ -523,8 +524,21 @@ export function OrdersPage() {
         ),
       },
       {
+        accessorKey: "partner_code",
+        header: "Mã KH",
+        size: 100,
+        meta: { filterKey: "partner_code", filterType: "text" },
+      },
+      {
+        accessorKey: "partner_name",
+        header: "Khách hàng",
+        size: 180,
+        meta: { filterKey: "partner_name", filterType: "text" },
+      },
+      {
         accessorKey: "received_at",
         header: "Ngày nhận",
+        size: 160,
         meta: { filterKey: "received_from", filterType: "text" },
       },
       {
@@ -533,13 +547,12 @@ export function OrdersPage() {
         meta: { filterKey: "received_to", filterType: "text" },
         cell: () => "",
       },
-      { accessorKey: "partner_code", header: "Mã KH" },
-      { accessorKey: "partner_name", header: "Khách" },
-      { accessorKey: "clinic_name", header: "Nha khoa", meta: { filterKey: "clinic_name", filterType: "text" } },
-      { accessorKey: "patient_name", header: "Bệnh nhân", meta: { filterKey: "patient_name", filterType: "text" } },
+      { accessorKey: "clinic_name", header: "Nha khoa", size: 180, meta: { filterKey: "clinic_name", filterType: "text" } },
+      { accessorKey: "patient_name", header: "Bệnh nhân", size: 150, meta: { filterKey: "patient_name", filterType: "text" } },
       {
         accessorKey: "coord_review_status",
         header: "Đối chiếu",
+        size: 120,
         meta: {
           filterKey: "coord_review_status",
           filterType: "select",
@@ -582,10 +595,20 @@ export function OrdersPage() {
           </div>
         ),
       },
-      { accessorKey: "total_amount", header: "Tổng tiền" },
+      {
+        accessorKey: "total_amount",
+        header: "Tổng tiền",
+        size: 120,
+        cell: ({ getValue }) => (
+          <div className="text-right font-semibold tabular-nums">
+            {Number(getValue() ?? 0).toLocaleString("vi-VN")}
+          </div>
+        )
+      },
       {
         id: "actions",
         header: "Thao tác",
+        size: 120,
         enableHiding: false,
         meta: { filterType: "none" },
         cell: ({ row }) => (

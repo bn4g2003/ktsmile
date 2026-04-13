@@ -319,12 +319,11 @@ export function ExcelDataGrid<T>({
   }, []);
 
   const columnsResolved = React.useMemo(() => {
-    if (!renderRowDetail) return columns;
-    const hasActions = columns.some((c) => c.id === "actions");
-    if (!hasActions) {
-      return [
-        ...columns,
-        {
+    let base = [...columns];
+    if (renderRowDetail) {
+      const hasActions = base.some((c) => c.id === "actions");
+      if (!hasActions) {
+        base.push({
           id: "actions",
           header: "Thao tác",
           enableHiding: false,
@@ -334,22 +333,30 @@ export function ExcelDataGrid<T>({
               <DataGridMenuViewItem onSelect={() => setViewRow(row.original)}>Xem</DataGridMenuViewItem>
             </DataGridRowActionsMenu>
           ),
-        },
-      ];
+        });
+      } else {
+        base = base.map((col) => {
+          if (col.id !== "actions") return col;
+          const prevCell = col.cell;
+          return {
+            ...col,
+            cell: (info: CellContext<T, unknown>) => (
+              <DataGridRowActionsMenu>
+                <DataGridMenuViewItem onSelect={() => setViewRow(info.row.original)}>Xem</DataGridMenuViewItem>
+                {prevCell ? flexRender(prevCell, info) : null}
+              </DataGridRowActionsMenu>
+            ),
+          };
+        });
+      }
     }
-    return columns.map((col) => {
-      if (col.id !== "actions") return col;
-      const prevCell = col.cell;
-      return {
-        ...col,
-        cell: (info: CellContext<T, unknown>) => (
-          <DataGridRowActionsMenu>
-            <DataGridMenuViewItem onSelect={() => setViewRow(info.row.original)}>Xem</DataGridMenuViewItem>
-            {prevCell ? flexRender(prevCell, info) : null}
-          </DataGridRowActionsMenu>
-        ),
-      };
-    });
+    // Always move actions to the end
+    const actionsIdx = base.findIndex(c => c.id === "actions");
+    if (actionsIdx !== -1 && actionsIdx !== base.length - 1) {
+      const [actionsCol] = base.splice(actionsIdx, 1);
+      base.push(actionsCol);
+    }
+    return base;
   }, [columns, renderRowDetail]);
 
   const hasColumnFilters = React.useMemo(() => {
@@ -427,8 +434,8 @@ export function ExcelDataGrid<T>({
   };
 
   return (
-    <div className="space-y-4 sm:space-y-6">
-      <div className="rounded-[var(--radius-xl)] bg-[var(--surface-card)] p-4 shadow-[var(--shadow-card)] sm:p-6">
+    <div className="w-full max-w-full overflow-hidden space-y-4 sm:space-y-6">
+      <div className="w-full max-w-full overflow-hidden rounded-[var(--radius-xl)] bg-[var(--surface-card)] p-4 shadow-[var(--shadow-card)] sm:p-6">
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0 flex-1">
@@ -629,15 +636,19 @@ export function ExcelDataGrid<T>({
             )}
           </div>
 
-          <div className="hidden overflow-x-auto rounded-[var(--radius-lg)] bg-[var(--surface-card)] p-3 sm:p-4 shadow-[inset_0_0_0_1px_var(--border-ghost)] md:block">
-            <table className="w-full min-w-[640px] border-collapse text-sm">
+          <div className="w-full overflow-x-auto rounded-[var(--radius-lg)] bg-[var(--surface-card)] shadow-[inset_0_0_0_1px_var(--border-ghost)] md:block scrollbar-thin scrollbar-thumb-[var(--border-ghost)] scrollbar-track-transparent">
+            <table className="w-full min-w-[1280px] border-collapse text-sm table-fixed">
               <thead>
                 {table.getHeaderGroups().map((hg) => (
                   <tr key={hg.id} className="border-b border-[var(--border-ghost)]">
                     {hg.headers.map((h) => (
                       <th
                         key={h.id}
-                        className="px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--on-surface-faint)] first:pl-4 last:pr-4"
+                        style={{ width: h.column.getSize() }}
+                        className={cn(
+                          "px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--on-surface-faint)] first:pl-4 last:pr-4",
+                          h.column.id === "actions" && "sticky right-0 z-20 bg-[var(--surface-card)] shadow-[-6px_0_12px_rgba(0,0,0,0.1)] border-l border-[var(--border-ghost)]"
+                        )}
                       >
                         {h.isPlaceholder
                           ? null
@@ -652,7 +663,13 @@ export function ExcelDataGrid<T>({
                     const ft = col.columnDef.meta?.filterType ?? "text";
                     if (!fk || ft === "none") {
                       return (
-                        <td key={col.id} className="px-3 py-2 first:pl-4 last:pr-4">
+                        <td
+                          key={col.id}
+                          className={cn(
+                            "px-3 py-2 first:pl-4 last:pr-4",
+                            col.id === "actions" && "sticky right-0 z-20 bg-[var(--surface-muted)] shadow-[-4px_0_8px_rgba(0,0,0,0.05)]"
+                          )}
+                        >
                           <span className="sr-only">filter</span>
                         </td>
                       );
@@ -662,7 +679,10 @@ export function ExcelDataGrid<T>({
                       return (
                         <td
                           key={col.id}
-                          className="min-w-[9.5rem] px-3 py-2 align-top first:pl-4 last:pr-4"
+                          className={cn(
+                            "min-w-[9.5rem] px-3 py-2 align-top first:pl-4 last:pr-4",
+                            col.id === "actions" && "sticky right-0 z-20 bg-[var(--surface-muted)] shadow-[-6px_0_12px_rgba(0,0,0,0.1)] border-l border-[var(--border-ghost)]"
+                          )}
                         >
                           <GridMultiSelectFilter
                             filterKey={fk}
@@ -675,7 +695,13 @@ export function ExcelDataGrid<T>({
                       );
                     }
                     return (
-                      <td key={col.id} className="px-3 py-2 first:pl-4 last:pr-4">
+                      <td
+                        key={col.id}
+                        className={cn(
+                          "px-3 py-2 first:pl-4 last:pr-4",
+                          col.id === "actions" && "sticky right-0 z-20 bg-[var(--surface-muted)] shadow-[-4px_0_8px_rgba(0,0,0,0.05)]"
+                        )}
+                      >
                         <Input
                           value={filters[fk] ?? ""}
                           onChange={(e) => setFilter(fk, e.target.value)}
@@ -719,7 +745,12 @@ export function ExcelDataGrid<T>({
                       {row.getVisibleCells().map((cell) => (
                         <td
                           key={cell.id}
-                          className="px-3 py-2 align-middle text-[var(--on-surface)] first:pl-4 last:pr-4"
+                          style={{ width: cell.column.getSize() }}
+                          className={cn(
+                            "px-3 py-2 align-middle text-[var(--on-surface)] first:pl-4 last:pr-4 transition-colors",
+                            cell.column.id === "actions" && "sticky right-0 z-10 shadow-[-6px_0_12px_rgba(0,0,0,0.1)] border-l border-[var(--border-ghost)]",
+                            cell.column.id === "actions" && (i % 2 === 1 ? "bg-[var(--surface-row-b)]" : "bg-[var(--surface-card)]")
+                          )}
                         >
                           {flexRender(cell.column.columnDef.cell, cell.getContext())}
                         </td>
@@ -738,8 +769,8 @@ export function ExcelDataGrid<T>({
           {total === 0
             ? "0"
             : String((page - 1) * pageSize + 1) +
-              "–" +
-              String(Math.min(page * pageSize, total))}{" "}
+            "–" +
+            String(Math.min(page * pageSize, total))}{" "}
           / {total} dòng
         </p>
         <div className="flex flex-wrap items-center gap-1.5">
