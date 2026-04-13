@@ -23,6 +23,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
+import { Combobox } from "@/components/ui/combobox";
 import { LabOrderRowDetailPanel } from "@/components/modules/orders/lab-order-row-detail-panel";
 import { LabOrderStatusQuickDialog } from "@/components/modules/orders/lab-order-status-quick-dialog";
 import { Textarea } from "@/components/ui/textarea";
@@ -45,6 +46,7 @@ import { LAB_ORDER_ACCESSORY_DEFS, parseAccessoriesJson } from "@/lib/lab/order-
 import { LabToothPicker } from "@/components/modules/orders/lab-tooth-picker";
 import { LabOrderPrintButton } from "@/components/shared/reports/lab-order-print-button";
 import { importLabOrdersFromExcel } from "@/lib/actions/lab-orders-import";
+import { parseToothPositionsToSet } from "@/lib/dental/fdi-teeth";
 import {
   createLabOrder,
   deleteLabOrder,
@@ -56,6 +58,15 @@ import {
   updateLabOrderStatus,
   type LabOrderRow,
 } from "@/lib/actions/lab-orders";
+
+const DENTAL_SHADES = [
+  "A1", "A2", "A3", "A3.5", "A4",
+  "B1", "B2", "B3", "B4",
+  "C1", "C2", "C3", "C4",
+  "D2", "D3", "D4",
+  "1M1", "1M2", "2M1", "2M2", "2M3", "3M1", "3M2", "3M3", "4M1", "4M2", "4M3", "5M1", "5M2", "5M3",
+  "OM1", "OM2", "OM3",
+];
 
 function toDateTimeLocal(iso: string | null | undefined): string {
   if (!iso) return "";
@@ -952,35 +963,47 @@ export function OrdersPage() {
                         <Label>Vị trí răng (FDI)</Label>
                         <LabToothPicker
                           value={line.tooth_positions}
-                          onChange={(v) =>
+                          onChange={(v) => {
+                            const c = parseToothPositionsToSet(v).size;
+                            const cs = c > 0 ? String(c) : "";
                             setDraftLines((prev) =>
-                              prev.map((l) => (l.key === line.key ? { ...l, tooth_positions: v } : l)),
-                            )
-                          }
+                              prev.map((l) =>
+                                l.key === line.key
+                                  ? { ...l, tooth_positions: v, tooth_count: cs, qty: cs || "1" }
+                                  : l,
+                              ),
+                            );
+                          }}
                         />
                         <Input
                           className="mt-1 font-mono text-xs"
                           value={line.tooth_positions}
-                          onChange={(e) =>
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            const c = parseToothPositionsToSet(v).size;
+                            const cs = c > 0 ? String(c) : "";
                             setDraftLines((prev) =>
                               prev.map((l) =>
-                                l.key === line.key ? { ...l, tooth_positions: e.target.value } : l,
+                                l.key === line.key
+                                  ? { ...l, tooth_positions: v, tooth_count: cs, qty: cs || "1" }
+                                  : l,
                               ),
-                            )
-                          }
+                            );
+                          }}
                           placeholder="Hoặc nhập tay: 11, 21, 36"
                         />
                       </div>
                       <div className="grid gap-2">
                         <Label>Màu sắc</Label>
-                        <Input
+                        <Combobox
+                          options={DENTAL_SHADES}
                           value={line.shade}
-                          onChange={(e) =>
+                          onChange={(v) =>
                             setDraftLines((prev) =>
-                              prev.map((l) => (l.key === line.key ? { ...l, shade: e.target.value } : l)),
+                              prev.map((l) => (l.key === line.key ? { ...l, shade: v } : l)),
                             )
                           }
-                          placeholder="VD: A2, 3M2"
+                          placeholder="Chọn/Nhập màu…"
                         />
                       </div>
                       <div className="grid gap-2">
@@ -997,7 +1020,7 @@ export function OrdersPage() {
                               ),
                             )
                           }
-                          placeholder="Tuỳ chọn"
+                          placeholder="Tự động"
                         />
                       </div>
                       <div className="grid gap-2">
@@ -1046,20 +1069,6 @@ export function OrdersPage() {
                         </Select>
                       </div>
                       <div className="grid gap-2">
-                        <Label>Số lượng (SL hàng)</Label>
-                        <Input
-                          type="number"
-                          min={0.01}
-                          step={0.01}
-                          value={line.qty}
-                          onChange={(e) =>
-                            setDraftLines((prev) =>
-                              prev.map((l) => (l.key === line.key ? { ...l, qty: e.target.value } : l)),
-                            )
-                          }
-                        />
-                      </div>
-                      <div className="grid gap-2">
                         <Label>Đơn giá</Label>
                         <Input
                           type="number"
@@ -1100,17 +1109,6 @@ export function OrdersPage() {
                               prev.map((l) =>
                                 l.key === line.key ? { ...l, disc_vnd: e.target.value } : l,
                               ),
-                            )
-                          }
-                        />
-                      </div>
-                      <div className="grid gap-2 sm:col-span-2 lg:col-span-3">
-                        <Label>Ghi chú dòng</Label>
-                        <Input
-                          value={line.notes}
-                          onChange={(e) =>
-                            setDraftLines((prev) =>
-                              prev.map((l) => (l.key === line.key ? { ...l, notes: e.target.value } : l)),
                             )
                           }
                         />
