@@ -523,8 +523,8 @@ export function OrdersPage() {
         meta: { filterKey: "received_to", filterType: "text" },
         cell: () => "",
       },
-      { accessorKey: "partner_code", header: "Mã KH", meta: { filterKey: "partner_code", filterType: "text" } },
-      { accessorKey: "partner_name", header: "Khách", meta: { filterKey: "partner_name", filterType: "text" } },
+      { accessorKey: "partner_code", header: "Mã KH" },
+      { accessorKey: "partner_name", header: "Khách" },
       { accessorKey: "clinic_name", header: "Nha khoa", meta: { filterKey: "clinic_name", filterType: "text" } },
       { accessorKey: "patient_name", header: "Bệnh nhân", meta: { filterKey: "patient_name", filterType: "text" } },
       {
@@ -540,7 +540,6 @@ export function OrdersPage() {
       {
         accessorKey: "prescription_slip_code",
         header: "Phiếu BS",
-        meta: { filterKey: "prescription_slip_code", filterType: "text" },
         cell: ({ getValue }) => (getValue() ? String(getValue()) : "—"),
       },
       {
@@ -573,7 +572,7 @@ export function OrdersPage() {
           </div>
         ),
       },
-      { accessorKey: "total_amount", header: "Tổng tiền", meta: { filterKey: "total_amount", filterType: "text" } },
+      { accessorKey: "total_amount", header: "Tổng tiền" },
       {
         id: "actions",
         header: "Thao tác",
