@@ -22,6 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { PartnerRowDetailPanel } from "@/components/modules/master/partner-row-detail-panel";
+import { SupplierRowDetailPanel } from "@/components/modules/master/supplier-row-detail-panel";
 import { Textarea } from "@/components/ui/textarea";
 import { formatPartnerType } from "@/lib/format/labels";
 import {
@@ -426,19 +427,7 @@ export function PartnersPage({ initialTab = "customers" }: { initialTab?: Partne
           columns={columnsSuppliers}
           list={listSuppliers}
           reloadSignal={gridSupplier}
-          renderRowDetail={(row) => (
-            <DetailPreview
-              fields={[
-                { label: "Mã NCC", value: row.code },
-                { label: "Tên", value: row.name },
-                { label: "Đại diện", value: row.representative_name },
-                { label: "SĐT", value: row.phone },
-                { label: "MST", value: row.tax_id },
-                { label: "Địa chỉ", value: row.address, span: "full" },
-                { label: "Ghi chú", value: row.notes, span: "full" },
-              ]}
-            />
-          )}
+          renderRowDetail={(row) => <SupplierRowDetailPanel row={row} />}
           rowDetailTitle={(r) => "NCC " + r.code}
           toolbarExtra={
             <div className="flex flex-wrap items-center gap-2">

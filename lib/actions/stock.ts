@@ -24,6 +24,8 @@ export type StockDocumentRow = {
   supplier_code?: string | null;
   supplier_name?: string | null;
   line_count: number;
+  total_quantity: number;
+  total_amount: number;
 };
 
 export type StockDocumentHeader = {
@@ -48,6 +50,11 @@ function postingStatusFilterUnsupported(err: { message?: string } | null): boole
   );
 }
 
+function relationMissing(err: { message?: string } | null): boolean {
+  const m = (err?.message ?? "").toLowerCase();
+  return m.includes("does not exist") || m.includes("material_suppliers") || m.includes("materials");
+}
+
 export async function listStockDocuments(
   args: ListArgs,
 ): Promise<ListResult<StockDocumentRow>> {
@@ -57,7 +64,7 @@ export async function listStockDocuments(
 
   const build = (usePostingFilter: boolean) => {
     let q = supabase.from("stock_documents").select(
-      "*, suppliers:supplier_id(code,name), stock_lines(id)",
+      "*, suppliers:supplier_id(code,name), stock_lines(id,quantity,line_amount)",
       { count: "exact" },
     );
 
@@ -93,8 +100,14 @@ export async function listStockDocuments(
 
   const rows: StockDocumentRow[] = (data ?? []).map((r: Record<string, unknown>) => {
     const suppliers = r["suppliers"] as { code?: string; name?: string } | null;
-    const sl = r["stock_lines"] as { id?: string }[] | null;
+    const sl = r["stock_lines"] as { id?: string; quantity?: number; line_amount?: number }[] | null;
     const cnt = Array.isArray(sl) ? sl.length : 0;
+    let totalQty = 0;
+    let totalAmount = 0;
+    for (const ln of sl ?? []) {
+      totalQty += Number(ln.quantity ?? 0);
+      totalAmount += Number(ln.line_amount ?? 0);
+    }
     return {
       id: r["id"] as string,
       document_number: r["document_number"] as string,
@@ -109,10 +122,57 @@ export async function listStockDocuments(
       supplier_code: suppliers?.code,
       supplier_name: suppliers?.name,
       line_count: cnt,
+      total_quantity: totalQty,
+      total_amount: totalAmount,
     };
   });
 
   return { rows, total: count ?? 0 };
+}
+
+export async function listInboundDocumentsBySupplier(
+  supplierId: string,
+  limit = 30,
+): Promise<StockDocumentRow[]> {
+  const supabase = createSupabaseAdmin();
+  const { data, error } = await supabase
+    .from("stock_documents")
+    .select("*, suppliers:supplier_id(code,name), stock_lines(id,quantity,line_amount)")
+    .eq("supplier_id", supplierId)
+    .eq("movement_type", "inbound")
+    .order("document_date", { ascending: false })
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw new Error(error.message);
+
+  return (data ?? []).map((r: Record<string, unknown>) => {
+    const suppliers = r["suppliers"] as { code?: string; name?: string } | null;
+    const sl = r["stock_lines"] as { id?: string; quantity?: number; line_amount?: number }[] | null;
+    const cnt = Array.isArray(sl) ? sl.length : 0;
+    let totalQty = 0;
+    let totalAmount = 0;
+    for (const ln of sl ?? []) {
+      totalQty += Number(ln.quantity ?? 0);
+      totalAmount += Number(ln.line_amount ?? 0);
+    }
+    return {
+      id: r["id"] as string,
+      document_number: r["document_number"] as string,
+      document_date: r["document_date"] as string,
+      movement_type: r["movement_type"] as "inbound" | "outbound",
+      posting_status: (r["posting_status"] as "draft" | "posted" | undefined) ?? "posted",
+      supplier_id: (r["supplier_id"] as string | null) ?? null,
+      reason: (r["reason"] as string | null) ?? null,
+      notes: (r["notes"] as string | null) ?? null,
+      created_at: r["created_at"] as string,
+      updated_at: r["updated_at"] as string,
+      supplier_code: suppliers?.code ?? null,
+      supplier_name: suppliers?.name ?? null,
+      line_count: cnt,
+      total_quantity: totalQty,
+      total_amount: totalAmount,
+    };
+  });
 }
 
 const docSchema = z.object({
@@ -157,6 +217,149 @@ export async function deleteStockDocument(id: string) {
   if (error) throw new Error(error.message);
   revalidatePath("/inventory/documents");
   revalidatePath("/inventory/stock");
+}
+
+const inboundMaterialPurchaseSchema = z
+  .object({
+    supplier_id: z.string().uuid(),
+    document_date: z.string().min(1),
+    document_number: z.string().min(1).max(100).optional().nullable(),
+    notes: z.string().max(2000).optional().nullable(),
+    lines: z
+      .array(
+        z.object({
+          product_id: z.string().uuid(),
+          quantity: z.coerce.number().positive(),
+          unit_price: z.coerce.number().min(0).optional().nullable(),
+        }),
+      )
+      .min(1),
+  })
+  .superRefine((data, ctx) => {
+    const ids = data.lines.map((l) => l.product_id);
+    if (new Set(ids).size !== ids.length) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["lines"],
+        message: "Mỗi vật tư chỉ một dòng — gộp số lượng hoặc xóa dòng trùng.",
+      });
+    }
+  });
+
+/**
+ * Phiếu nhập kho NVL từ NCC: bắt buộc đã có dòng danh mục material_suppliers (fallback product_suppliers cho DB cũ).
+ * Đơn giá dòng: dùng giá nhập nhập tay, hoặc giá tham chiếu trong danh mục, hoặc 0.
+ */
+export async function createInboundMaterialPurchase(
+  input: z.infer<typeof inboundMaterialPurchaseSchema>,
+): Promise<{ documentId: string; document_number: string }> {
+  const row = inboundMaterialPurchaseSchema.parse(input);
+  const supabase = createSupabaseAdmin();
+
+  const uniqueIds = [...new Set(row.lines.map((l) => l.product_id))];
+  const refPriceByProduct = new Map<string, number | null>();
+  const stockProductIdByInputProductId = new Map<string, string>();
+
+  let usedMaterials = false;
+  const linksMat = await supabase
+    .from("material_suppliers")
+    .select("reference_purchase_price, materials:material_id(legacy_product_id)")
+    .eq("supplier_id", row.supplier_id);
+  if (!linksMat.error) {
+    usedMaterials = true;
+    for (const x of linksMat.data ?? []) {
+      const mat = x["materials"] as { legacy_product_id?: string } | null;
+      const legacyId = mat?.legacy_product_id;
+      if (!legacyId) continue;
+      if (!uniqueIds.includes(legacyId)) continue;
+      refPriceByProduct.set(
+        legacyId,
+        x["reference_purchase_price"] != null ? Number(x["reference_purchase_price"]) : null,
+      );
+      stockProductIdByInputProductId.set(legacyId, legacyId);
+    }
+  } else if (!relationMissing(linksMat.error)) {
+    throw new Error(linksMat.error.message);
+  }
+
+  if (!usedMaterials) {
+    const { data: links, error: le } = await supabase
+      .from("product_suppliers")
+      .select("product_id, reference_purchase_price")
+      .eq("supplier_id", row.supplier_id)
+      .in("product_id", uniqueIds);
+    if (le) throw new Error(le.message);
+    for (const x of links ?? []) {
+      const pid = x["product_id"] as string;
+      refPriceByProduct.set(
+        pid,
+        x["reference_purchase_price"] != null ? Number(x["reference_purchase_price"]) : null,
+      );
+      stockProductIdByInputProductId.set(pid, pid);
+    }
+  }
+  for (const id of uniqueIds) {
+    if (!refPriceByProduct.has(id)) {
+      throw new Error(
+        "Có vật tư chưa gắn với NCC này trong danh mục (SP & NVL → Xem → NCC & kho). Không thể nhập hàng.",
+      );
+    }
+  }
+
+  let document_number = row.document_number?.trim() ?? "";
+  if (!document_number) {
+    const suffix = crypto.randomUUID().replace(/-/g, "").slice(0, 8).toUpperCase();
+    document_number = "PN-NVL-" + row.document_date.replace(/-/g, "") + "-" + suffix;
+  }
+
+  const insertDoc = {
+    document_number,
+    document_date: row.document_date,
+    movement_type: "inbound" as const,
+    supplier_id: row.supplier_id,
+    reason: "Nhập NVL từ NCC",
+    notes: row.notes?.trim() || null,
+    posting_status: "posted" as const,
+  };
+
+  let docId: string | null = null;
+  try {
+    let { data: doc, error: de } = await supabase
+      .from("stock_documents")
+      .insert(insertDoc)
+      .select("id")
+      .single();
+    if (de && postingStatusFilterUnsupported(de)) {
+      const { posting_status: _pst, ...rest } = insertDoc;
+      ({ data: doc, error: de } = await supabase.from("stock_documents").insert(rest).select("id").single());
+    }
+    if (de || !doc) throw new Error(de?.message ?? "Không tạo được phiếu nhập.");
+    docId = doc["id"] as string;
+
+    for (const line of row.lines) {
+      const ref = refPriceByProduct.get(line.product_id);
+      const unit_price = line.unit_price != null ? line.unit_price : (ref ?? 0);
+      const stockProductId = stockProductIdByInputProductId.get(line.product_id) ?? line.product_id;
+      const { error: lie } = await supabase.from("stock_lines").insert({
+        document_id: docId,
+        product_id: stockProductId,
+        quantity: line.quantity,
+        unit_price,
+      });
+      if (lie) throw new Error(lie.message);
+    }
+  } catch (e) {
+    if (docId) {
+      await supabase.from("stock_lines").delete().eq("document_id", docId);
+      await supabase.from("stock_documents").delete().eq("id", docId);
+    }
+    throw e;
+  }
+
+  revalidatePath("/inventory/documents");
+  revalidatePath("/inventory/stock");
+  revalidatePath("/accounting/debt");
+  return { documentId: docId, document_number };
 }
 
 const outboundRequestSchema = z.object({
@@ -438,7 +641,38 @@ export async function listProductStock(
 ): Promise<ListResult<ProductStockRow>> {
   const supabase = createSupabaseAdmin();
   const { page, pageSize, globalSearch, filters } = args;
+  const seg = filters.stock_segment?.trim();
+  if (seg === "nvl") {
+    let qNvl = supabase.from("v_material_stock").select("*", { count: "exact" });
+    const g = globalSearch.trim();
+    if (g) {
+      const p = "%" + g + "%";
+      qNvl = qNvl.or("material_code.ilike." + p + ",material_name.ilike." + p);
+    }
+    if (filters.product_code?.trim()) {
+      qNvl = qNvl.ilike("material_code", "%" + filters.product_code.trim() + "%");
+    }
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize - 1;
+    qNvl = qNvl.order("material_code", { ascending: true }).range(from, to);
+    const { data, error, count } = await qNvl;
+    if (error) throw new Error(error.message);
+    const rows: ProductStockRow[] = (data ?? []).map((r: Record<string, unknown>) => ({
+      product_id: (r["product_id"] as string) ?? (r["material_id"] as string),
+      product_code: (r["material_code"] as string) ?? "",
+      product_name: (r["material_name"] as string) ?? "",
+      unit: r["unit"] as string,
+      product_usage: "inventory",
+      quantity_on_hand: Number(r["quantity_on_hand"] ?? 0),
+      primary_supplier_id: (r["primary_supplier_id"] as string | null) ?? null,
+      primary_supplier_code: (r["primary_supplier_code"] as string | null) ?? null,
+      primary_supplier_name: (r["primary_supplier_name"] as string | null) ?? null,
+    }));
+    return { rows, total: count ?? 0 };
+  }
+
   let q = supabase.from("v_product_stock").select("*", { count: "exact" });
+  q = q.eq("product_usage", "sales");
 
   const g = globalSearch.trim();
   if (g) {

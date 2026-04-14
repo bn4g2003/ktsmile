@@ -94,6 +94,15 @@ function fromDateTimeLocal(s: string): string | null {
   return d.toISOString();
 }
 
+function nextMorningDeliveryFromReceived(receivedAt: string): string | null {
+  const base = receivedAt?.trim();
+  if (!base) return null;
+  const d = new Date(base + "T08:30:00");
+  if (Number.isNaN(d.getTime())) return null;
+  d.setDate(d.getDate() + 1);
+  return d.toISOString();
+}
+
 function emptyAccessoryQty(): Record<LabAccessoryKey, string> {
   return Object.fromEntries(LAB_ORDER_ACCESSORY_DEFS.map((d) => [d.key, ""])) as Record<
     LabAccessoryKey,
@@ -545,7 +554,14 @@ export function OrdersPage() {
         id: "received_to",
         header: "Đến",
         meta: { filterKey: "received_to", filterType: "text" },
-        cell: () => "",
+        cell: ({ row }) => {
+          const explicitDue = (row.original as unknown as { due_delivery_at?: string | null }).due_delivery_at;
+          const due = explicitDue ?? nextMorningDeliveryFromReceived(row.original.received_at);
+          if (!due) return "—";
+          const d = new Date(due);
+          if (Number.isNaN(d.getTime())) return "—";
+          return d.toLocaleString("vi-VN");
+        },
       },
       { accessorKey: "clinic_name", header: "Nha khoa", size: 180, meta: { filterKey: "clinic_name", filterType: "text" } },
       { accessorKey: "patient_name", header: "Bệnh nhân", size: 150, meta: { filterKey: "patient_name", filterType: "text" } },

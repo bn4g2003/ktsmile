@@ -17,6 +17,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ProductRowDetailPanel } from "@/components/modules/master/product-row-detail-panel";
+import { MaterialRowDetailPanel } from "@/components/modules/master/material-row-detail-panel";
+import { DetailTabStrip } from "@/components/ui/detail-tab-strip";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { importProductsFromExcel } from "@/lib/actions/products-import";
@@ -26,24 +28,28 @@ import {
   listProducts,
   updateProduct,
   type ProductRow,
-  type ProductUsage,
 } from "@/lib/actions/products";
+import {
+  createMaterial,
+  deleteMaterial,
+  listMaterials,
+  updateMaterial,
+  type MaterialRow,
+} from "@/lib/actions/materials";
 
-function formatProductUsage(u: ProductUsage) {
-  if (u === "inventory") return "Kho / NVL";
-  if (u === "sales") return "Bán / labo";
-  return "Kho + bán";
-}
+type CatalogTab = "sales" | "inventory";
 
-export function ProductsPage() {
+export function ProductsPage({ initialCatalogTab = "sales" }: { initialCatalogTab?: CatalogTab }) {
   const router = useRouter();
+  const [catalogTab, setCatalogTab] = React.useState<CatalogTab>(initialCatalogTab);
   const [gridReload, setGridReload] = React.useState(0);
   const bumpGrid = React.useCallback(() => {
     setGridReload((n) => n + 1);
     router.refresh();
   }, [router]);
   const [open, setOpen] = React.useState(false);
-  const [editing, setEditing] = React.useState<ProductRow | null>(null);
+  const [editingSales, setEditingSales] = React.useState<ProductRow | null>(null);
+  const [editingNvl, setEditingNvl] = React.useState<MaterialRow | null>(null);
   const [pending, setPending] = React.useState(false);
   const [err, setErr] = React.useState<string | null>(null);
   const [code, setCode] = React.useState("");
@@ -52,19 +58,31 @@ export function ProductsPage() {
   const [unitPrice, setUnitPrice] = React.useState("0");
   const [warranty, setWarranty] = React.useState("");
   const [isActive, setIsActive] = React.useState(true);
-  const [productUsage, setProductUsage] = React.useState<ProductUsage>("both");
   const fileImportRef = React.useRef<HTMLInputElement>(null);
   const [importBusy, setImportBusy] = React.useState(false);
 
+  React.useEffect(() => {
+    setCatalogTab(initialCatalogTab);
+  }, [initialCatalogTab]);
+
+  const setCatalogTabAndUrl = React.useCallback(
+    (t: CatalogTab) => {
+      setCatalogTab(t);
+      const path = t === "inventory" ? "/master/products?tab=inventory" : "/master/products";
+      router.replace(path, { scroll: false });
+    },
+    [router],
+  );
+
   const reset = () => {
-    setEditing(null);
+    setEditingSales(null);
+    setEditingNvl(null);
     setCode("");
     setName("");
     setUnit("");
     setUnitPrice("0");
     setWarranty("");
     setIsActive(true);
-    setProductUsage("both");
     setErr(null);
   };
 
@@ -73,15 +91,28 @@ export function ProductsPage() {
     setOpen(true);
   };
 
-  const openEdit = (row: ProductRow) => {
-    setEditing(row);
+  const openEditSales = (row: ProductRow) => {
+    setEditingSales(row);
+    setEditingNvl(null);
     setCode(row.code);
     setName(row.name);
     setUnit(row.unit);
     setUnitPrice(String(row.unit_price));
     setWarranty(row.warranty_years != null ? String(row.warranty_years) : "");
     setIsActive(row.is_active);
-    setProductUsage(row.product_usage ?? "both");
+    setErr(null);
+    setOpen(true);
+  };
+
+  const openEditNvl = (row: MaterialRow) => {
+    setEditingNvl(row);
+    setEditingSales(null);
+    setCode(row.code);
+    setName(row.name);
+    setUnit(row.unit);
+    setUnitPrice("0");
+    setWarranty("");
+    setIsActive(row.is_active);
     setErr(null);
     setOpen(true);
   };
@@ -91,17 +122,28 @@ export function ProductsPage() {
     setPending(true);
     setErr(null);
     try {
-      const payload = {
-        code: code.trim(),
-        name: name.trim(),
-        unit: unit.trim(),
-        unit_price: Number(unitPrice),
-        warranty_years: warranty.trim() === "" ? null : Number(warranty),
-        is_active: isActive,
-        product_usage: productUsage,
-      };
-      if (editing) await updateProduct(editing.id, payload);
-      else await createProduct(payload);
+      if (catalogTab === "sales") {
+        const payload = {
+          code: code.trim(),
+          name: name.trim(),
+          unit: unit.trim(),
+          unit_price: Number(unitPrice),
+          warranty_years: warranty.trim() === "" ? null : Number(warranty),
+          is_active: isActive,
+          product_usage: "sales" as const,
+        };
+        if (editingSales) await updateProduct(editingSales.id, payload);
+        else await createProduct(payload);
+      } else {
+        const payload = {
+          code: code.trim(),
+          name: name.trim(),
+          unit: unit.trim(),
+          is_active: isActive,
+        };
+        if (editingNvl) await updateMaterial(editingNvl.id, payload);
+        else await createMaterial(payload);
+      }
       setOpen(false);
       reset();
       bumpGrid();
@@ -152,43 +194,22 @@ export function ProductsPage() {
     }
   };
 
-  const columns = React.useMemo<ColumnDef<ProductRow, unknown>[]>(
+  const onDeleteNvl = async (row: MaterialRow) => {
+    if (!confirm("Xóa NVL " + row.code + "?")) return;
+    try {
+      await deleteMaterial(row.id);
+      bumpGrid();
+    } catch (e2) {
+      alert(e2 instanceof Error ? e2.message : "Không xóa được");
+    }
+  };
+
+  const salesColumns = React.useMemo<ColumnDef<ProductRow, unknown>[]>(
     () => [
       { accessorKey: "code", header: "Mã SP", meta: { filterKey: "code", filterType: "text" } },
       { accessorKey: "name", header: "Tên", meta: { filterKey: "name", filterType: "text" } },
       { accessorKey: "unit", header: "ĐVT" },
       { accessorKey: "unit_price", header: "Đơn giá" },
-      {
-        accessorKey: "product_usage",
-        header: "Phạm vi",
-        meta: {
-          filterKey: "product_usage",
-          filterType: "select",
-          filterOptions: [
-            { value: "both", label: "Kho + bán" },
-            { value: "inventory", label: "Kho / NVL" },
-            { value: "sales", label: "Bán / labo" },
-          ],
-        },
-        cell: ({ getValue }) => formatProductUsage(getValue() as ProductUsage),
-      },
-      {
-        accessorKey: "quantity_on_hand",
-        header: "Tồn kho",
-        cell: ({ getValue }) => String(getValue()),
-      },
-      {
-        id: "primary_supplier_code",
-        accessorFn: (r) => r.primary_supplier_code ?? "",
-        header: "NCC chính",
-        cell: ({ row }) => {
-          const c = row.original.primary_supplier_code;
-          const n = row.original.primary_supplier_name;
-          if (!c && !n) return "—";
-          return (c ?? "") + (n ? " — " + n : "");
-        },
-      },
-      { accessorKey: "supplier_link_count", header: "Số NCC" },
       { accessorKey: "warranty_years", header: "BH (năm)" },
       {
         accessorKey: "is_active",
@@ -210,57 +231,139 @@ export function ProductsPage() {
         meta: { filterType: "none" },
         cell: ({ row }) => (
           <>
-            <DataGridMenuEditItem onSelect={() => openEdit(row.original)}>Sửa</DataGridMenuEditItem>
+            <DataGridMenuEditItem onSelect={() => openEditSales(row.original)}>Sửa</DataGridMenuEditItem>
             <DataGridMenuDeleteItem onSelect={() => void onDelete(row.original)}>Xóa</DataGridMenuDeleteItem>
           </>
         ),
       },
     ],
-    [],
+    [openEditSales],
   );
+
+  const nvlColumns = React.useMemo<ColumnDef<MaterialRow, unknown>[]>(
+    () => [
+      { accessorKey: "code", header: "Mã NVL", meta: { filterKey: "code", filterType: "text" } },
+      { accessorKey: "name", header: "Tên NVL", meta: { filterKey: "name", filterType: "text" } },
+      { accessorKey: "unit", header: "ĐVT" },
+      { accessorKey: "quantity_on_hand", header: "Tồn kho" },
+      {
+        id: "primary_supplier_code",
+        accessorFn: (r) => r.primary_supplier_code ?? "",
+        header: "NCC chính",
+        cell: ({ row }) => {
+          const c = row.original.primary_supplier_code;
+          const n = row.original.primary_supplier_name;
+          if (!c && !n) return "—";
+          return (c ?? "") + (n ? " — " + n : "");
+        },
+      },
+      {
+        accessorKey: "is_active",
+        header: "Hoạt động",
+        meta: {
+          filterKey: "is_active",
+          filterType: "select",
+          filterOptions: [
+            { value: "true", label: "Có" },
+            { value: "false", label: "Không" },
+          ],
+        },
+        cell: ({ getValue }) => ((getValue() as boolean) ? "Có" : "Không"),
+      },
+      {
+        id: "actions",
+        header: "Thao tác",
+        enableHiding: false,
+        meta: { filterType: "none" },
+        cell: ({ row }) => (
+          <>
+            <DataGridMenuEditItem onSelect={() => openEditNvl(row.original)}>Sửa</DataGridMenuEditItem>
+            <DataGridMenuDeleteItem onSelect={() => void onDeleteNvl(row.original)}>Xóa</DataGridMenuDeleteItem>
+          </>
+        ),
+      },
+    ],
+    [openEditNvl],
+  );
+
+  const gridTitle = catalogTab === "sales" ? "Sản phẩm (bán / labo)" : "Nguyên vật liệu (kho + NCC)";
 
   return (
     <>
-      <ExcelDataGrid<ProductRow>
-        moduleId="products"
-        title="Sản phẩm & nguyên vật liệu (kho + NCC)"
-        columns={columns}
-        list={listProducts}
-        reloadSignal={gridReload}
-        renderRowDetail={(row) => <ProductRowDetailPanel row={row} />}
-        rowDetailTitle={(r) => "Sản phẩm " + r.code}
-        toolbarExtra={
-          <div className="flex flex-wrap items-center gap-2">
-            <input
-              ref={fileImportRef}
-              type="file"
-              accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
-              className="hidden"
-              onChange={(ev) => void onExcelSelected(ev)}
-            />
-            <Button
-              variant="secondary"
-              type="button"
-              size="sm"
-              disabled={importBusy}
-              onClick={onPickExcel}
-            >
-              {importBusy ? "Đang nhập…" : "Nhập Excel (bảng giá)"}
-            </Button>
+      <div className="mb-4">
+        <DetailTabStrip
+          items={[
+            { id: "sales", label: "Sản phẩm (bán / labo)" },
+            { id: "inventory", label: "Nguyên vật liệu (kho)" },
+          ]}
+          value={catalogTab}
+          onChange={(id) => setCatalogTabAndUrl(id as CatalogTab)}
+        />
+      </div>
+      {catalogTab === "sales" ? (
+        <ExcelDataGrid<ProductRow>
+          moduleId="products_sales"
+          title={gridTitle}
+          columns={salesColumns}
+          list={listProducts}
+          prependFilters={{ catalog_segment: "sales" }}
+          reloadSignal={gridReload}
+          renderRowDetail={(row) => <ProductRowDetailPanel row={row} />}
+          rowDetailTitle={(r) => "Sản phẩm " + r.code}
+          toolbarExtra={
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                ref={fileImportRef}
+                type="file"
+                accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+                className="hidden"
+                onChange={(ev) => void onExcelSelected(ev)}
+              />
+              <Button
+                variant="secondary"
+                type="button"
+                size="sm"
+                disabled={importBusy}
+                onClick={onPickExcel}
+              >
+                {importBusy ? "Đang nhập…" : "Nhập Excel (bảng giá)"}
+              </Button>
+              <Button variant="primary" type="button" size="sm" onClick={openCreate}>
+                Thêm sản phẩm
+              </Button>
+            </div>
+          }
+          getRowId={(r) => r.id}
+        />
+      ) : (
+        <ExcelDataGrid<MaterialRow>
+          moduleId="materials_inventory"
+          title={gridTitle}
+          columns={nvlColumns}
+          list={listMaterials}
+          reloadSignal={gridReload}
+          renderRowDetail={(row) => <MaterialRowDetailPanel row={row} />}
+          rowDetailTitle={(r) => "NVL " + r.code}
+          toolbarExtra={
             <Button variant="primary" type="button" size="sm" onClick={openCreate}>
-              Thêm SP
+              Thêm NVL
             </Button>
-          </div>
-        }
-        getRowId={(r) => r.id}
-      />
+          }
+          getRowId={(r) => r.id}
+        />
+      )}
       <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) reset(); }}>
         <DialogContent size="xl" className="max-h-[90vh]">
           <DialogHeader>
-            <DialogTitle>{editing ? "Sửa sản phẩm" : "Thêm sản phẩm"}</DialogTitle>
+            <DialogTitle>
+              {catalogTab === "sales"
+                ? (editingSales ? "Sửa sản phẩm" : "Thêm sản phẩm")
+                : (editingNvl ? "Sửa nguyên vật liệu" : "Thêm nguyên vật liệu")}
+            </DialogTitle>
             <DialogDescription>
-              Phạm vi &quot;Kho / NVL&quot; dùng cho phiếu kho; gắn NCC ở tab Xem → NCC &amp; kho. Import Excel
-              giữ mặc định kho + bán.
+              {catalogTab === "sales"
+                ? "Danh mục sản phẩm bán/labo. Kho NVL quản lý ở tab Nguyên vật liệu."
+                : "Danh mục NVL tách riêng; gán NCC tại tab Xem → NCC & kho."}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={(e) => void submit(e)} className="grid gap-4 sm:grid-cols-2">
@@ -286,21 +389,9 @@ export function ProductsPage() {
                 step={0.01}
                 value={unitPrice}
                 onChange={(e) => setUnitPrice(e.target.value)}
-                required
+                required={catalogTab === "sales"}
+                disabled={catalogTab !== "sales"}
               />
-            </div>
-            <div className="grid gap-2 sm:col-span-2">
-              <Label htmlFor="pr-usage">Phạm vi sử dụng</Label>
-              <select
-                id="pr-usage"
-                className="min-h-10 w-full rounded-[var(--radius-md)] border border-[var(--border-ghost)] bg-[var(--surface-card)] px-3 text-sm"
-                value={productUsage}
-                onChange={(e) => setProductUsage(e.target.value as ProductUsage)}
-              >
-                <option value="both">Kho + bán (mặc định)</option>
-                <option value="inventory">Chủ yếu kho / nguyên vật liệu</option>
-                <option value="sales">Chủ yếu bán / labo</option>
-              </select>
             </div>
             <div className="grid gap-2 sm:col-span-2">
               <Label htmlFor="pr-war">Bảo hành (năm)</Label>
@@ -310,6 +401,7 @@ export function ProductsPage() {
                 min={0}
                 value={warranty}
                 onChange={(e) => setWarranty(e.target.value)}
+                disabled={catalogTab !== "sales"}
               />
             </div>
             <div className="flex items-center gap-3 sm:col-span-2">

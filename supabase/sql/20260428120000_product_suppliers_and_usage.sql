@@ -1,5 +1,19 @@
 -- Nguyên vật liệu / SP: phạm vi dùng (kho vs bán) + liên kết NCC (mã NCC, giá tham chiếu, NCC chính)
 
+-- Đảm bảo posting_status tồn tại (view v_product_stock cần cột này; DB chưa chạy 20260417120000 vẫn migrate được)
+alter table public.stock_documents
+  add column if not exists posting_status text not null default 'posted';
+
+alter table public.stock_documents
+  drop constraint if exists stock_documents_posting_status_check;
+
+alter table public.stock_documents
+  add constraint stock_documents_posting_status_check
+  check (posting_status in ('draft', 'posted'));
+
+create index if not exists stock_documents_posting_status_idx
+  on public.stock_documents (posting_status);
+
 alter table public.products
   add column if not exists product_usage text not null default 'both';
 
@@ -40,8 +54,12 @@ create trigger product_suppliers_set_updated_at
 comment on table public.product_suppliers is
   'NVL/SP mua từ NCC: mã hàng NCC, giá mua tham chiếu, NCC chính (một dòng is_primary / SP)';
 
+-- Thay đổi cột view: PG không cho CREATE OR REPLACE khi thêm/lệch cột (42P16) — drop rồi tạo lại
+drop view if exists public.v_products_admin_grid;
+drop view if exists public.v_product_stock;
+
 -- Tồn kho + NCC chính (dùng lưới tồn kho & đối chiếu phiếu nhập)
-create or replace view public.v_product_stock as
+create view public.v_product_stock as
 select
   p.id as product_id,
   p.code as product_code,
@@ -76,10 +94,10 @@ left join public.suppliers s on s.id = ps.supplier_id
 group by p.id, p.code, p.name, p.unit, p.product_usage, ps.supplier_id, s.code, s.name;
 
 comment on view public.v_product_stock is
-  'Tồn kho = nhập − xuất (posted); kèm product_usage và NCC chính từ product_suppliers';
+  'Tồn kho = nhập − xuất (chỉ phiếu posting_status = posted); product_usage + NCC chính từ product_suppliers';
 
 -- Lưới danh mục SP/NVL (đọc-only; insert/update vẫn qua bảng products)
-create or replace view public.v_products_admin_grid as
+create view public.v_products_admin_grid as
 select
   p.id,
   p.code,

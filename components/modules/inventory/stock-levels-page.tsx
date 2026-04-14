@@ -5,6 +5,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { ExcelDataGrid } from "@/components/shared/data-grid/excel-data-grid";
 import { Button } from "@/components/ui/button";
+import { DetailTabStrip } from "@/components/ui/detail-tab-strip";
 import {
   Dialog,
   DialogContent,
@@ -17,10 +18,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { listProductPicker } from "@/lib/actions/products";
+import { listMaterialPicker } from "@/lib/actions/materials";
 import { createOutboundStockRequest, listProductStock, type ProductStockRow } from "@/lib/actions/stock";
 
-export function StockLevelsPage() {
+type StockTab = "nvl" | "sp";
+
+export function StockLevelsPage({ initialTab = "nvl" }: { initialTab?: StockTab }) {
   const router = useRouter();
+  const [tab, setTab] = React.useState<StockTab>(initialTab);
   const [gridReload, setGridReload] = React.useState(0);
   const bumpGrid = React.useCallback(() => {
     setGridReload((n) => n + 1);
@@ -37,9 +42,26 @@ export function StockLevelsPage() {
   const [reqPending, setReqPending] = React.useState(false);
 
   React.useEffect(() => {
+    setTab(initialTab);
+  }, [initialTab]);
+
+  const setTabAndUrl = React.useCallback(
+    (next: StockTab) => {
+      setTab(next);
+      const path = next === "sp" ? "/inventory/stock?tab=sp" : "/inventory/stock";
+      router.replace(path, { scroll: false });
+    },
+    [router],
+  );
+
+  React.useEffect(() => {
     if (!openRequest) return;
-    void listProductPicker({ forInventory: true }).then(setReqProducts).catch(() => {});
-  }, [openRequest]);
+    if (tab === "nvl") {
+      void listMaterialPicker().then(setReqProducts).catch(() => {});
+      return;
+    }
+    void listProductPicker({ forSales: true }).then(setReqProducts).catch(() => {});
+  }, [openRequest, tab]);
 
   const openRequestFromToolbar = React.useCallback(() => {
     setReqProductId("");
@@ -107,7 +129,7 @@ export function StockLevelsPage() {
     );
   }, []);
 
-  const columns = React.useMemo<ColumnDef<ProductStockRow, unknown>[]>(
+  const baseColumns = React.useMemo<ColumnDef<ProductStockRow, unknown>[]>(
     () => [
       { accessorKey: "product_code", header: "Mã SP", meta: { filterKey: "product_code", filterType: "text" } },
       { accessorKey: "product_name", header: "Tên SP" },
@@ -129,28 +151,51 @@ export function StockLevelsPage() {
         cell: ({ row }) => row.original.primary_supplier_code ?? "—",
       },
       { accessorKey: "quantity_on_hand", header: "Tồn" },
-      {
-        id: "ycxk",
-        header: "YCXK",
-        enableHiding: false,
-        meta: { filterType: "none" },
-        cell: ({ row }) => (
-          <Button type="button" variant="secondary" className="h-8 px-2 text-xs" onClick={() => openRequestFromRow(row.original)}>
-            Yêu cầu xuất
-          </Button>
-        ),
-      },
     ],
+    [],
+  );
+
+  const outboundActionCol = React.useMemo<ColumnDef<ProductStockRow, unknown>>(
+    () => ({
+      id: "ycxk",
+      header: "YCXK",
+      enableHiding: false,
+      meta: { filterType: "none" },
+      cell: ({ row }) => (
+        <Button type="button" variant="secondary" className="h-8 px-2 text-xs" onClick={() => openRequestFromRow(row.original)}>
+          Yêu cầu xuất
+        </Button>
+      ),
+    }),
     [openRequestFromRow],
   );
 
+  const columns = React.useMemo<ColumnDef<ProductStockRow, unknown>[]>(
+    () => [...baseColumns, outboundActionCol],
+    [baseColumns, outboundActionCol],
+  );
+
+  const gridTitle = tab === "sp" ? "Kho SP — tồn sản phẩm" : "Kho NVL — tồn vật tư & phôi";
+
   return (
     <>
+      <div className="mb-4">
+        <DetailTabStrip
+          items={[
+            { id: "nvl", label: "Kho NVL" },
+            { id: "sp", label: "Kho SP" },
+          ]}
+          value={tab}
+          onChange={(id) => setTabAndUrl(id as StockTab)}
+        />
+      </div>
       <ExcelDataGrid<ProductStockRow>
-        moduleId="v_product_stock"
-        title="Tồn kho Vật tư & Phôi"
+        key={tab}
+        moduleId={tab === "sp" ? "v_product_stock_sp" : "v_product_stock_nvl"}
+        title={gridTitle}
         columns={columns}
         list={listProductStock}
+        prependFilters={{ stock_segment: tab }}
         reloadSignal={gridReload}
         getRowId={(r) => r.product_id}
         renderRowDetail={renderStockDetail}
@@ -164,7 +209,7 @@ export function StockLevelsPage() {
       <Dialog open={openRequest} onOpenChange={setOpenRequest}>
         <DialogContent size="xl" className="max-h-[90vh]">
           <DialogHeader>
-            <DialogTitle>Yêu cầu xuất kho vật tư</DialogTitle>
+            <DialogTitle>{tab === "sp" ? "Yêu cầu xuất kho sản phẩm" : "Yêu cầu xuất kho vật tư"}</DialogTitle>
             <DialogDescription>
               Phiếu xuất được tạo ở trạng thái nháp; tồn kho vật tư/phôi chỉ thay đổi sau khi ghi nhận trên trang chi tiết phiếu. Thành phẩm xuất bán trực tiếp không qua kho này.
             </DialogDescription>
@@ -183,7 +228,7 @@ export function StockLevelsPage() {
                 {reqProducts.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.code} — {p.name}
-                    {p.product_usage === "inventory" ? " (NVL)" : ""}
+                    {p.product_usage === "inventory" ? " (NVL)" : p.product_usage === "sales" ? " (SP)" : ""}
                   </option>
                 ))}
               </Select>

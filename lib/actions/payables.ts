@@ -14,6 +14,16 @@ export type PayableRow = {
   closing: number;
 };
 
+export type SupplierPayableSnapshot = {
+  supplier_id: string;
+  year: number;
+  month: number;
+  opening: number;
+  inbound_month: number;
+  payments_month: number;
+  closing: number;
+};
+
 function monthBounds(year: number, month: number) {
   const start = new Date(Date.UTC(year, month - 1, 1));
   const end = new Date(Date.UTC(year, month, 1));
@@ -142,4 +152,62 @@ export async function carryForwardPayablesOpeningToNextMonth(
 
   revalidatePath("/accounting/debt");
   return { nextYear, nextMonth, upserted };
+}
+
+export async function getSupplierPayableSnapshot(
+  supplierId: string,
+): Promise<SupplierPayableSnapshot | null> {
+  const supabase = createSupabaseAdmin();
+  const now = new Date();
+  const y = now.getUTCFullYear();
+  const m = now.getUTCMonth() + 1;
+  const { start, end } = monthBounds(y, m);
+
+  const { data: s, error: se } = await supabase
+    .from("suppliers")
+    .select("id")
+    .eq("id", supplierId)
+    .maybeSingle();
+  if (se || !s) return null;
+
+  const { data: openingRow, error: oe } = await supabase
+    .from("supplier_opening_balances")
+    .select("opening_balance")
+    .eq("supplier_id", supplierId)
+    .eq("year", y)
+    .eq("month", m)
+    .maybeSingle();
+  if (oe) throw new Error(oe.message);
+  const opening = Number(openingRow?.opening_balance ?? 0);
+
+  const { data: inboundRows, error: ie } = await supabase
+    .from("v_supplier_inbound_by_month")
+    .select("inbound_amount")
+    .eq("supplier_id", supplierId)
+    .gte("month", start)
+    .lt("month", end);
+  if (ie) throw new Error(ie.message);
+  let inbound_month = 0;
+  for (const r of inboundRows ?? []) inbound_month += Number(r.inbound_amount ?? 0);
+
+  const { data: paymentRows, error: pe } = await supabase
+    .from("v_supplier_payments_by_month")
+    .select("payment_amount")
+    .eq("supplier_id", supplierId)
+    .gte("month", start)
+    .lt("month", end);
+  if (pe) throw new Error(pe.message);
+  let payments_month = 0;
+  for (const r of paymentRows ?? []) payments_month += Number(r.payment_amount ?? 0);
+
+  const closing = opening + inbound_month - payments_month;
+  return {
+    supplier_id: supplierId,
+    year: y,
+    month: m,
+    opening: round2(opening),
+    inbound_month: round2(inbound_month),
+    payments_month: round2(payments_month),
+    closing: round2(closing),
+  };
 }

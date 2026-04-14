@@ -31,6 +31,13 @@ export async function listProducts(args: ListArgs): Promise<ListResult<ProductRo
   const { page, pageSize, globalSearch, filters } = args;
   let q = supabase.from("v_products_admin_grid").select("*", { count: "exact" });
 
+  const seg = filters.catalog_segment?.trim();
+  if (seg === "sales") {
+    q = q.in("product_usage", ["sales", "both"]);
+  } else if (seg === "inventory") {
+    q = q.eq("product_usage", "inventory");
+  }
+
   const g = globalSearch.trim();
   if (g) {
     const p = "%" + g + "%";
@@ -107,11 +114,13 @@ export async function deleteProduct(id: string) {
   revalidatePath("/inventory/stock");
 }
 
-export async function listProductPicker(opts?: { forInventory?: boolean }) {
+export async function listProductPicker(opts?: { forInventory?: boolean; forSales?: boolean }) {
   const supabase = createSupabaseAdmin();
   let q = supabase.from("products").select("id, code, name, unit_price, product_usage");
   if (opts?.forInventory) {
     q = q.in("product_usage", ["both", "inventory"]);
+  } else if (opts?.forSales) {
+    q = q.in("product_usage", ["both", "sales"]);
   }
   const { data, error } = await q.order("code", { ascending: true }).limit(3000);
   if (error) throw new Error(error.message);
