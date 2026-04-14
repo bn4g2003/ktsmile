@@ -26,7 +26,14 @@ import {
   listProducts,
   updateProduct,
   type ProductRow,
+  type ProductUsage,
 } from "@/lib/actions/products";
+
+function formatProductUsage(u: ProductUsage) {
+  if (u === "inventory") return "Kho / NVL";
+  if (u === "sales") return "Bán / labo";
+  return "Kho + bán";
+}
 
 export function ProductsPage() {
   const router = useRouter();
@@ -45,6 +52,7 @@ export function ProductsPage() {
   const [unitPrice, setUnitPrice] = React.useState("0");
   const [warranty, setWarranty] = React.useState("");
   const [isActive, setIsActive] = React.useState(true);
+  const [productUsage, setProductUsage] = React.useState<ProductUsage>("both");
   const fileImportRef = React.useRef<HTMLInputElement>(null);
   const [importBusy, setImportBusy] = React.useState(false);
 
@@ -56,6 +64,7 @@ export function ProductsPage() {
     setUnitPrice("0");
     setWarranty("");
     setIsActive(true);
+    setProductUsage("both");
     setErr(null);
   };
 
@@ -72,6 +81,7 @@ export function ProductsPage() {
     setUnitPrice(String(row.unit_price));
     setWarranty(row.warranty_years != null ? String(row.warranty_years) : "");
     setIsActive(row.is_active);
+    setProductUsage(row.product_usage ?? "both");
     setErr(null);
     setOpen(true);
   };
@@ -88,6 +98,7 @@ export function ProductsPage() {
         unit_price: Number(unitPrice),
         warranty_years: warranty.trim() === "" ? null : Number(warranty),
         is_active: isActive,
+        product_usage: productUsage,
       };
       if (editing) await updateProduct(editing.id, payload);
       else await createProduct(payload);
@@ -147,6 +158,37 @@ export function ProductsPage() {
       { accessorKey: "name", header: "Tên", meta: { filterKey: "name", filterType: "text" } },
       { accessorKey: "unit", header: "ĐVT" },
       { accessorKey: "unit_price", header: "Đơn giá" },
+      {
+        accessorKey: "product_usage",
+        header: "Phạm vi",
+        meta: {
+          filterKey: "product_usage",
+          filterType: "select",
+          filterOptions: [
+            { value: "both", label: "Kho + bán" },
+            { value: "inventory", label: "Kho / NVL" },
+            { value: "sales", label: "Bán / labo" },
+          ],
+        },
+        cell: ({ getValue }) => formatProductUsage(getValue() as ProductUsage),
+      },
+      {
+        accessorKey: "quantity_on_hand",
+        header: "Tồn kho",
+        cell: ({ getValue }) => String(getValue()),
+      },
+      {
+        id: "primary_supplier_code",
+        accessorFn: (r) => r.primary_supplier_code ?? "",
+        header: "NCC chính",
+        cell: ({ row }) => {
+          const c = row.original.primary_supplier_code;
+          const n = row.original.primary_supplier_name;
+          if (!c && !n) return "—";
+          return (c ?? "") + (n ? " — " + n : "");
+        },
+      },
+      { accessorKey: "supplier_link_count", header: "Số NCC" },
       { accessorKey: "warranty_years", header: "BH (năm)" },
       {
         accessorKey: "is_active",
@@ -181,7 +223,7 @@ export function ProductsPage() {
     <>
       <ExcelDataGrid<ProductRow>
         moduleId="products"
-        title="Sản phẩm & vật tư"
+        title="Sản phẩm & nguyên vật liệu (kho + NCC)"
         columns={columns}
         list={listProducts}
         reloadSignal={gridReload}
@@ -217,8 +259,8 @@ export function ProductsPage() {
           <DialogHeader>
             <DialogTitle>{editing ? "Sửa sản phẩm" : "Thêm sản phẩm"}</DialogTitle>
             <DialogDescription>
-              Mã, tên, đơn vị và đơn giá. Import từ Excel tạo mã dạng BG-0001 theo cột STT (hoặc BG-R0001
-              nếu thiếu STT).
+              Phạm vi &quot;Kho / NVL&quot; dùng cho phiếu kho; gắn NCC ở tab Xem → NCC &amp; kho. Import Excel
+              giữ mặc định kho + bán.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={(e) => void submit(e)} className="grid gap-4 sm:grid-cols-2">
@@ -246,6 +288,19 @@ export function ProductsPage() {
                 onChange={(e) => setUnitPrice(e.target.value)}
                 required
               />
+            </div>
+            <div className="grid gap-2 sm:col-span-2">
+              <Label htmlFor="pr-usage">Phạm vi sử dụng</Label>
+              <select
+                id="pr-usage"
+                className="min-h-10 w-full rounded-[var(--radius-md)] border border-[var(--border-ghost)] bg-[var(--surface-card)] px-3 text-sm"
+                value={productUsage}
+                onChange={(e) => setProductUsage(e.target.value as ProductUsage)}
+              >
+                <option value="both">Kho + bán (mặc định)</option>
+                <option value="inventory">Chủ yếu kho / nguyên vật liệu</option>
+                <option value="sales">Chủ yếu bán / labo</option>
+              </select>
             </div>
             <div className="grid gap-2 sm:col-span-2">
               <Label htmlFor="pr-war">Bảo hành (năm)</Label>

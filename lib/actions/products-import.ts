@@ -143,6 +143,7 @@ export async function importProductsFromExcel(formData: FormData): Promise<Impor
         code: row.code.trim(),
         ...patch,
         is_active: true,
+        product_usage: "both",
       });
     }
   }
@@ -177,6 +178,7 @@ export async function importProductsFromExcel(formData: FormData): Promise<Impor
   revalidatePath("/master/products");
   revalidatePath("/master/prices");
   revalidatePath("/orders");
+  revalidatePath("/inventory/stock");
 
   const parts = [
     inserted ? "Thêm " + inserted + " SP" : null,

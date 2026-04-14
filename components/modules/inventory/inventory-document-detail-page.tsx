@@ -25,6 +25,7 @@ import { Card } from "@/components/ui/card";
 import { DetailPreview } from "@/components/ui/detail-preview";
 import { formatMovement, formatPostingStatus } from "@/lib/format/labels";
 import { listProductPicker } from "@/lib/actions/products";
+import { getProductSupplyMatch, type ProductSupplyMatch } from "@/lib/actions/product-suppliers";
 import {
   createStockLine,
   deleteStockLine,
@@ -46,8 +47,11 @@ export function InventoryDocumentDetailPage() {
     router.refresh();
   }, [router]);
   const [products, setProducts] = React.useState<
-    { id: string; code: string; name: string; unit_price: number }[]
+    { id: string; code: string; name: string; unit_price: number; product_usage?: string }[]
   >([]);
+  const [supplyHint, setSupplyHint] = React.useState<ProductSupplyMatch | null>(null);
+  /** Chỉ tự điền đơn giá từ danh mục NCC khi thêm dòng mới, không ghi đè khi sửa dòng. */
+  const allowInboundPriceAuto = React.useRef(false);
   const [open, setOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<StockLineRow | null>(null);
   const [pending, setPending] = React.useState(false);
@@ -79,8 +83,35 @@ export function InventoryDocumentDetailPage() {
   }, [reloadHeader]);
 
   React.useEffect(() => {
-    void listProductPicker().then(setProducts).catch(() => {});
+    void listProductPicker({ forInventory: true }).then(setProducts).catch(() => {});
   }, []);
+
+  React.useEffect(() => {
+    if (!productId || !docHeader || docHeader.movement_type !== "inbound") {
+      setSupplyHint(null);
+      return;
+    }
+    let cancelled = false;
+    void getProductSupplyMatch(productId, docHeader.supplier_id)
+      .then((m) => {
+        if (cancelled) return;
+        setSupplyHint(m);
+        if (
+          allowInboundPriceAuto.current &&
+          docHeader.supplier_id &&
+          m.has_link_for_document_supplier &&
+          m.reference_purchase_price != null
+        ) {
+          setPrice(String(m.reference_purchase_price));
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setSupplyHint(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [productId, docHeader?.supplier_id, docHeader?.movement_type]);
 
   const onPostStock = async () => {
     setPostPending(true);
@@ -125,11 +156,13 @@ export function InventoryDocumentDetailPage() {
   };
 
   const openCreate = () => {
+    allowInboundPriceAuto.current = true;
     reset();
     setOpen(true);
   };
 
   const openEdit = (row: StockLineRow) => {
+    allowInboundPriceAuto.current = false;
     setEditing(row);
     setProductId(row.product_id);
     setQty(String(row.quantity));
@@ -230,6 +263,9 @@ export function InventoryDocumentDetailPage() {
                 {formatMovement(docHeader.movement_type)}
                 {" · "}
                 {formatPostingStatus(docHeader.posting_status)}
+                {docHeader.supplier_code
+                  ? " · NCC: " + docHeader.supplier_code + (docHeader.supplier_name ? " (" + docHeader.supplier_name + ")" : "")
+                  : ""}
               </p>
             ) : (
               <p className="text-sm text-[#b91c1c]">Không tìm thấy phiếu.</p>
@@ -271,7 +307,16 @@ export function InventoryDocumentDetailPage() {
         }
         getRowId={(r) => r.id}
       />
-      <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) reset(); }}>
+      <Dialog
+        open={open}
+        onOpenChange={(v) => {
+          setOpen(v);
+          if (!v) {
+            allowInboundPriceAuto.current = false;
+            reset();
+          }
+        }}
+      >
         <DialogContent size="xl" className="max-h-[90vh]">
           <DialogHeader>
             <DialogTitle>{editing ? "Sửa dòng" : "Thêm dòng"}</DialogTitle>
@@ -286,10 +331,34 @@ export function InventoryDocumentDetailPage() {
                 {products.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.code} — {p.name}
+                    {p.product_usage === "inventory" ? " (NVL)" : p.product_usage === "sales" ? " (bán)" : ""}
                   </option>
                 ))}
               </Select>
             </div>
+            {docHeader?.movement_type === "inbound" && docHeader.supplier_id && supplyHint ? (
+              <div className="rounded-lg border border-[var(--border-ghost)] bg-[var(--surface-muted)] px-3 py-2 text-xs leading-relaxed text-[var(--on-surface-muted)] sm:col-span-2">
+                {!supplyHint.has_link_for_document_supplier ? (
+                  <p className="m-0 text-[#b91c1c]">
+                    Chưa cấp NCC <strong>{docHeader.supplier_code ?? ""}</strong> cho vật tư này trong danh mục
+                    (Xem → NCC &amp; kho). Công nợ / đối soát vẫn theo NCC trên phiếu.
+                  </p>
+                ) : (
+                  <p className="m-0">
+                    Đã khớp danh mục NCC.
+                    {supplyHint.supplier_sku ? " Mã hàng NCC: " + supplyHint.supplier_sku + "." : ""}
+                  </p>
+                )}
+                {supplyHint.primary_supplier_id &&
+                docHeader.supplier_id &&
+                supplyHint.primary_supplier_id !== docHeader.supplier_id &&
+                supplyHint.primary_supplier_code ? (
+                  <p className="mt-1 m-0">
+                    NCC chính của vật tư: <strong>{supplyHint.primary_supplier_code}</strong> (khác NCC trên phiếu).
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
             <div className="grid gap-2">
               <Label htmlFor="sl-q">Số lượng</Label>
               <Input

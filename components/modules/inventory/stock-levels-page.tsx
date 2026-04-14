@@ -28,7 +28,7 @@ export function StockLevelsPage() {
   }, [router]);
   const [openRequest, setOpenRequest] = React.useState(false);
   const [reqProducts, setReqProducts] = React.useState<
-    { id: string; code: string; name: string; unit_price: number }[]
+    { id: string; code: string; name: string; unit_price: number; product_usage?: string }[]
   >([]);
   const [reqProductId, setReqProductId] = React.useState("");
   const [reqQty, setReqQty] = React.useState("1");
@@ -38,7 +38,7 @@ export function StockLevelsPage() {
 
   React.useEffect(() => {
     if (!openRequest) return;
-    void listProductPicker().then(setReqProducts).catch(() => {});
+    void listProductPicker({ forInventory: true }).then(setReqProducts).catch(() => {});
   }, [openRequest]);
 
   const openRequestFromToolbar = React.useCallback(() => {
@@ -82,12 +82,24 @@ export function StockLevelsPage() {
   };
 
   const renderStockDetail = React.useCallback((row: ProductStockRow) => {
+    const usage =
+      row.product_usage === "inventory"
+        ? "Kho / NVL"
+        : row.product_usage === "sales"
+          ? "Bán / labo"
+          : "Kho + bán";
+    const ncc =
+      row.primary_supplier_code != null
+        ? row.primary_supplier_code + (row.primary_supplier_name ? " — " + row.primary_supplier_name : "")
+        : "—";
     return (
       <DetailPreview
         fields={[
           { label: "Mã SP", value: row.product_code },
           { label: "Tên SP", value: row.product_name },
           { label: "ĐVT", value: row.unit },
+          { label: "Phạm vi", value: usage },
+          { label: "NCC chính (mua)", value: ncc, span: "full" },
           { label: "Tồn", value: row.quantity_on_hand },
           { label: "Product ID", value: row.product_id, span: "full" },
         ]}
@@ -100,6 +112,22 @@ export function StockLevelsPage() {
       { accessorKey: "product_code", header: "Mã SP", meta: { filterKey: "product_code", filterType: "text" } },
       { accessorKey: "product_name", header: "Tên SP" },
       { accessorKey: "unit", header: "ĐVT" },
+      {
+        accessorKey: "product_usage",
+        header: "Phạm vi",
+        cell: ({ getValue }) => {
+          const u = getValue() as string;
+          if (u === "inventory") return "NVL";
+          if (u === "sales") return "Bán";
+          return "Cả hai";
+        },
+      },
+      {
+        id: "ncc",
+        accessorFn: (r) => r.primary_supplier_code ?? "",
+        header: "NCC chính",
+        cell: ({ row }) => row.original.primary_supplier_code ?? "—",
+      },
       { accessorKey: "quantity_on_hand", header: "Tồn" },
       {
         id: "ycxk",
@@ -155,6 +183,7 @@ export function StockLevelsPage() {
                 {reqProducts.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.code} — {p.name}
+                    {p.product_usage === "inventory" ? " (NVL)" : ""}
                   </option>
                 ))}
               </Select>

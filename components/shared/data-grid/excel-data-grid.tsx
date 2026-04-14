@@ -7,6 +7,7 @@ import {
   type CellContext,
   type Column,
   type ColumnDef,
+  type Row,
   type VisibilityState,
 } from "@tanstack/react-table";
 import * as React from "react";
@@ -367,6 +368,22 @@ export function ExcelDataGrid<T>({
     });
   }, [columnsResolved]);
 
+  /**
+   * Must match TanStack `row.id` (used as React keys for rows). If a custom `getRowId` returns ""
+   * or whitespace, TanStack still uses that for every row → duplicate keys.
+   */
+  const tableGetRowId = React.useCallback(
+    (originalRow: T, index: number, parent?: Row<T>) => {
+      if (getRowId) {
+        const raw = getRowId(originalRow);
+        const s = raw != null ? String(raw).trim() : "";
+        if (s) return s;
+      }
+      return parent ? `${parent.id}.${index}` : String(index);
+    },
+    [getRowId],
+  );
+
   const table = useReactTable({
     data,
     columns: columnsResolved,
@@ -375,6 +392,7 @@ export function ExcelDataGrid<T>({
     getCoreRowModel: getCoreRowModel(),
     manualPagination: true,
     pageCount,
+    getRowId: tableGetRowId,
   });
 
   const setFilter = (key: string, value: string) => {
@@ -593,13 +611,12 @@ export function ExcelDataGrid<T>({
             ) : (
               <ul className="flex list-none flex-col gap-3 p-0">
                 {table.getRowModel().rows.map((row, i) => {
-                  const rowKey = getRowId ? getRowId(row.original) : row.id;
                   const cells = row.getVisibleCells();
                   const actionCells = cells.filter((c) => c.column.id === "actions");
                   const dataCells = cells.filter((c) => c.column.id !== "actions");
                   return (
                     <li
-                      key={rowKey}
+                      key={row.id}
                       className={cn(
                         "rounded-[var(--radius-lg)] p-4 shadow-[inset_0_0_0_1px_var(--border-ghost)]",
                         i % 2 === 1 ? "bg-[var(--surface-row-b)]" : "bg-[var(--surface-card)]",
@@ -740,7 +757,7 @@ export function ExcelDataGrid<T>({
                 ) : (
                   table.getRowModel().rows.map((row, i) => (
                     <tr
-                      key={getRowId ? getRowId(row.original) : row.id}
+                      key={row.id}
                       className={cn(
                         "border-b border-[var(--border-ghost)] transition-colors last:border-b-0",
                         "hover:bg-[color-mix(in_srgb,var(--primary)_4%,var(--surface-card))]",

@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils/cn";
 /** Nhãn cho đường dẫn đầy đủ (trang cụ thể). */
 const ROUTE_LABELS: Record<string, string> = {
   "/master/partners": "Đối tác",
-  "/master/products": "Sản phẩm",
+  "/master/products": "SP & NVL",
   "/master/employees": "Nhân sự",
   "/master/prices": "Giá theo KH",
   "/orders": "Đơn hàng",

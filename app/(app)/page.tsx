@@ -97,7 +97,7 @@ const quickLinks: {
   },
   {
     href: "/master/products",
-    title: "Sản phẩm",
+    title: "SP & NVL",
     desc: "Phôi sứ & vật tư",
     Icon: IconProducts,
     panelClass: "bg-[#b45309] hover:brightness-110",

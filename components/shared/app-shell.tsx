@@ -19,7 +19,7 @@ const groups: { title: string; items: { href: string; label: string }[] }[] = [
     title: "Danh mục",
     items: [
       { href: "/master/partners", label: "Khách & NCC" },
-      { href: "/master/products", label: "Sản phẩm" },
+      { href: "/master/products", label: "SP & NVL" },
       { href: "/master/employees", label: "Nhân sự" },
       { href: "/master/prices", label: "Giá theo KH" },
     ],

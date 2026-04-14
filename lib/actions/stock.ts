@@ -33,6 +33,8 @@ export type StockDocumentHeader = {
   movement_type: "inbound" | "outbound";
   posting_status: "draft" | "posted";
   supplier_id: string | null;
+  supplier_code?: string | null;
+  supplier_name?: string | null;
   reason: string | null;
   notes: string | null;
 };
@@ -220,11 +222,12 @@ export async function getStockDocumentById(id: string): Promise<StockDocumentHea
   const supabase = createSupabaseAdmin();
   const { data, error } = await supabase
     .from("stock_documents")
-    .select("*")
+    .select("*, suppliers:supplier_id(code,name)")
     .eq("id", id)
     .maybeSingle();
   if (error) throw new Error(error.message);
   if (!data) return null;
+  const suppliers = data["suppliers"] as { code?: string; name?: string } | null;
   return {
     id: data["id"] as string,
     document_number: data["document_number"] as string,
@@ -232,6 +235,8 @@ export async function getStockDocumentById(id: string): Promise<StockDocumentHea
     movement_type: data["movement_type"] as "inbound" | "outbound",
     posting_status: (data["posting_status"] as "draft" | "posted" | undefined) ?? "posted",
     supplier_id: (data["supplier_id"] as string | null) ?? null,
+    supplier_code: suppliers?.code ?? null,
+    supplier_name: suppliers?.name ?? null,
     reason: (data["reason"] as string | null) ?? null,
     notes: (data["notes"] as string | null) ?? null,
   };
@@ -421,7 +426,11 @@ export type ProductStockRow = {
   product_code: string;
   product_name: string;
   unit: string;
+  product_usage: string;
   quantity_on_hand: number;
+  primary_supplier_id: string | null;
+  primary_supplier_code: string | null;
+  primary_supplier_name: string | null;
 };
 
 export async function listProductStock(
@@ -445,6 +454,16 @@ export async function listProductStock(
 
   const { data, error, count } = await q;
   if (error) throw new Error(error.message);
-  const rows = (data ?? []) as ProductStockRow[];
+  const rows: ProductStockRow[] = (data ?? []).map((r: Record<string, unknown>) => ({
+    product_id: r["product_id"] as string,
+    product_code: r["product_code"] as string,
+    product_name: r["product_name"] as string,
+    unit: r["unit"] as string,
+    product_usage: (r["product_usage"] as string) ?? "both",
+    quantity_on_hand: Number(r["quantity_on_hand"] ?? 0),
+    primary_supplier_id: (r["primary_supplier_id"] as string | null) ?? null,
+    primary_supplier_code: (r["primary_supplier_code"] as string | null) ?? null,
+    primary_supplier_name: (r["primary_supplier_name"] as string | null) ?? null,
+  }));
   return { rows, total: count ?? 0 };
 }

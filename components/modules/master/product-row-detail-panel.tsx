@@ -8,6 +8,13 @@ import {
   type PartnerPriceRow,
 } from "@/lib/actions/partner-prices";
 import type { ProductRow } from "@/lib/actions/products";
+import { ProductSuppliersPanel } from "@/components/modules/master/product-suppliers-panel";
+
+function formatProductUsageLabel(u: string) {
+  if (u === "inventory") return "Kho / NVL";
+  if (u === "sales") return "Bán / labo";
+  return "Kho + bán";
+}
 
 function ProductPricesBlock({ productId }: { productId: string }) {
   const [rows, setRows] = React.useState<PartnerPriceRow[] | null>(null);
@@ -66,7 +73,7 @@ function ProductPricesBlock({ productId }: { productId: string }) {
 }
 
 export function ProductRowDetailPanel({ row }: { row: ProductRow }) {
-  const [tab, setTab] = React.useState<"info" | "prices">("info");
+  const [tab, setTab] = React.useState<"info" | "suppliers" | "prices">("info");
 
   React.useEffect(() => {
     setTab("info");
@@ -77,6 +84,7 @@ export function ProductRowDetailPanel({ row }: { row: ProductRow }) {
       <DetailTabStrip
         items={[
           { id: "info", label: "Thông tin" },
+          { id: "suppliers", label: "NCC & kho" },
           { id: "prices", label: "Giá theo KH" },
         ]}
         value={tab}
@@ -88,6 +96,17 @@ export function ProductRowDetailPanel({ row }: { row: ProductRow }) {
             { label: "Mã SP", value: row.code },
             { label: "Tên", value: row.name },
             { label: "ĐVT", value: row.unit },
+            { label: "Phạm vi", value: formatProductUsageLabel(row.product_usage) },
+            { label: "Tồn kho (posted)", value: row.quantity_on_hand },
+            {
+              label: "NCC chính",
+              value:
+                row.primary_supplier_code != null
+                  ? row.primary_supplier_code + " — " + (row.primary_supplier_name ?? "")
+                  : "—",
+              span: "full",
+            },
+            { label: "Số NCC đã gắn", value: row.supplier_link_count },
             { label: "Đơn giá niêm yết", value: row.unit_price.toLocaleString("vi-VN") },
             { label: "Bảo hành (năm)", value: row.warranty_years ?? "—" },
             { label: "Hoạt động", value: row.is_active ? "Có" : "Không" },
@@ -96,6 +115,7 @@ export function ProductRowDetailPanel({ row }: { row: ProductRow }) {
           ]}
         />
       ) : null}
+      {tab === "suppliers" ? <ProductSuppliersPanel productId={row.id} /> : null}
       {tab === "prices" ? <ProductPricesBlock productId={row.id} /> : null}
     </div>
   );
