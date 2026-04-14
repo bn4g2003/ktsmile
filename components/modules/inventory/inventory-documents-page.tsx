@@ -108,12 +108,12 @@ export function InventoryDocumentsPage({ initialTab = "inbound" }: { initialTab?
   );
 
   React.useEffect(() => {
-    void listSupplierPicker().then(setSuppliers).catch(() => {});
+    void listSupplierPicker().then(setSuppliers).catch(() => { });
   }, []);
 
   React.useEffect(() => {
     if (!openRequest) return;
-    void listMaterialPicker().then(setReqProducts).catch(() => {});
+    void listMaterialPicker().then(setReqProducts).catch(() => { });
   }, [openRequest]);
 
   React.useEffect(() => {
@@ -323,12 +323,12 @@ export function InventoryDocumentsPage({ initialTab = "inbound" }: { initialTab?
         header: "Ngày",
         meta: { filterKey: "document_date_from", filterType: "text" },
       },
-      {
-        id: "document_date_to",
-        header: "Đến",
-        meta: { filterKey: "document_date_to", filterType: "text" },
-        cell: () => "",
-      },
+      // {
+      //   id: "document_date_to",
+      //   header: "Đến",
+      //   meta: { filterKey: "document_date_to", filterType: "text" },
+      //   cell: () => "",
+      // },
       {
         accessorKey: "movement_type",
         header: "Loại",
@@ -351,7 +351,7 @@ export function InventoryDocumentsPage({ initialTab = "inbound" }: { initialTab?
       },
       { accessorKey: "supplier_code", header: "Mã NCC" },
       { accessorKey: "supplier_name", header: "Nhà cung cấp" },
-      { accessorKey: "line_count", header: "Số dòng" },
+      // { accessorKey: "line_count", header: "Số dòng" },
       {
         accessorKey: "total_quantity",
         header: "Tổng SL",
