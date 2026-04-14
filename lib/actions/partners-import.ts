@@ -154,6 +154,101 @@ async function applyPartnerRowsToDb(
   };
 }
 
+async function applySupplierRowsToDb(
+  validRows: UnifiedImportRow[],
+  validationErrors: string[],
+): Promise<ImportPartnersResult> {
+  if (!validRows.length) {
+    return {
+      ok: false,
+      inserted: 0,
+      updated: 0,
+      errors: validationErrors.length ? validationErrors : undefined,
+      message: validationErrors.length ? "Không có dòng hợp lệ." : "File không có dòng dữ liệu.",
+    };
+  }
+
+  const supabase = createSupabaseAdmin();
+  const { data: existing, error: exErr } = await supabase.from("suppliers").select("id, code");
+  if (exErr) {
+    return { ok: false, inserted: 0, updated: 0, message: exErr.message };
+  }
+
+  const idByCode = new Map<string, string>();
+  for (const s of existing ?? []) {
+    idByCode.set(normKey(s.code as string), s.id as string);
+  }
+
+  const inserts: Record<string, unknown>[] = [];
+  const updates: { id: string; patch: Record<string, unknown> }[] = [];
+  const rowErrors: string[] = [...validationErrors];
+
+  for (const row of validRows) {
+    const k = normKey(row.code);
+    const id = idByCode.get(k);
+    const base = {
+      name: row.name.trim(),
+      representative_name: row.representative_name,
+      phone: row.phone,
+      address: row.address,
+      tax_id: row.tax_id,
+      notes: row.notes,
+      is_active: true,
+    };
+
+    if (id) {
+      updates.push({ id, patch: base });
+    } else {
+      inserts.push({
+        code: row.code.trim(),
+        ...base,
+      });
+    }
+  }
+
+  let inserted = 0;
+  let updated = 0;
+
+  try {
+    const chunk = 80;
+    for (let i = 0; i < inserts.length; i += chunk) {
+      const part = inserts.slice(i, i + chunk);
+      if (!part.length) continue;
+      const { error } = await supabase.from("suppliers").insert(part);
+      if (error) throw new Error(error.message);
+      inserted += part.length;
+    }
+
+    for (const u of updates) {
+      const { error } = await supabase.from("suppliers").update(u.patch).eq("id", u.id);
+      if (error) throw new Error(error.message);
+      updated += 1;
+    }
+  } catch (e) {
+    return {
+      ok: false,
+      inserted: 0,
+      updated: 0,
+      message: e instanceof Error ? e.message : "Lỗi khi ghi database.",
+    };
+  }
+
+  revalidatePath("/master/partners");
+
+  const parts = [
+    inserted ? "Thêm " + inserted + " NCC" : null,
+    updated ? "Cập nhật " + updated + " NCC (trùng mã)" : null,
+  ].filter(Boolean);
+
+  return {
+    ok: true,
+    inserted,
+    updated,
+    message: (parts.length ? parts.join(" · ") : "Không thay đổi.") + ".",
+    errors: rowErrors.length ? rowErrors : undefined,
+  };
+}
+
 export async function importCustomerPartnersFromExcel(formData: FormData): Promise<ImportPartnersResult> {
   const raw = formData.get("file");
   if (!raw || !(raw instanceof File)) {
@@ -296,10 +391,5 @@ export async function importSupplierPartnersFromExcel(formData: FormData): Promi
     lastByCode.set(k, vr.data);
   }
 
-  return applyPartnerRowsToDb([...lastByCode.values()], validationErrors, {
-    partnerTypeOnInsert: "supplier",
-    allowedExistingTypes: new Set<PartnerTypeDb>(["supplier"]),
-    wrongExistingMessage: (code) =>
-      "Mã “" + code + "” đã tồn tại dạng khách — bỏ qua dòng (dùng tab Khách hoặc đổi mã).",
-  });
+  return applySupplierRowsToDb([...lastByCode.values()], validationErrors);
 }

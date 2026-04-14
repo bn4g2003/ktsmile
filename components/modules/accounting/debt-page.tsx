@@ -7,40 +7,78 @@ import { ExcelDataGrid } from "@/components/shared/data-grid/excel-data-grid";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { DetailPreview } from "@/components/ui/detail-preview";
+import { DetailTabStrip } from "@/components/ui/detail-tab-strip";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { DebtChartsSection } from "@/components/modules/accounting/debt-charts-section";
 import { importDebtOpeningFromExcel } from "@/lib/actions/debt-import";
-import { carryForwardOpeningToNextMonth, listDebtReport, type DebtRow } from "@/lib/actions/debt";
+import {
+  carryForwardOpeningToNextMonth,
+  listDebtReport,
+  type DebtRow,
+} from "@/lib/actions/debt";
+import {
+  carryForwardPayablesOpeningToNextMonth,
+  listPayablesReport,
+  type PayableRow,
+} from "@/lib/actions/payables";
 
-export function DebtPage() {
+type DebtTab = "receivables" | "payables";
+
+export function DebtPage({ initialTab = "receivables" }: { initialTab?: DebtTab }) {
   const router = useRouter();
   const now = React.useMemo(() => new Date(), []);
+  const [tab, setTab] = React.useState<DebtTab>(initialTab);
+  React.useEffect(() => {
+    setTab(initialTab);
+  }, [initialTab]);
+
   const [year, setYear] = React.useState(String(now.getFullYear()));
   const [month, setMonth] = React.useState(String(now.getMonth() + 1));
   const [showCharts, setShowCharts] = React.useState(false);
-  const [gridReload, setGridReload] = React.useState(0);
+  const [gridReceivable, setGridReceivable] = React.useState(0);
+  const [gridPayable, setGridPayable] = React.useState(0);
   const fileImportRef = React.useRef<HTMLInputElement>(null);
   const [importBusy, setImportBusy] = React.useState(false);
-  const [carryBusy, setCarryBusy] = React.useState(false);
+  const [carryReceivableBusy, setCarryReceivableBusy] = React.useState(false);
+  const [carryPayableBusy, setCarryPayableBusy] = React.useState(false);
 
-  const bumpGrid = React.useCallback(() => {
-    setGridReload((n) => n + 1);
+  const bumpReceivable = React.useCallback(() => {
+    setGridReceivable((n) => n + 1);
     router.refresh();
   }, [router]);
 
-  const prependFilters = React.useMemo(
-    () => ({ year, month }),
-    [year, month],
-  );
+  const bumpPayable = React.useCallback(() => {
+    setGridPayable((n) => n + 1);
+    router.refresh();
+  }, [router]);
 
-  const columns = React.useMemo<ColumnDef<DebtRow, unknown>[]>(
+  React.useEffect(() => {
+    setGridReceivable((n) => n + 1);
+    setGridPayable((n) => n + 1);
+  }, [tab]);
+
+  const prependFilters = React.useMemo(() => ({ year, month }), [year, month]);
+
+  const columnsReceivable = React.useMemo<ColumnDef<DebtRow, unknown>[]>(
     () => [
       { accessorKey: "partner_code", header: "Mã KH" },
       { accessorKey: "partner_name", header: "Tên KH" },
       { accessorKey: "opening", header: "Nợ đầu kỳ" },
       { accessorKey: "orders_month", header: "PS bán (tháng)" },
       { accessorKey: "receipts_month", header: "Đã thu (tháng)" },
+      { accessorKey: "closing", header: "Nợ cuối kỳ" },
+    ],
+    [],
+  );
+
+  const columnsPayable = React.useMemo<ColumnDef<PayableRow, unknown>[]>(
+    () => [
+      { accessorKey: "supplier_code", header: "Mã NCC" },
+      { accessorKey: "supplier_name", header: "Tên NCC" },
+      { accessorKey: "opening", header: "Nợ đầu kỳ" },
+      { accessorKey: "inbound_month", header: "PS nhập (tháng)" },
+      { accessorKey: "payments_month", header: "Đã trả (tháng)" },
       { accessorKey: "closing", header: "Nợ cuối kỳ" },
     ],
     [],
@@ -64,7 +102,7 @@ export function DebtPage() {
           ? "\n\nCảnh báo:\n" + res.errors.slice(0, 40).join("\n") + (res.errors.length > 40 ? "\n…" : "")
           : "";
         alert((res.message ?? "Nhập xong.") + warn);
-        bumpGrid();
+        bumpReceivable();
       } else {
         const detail = res.errors?.length
           ? "\n\n" + res.errors.slice(0, 40).join("\n") + (res.errors.length > 40 ? "\n…" : "")
@@ -99,8 +137,33 @@ export function DebtPage() {
     );
   }, []);
 
+  const renderPayableDetail = React.useCallback((row: PayableRow) => {
+    return (
+      <DetailPreview
+        fields={[
+          { label: "Mã NCC", value: row.supplier_code },
+          { label: "Tên NCC", value: row.supplier_name },
+          { label: "Nợ đầu kỳ", value: row.opening },
+          { label: "PS nhập (tháng)", value: row.inbound_month },
+          { label: "Đã trả (tháng)", value: row.payments_month },
+          { label: "Nợ cuối kỳ", value: row.closing },
+          { label: "Supplier ID", value: row.supplier_id, span: "full" },
+        ]}
+      />
+    );
+  }, []);
+
   return (
     <div className="space-y-5">
+      <DetailTabStrip
+        items={[
+          { id: "receivables", label: "Phải thu (khách)" },
+          { id: "payables", label: "Phải trả (NCC)" },
+        ]}
+        value={tab}
+        onChange={(id) => setTab(id as DebtTab)}
+      />
+
       <Card className="flex flex-wrap items-end gap-4 p-5">
         <div className="grid gap-2">
           <Label htmlFor="d-y">Năm</Label>
@@ -122,74 +185,124 @@ export function DebtPage() {
             ))}
           </Select>
         </div>
-        <input
-          ref={fileImportRef}
-          type="file"
-          accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
-          className="hidden"
-          onChange={(ev) => void onExcelSelected(ev)}
-        />
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          className="min-h-8 self-end"
-          disabled={importBusy}
-          onClick={onPickExcel}
-        >
-          {importBusy ? "Đang nhập…" : "Nhập Excel (nợ đầu kỳ)"}
-        </Button>
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          className="min-h-8 self-end"
-          onClick={() => setShowCharts((v) => !v)}
-        >
-          {showCharts ? "Ẩn biểu đồ" : "Hiện biểu đồ công nợ"}
-        </Button>
-        <Button
-          type="button"
-          variant="primary"
-          size="sm"
-          className="min-h-8 self-end"
-          disabled={carryBusy}
-          onClick={() => {
-            if (
-              !confirm(
-                "Kết chuyển nợ cuối kỳ tháng " +
-                  month +
-                  "/" +
-                  year +
-                  " sang NỢ ĐẦU KỲ tháng sau cho toàn bộ khách? (ghi đè nếu đã có dòng đầu kỳ tháng đích)",
-              )
-            )
-              return;
-            setCarryBusy(true);
-            void carryForwardOpeningToNextMonth(Number(year), Number(month))
-              .then((r) => {
-                alert("Đã cập nhật " + r.upserted + " khách — nợ đầu kỳ tháng " + r.nextMonth + "/" + r.nextYear + ".");
-                bumpGrid();
-              })
-              .catch((e) => alert(e instanceof Error ? e.message : "Lỗi"))
-              .finally(() => setCarryBusy(false));
-          }}
-        >
-          {carryBusy ? "Đang kết chuyển…" : "Kết chuyển → nợ đầu kỳ tháng sau"}
-        </Button>
+
+        {tab === "receivables" ? (
+          <>
+            <input
+              ref={fileImportRef}
+              type="file"
+              accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+              className="hidden"
+              onChange={(ev) => void onExcelSelected(ev)}
+            />
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="min-h-8 self-end"
+              disabled={importBusy}
+              onClick={onPickExcel}
+            >
+              {importBusy ? "Đang nhập…" : "Nhập Excel (nợ đầu kỳ)"}
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="min-h-8 self-end"
+              onClick={() => setShowCharts((v) => !v)}
+            >
+              {showCharts ? "Ẩn biểu đồ" : "Hiện biểu đồ công nợ"}
+            </Button>
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
+              className="min-h-8 self-end"
+              disabled={carryReceivableBusy}
+              onClick={() => {
+                if (
+                  !confirm(
+                    "Kết chuyển nợ cuối kỳ tháng " +
+                      month +
+                      "/" +
+                      year +
+                      " sang NỢ ĐẦU KỲ tháng sau cho toàn bộ khách? (ghi đè nếu đã có dòng đầu kỳ tháng đích)",
+                  )
+                )
+                  return;
+                setCarryReceivableBusy(true);
+                void carryForwardOpeningToNextMonth(Number(year), Number(month))
+                  .then((r) => {
+                    alert(
+                      "Đã cập nhật " +
+                        r.upserted +
+                        " khách — nợ đầu kỳ tháng " +
+                        r.nextMonth +
+                        "/" +
+                        r.nextYear +
+                        ".",
+                    );
+                    bumpReceivable();
+                  })
+                  .catch((e) => alert(e instanceof Error ? e.message : "Lỗi"))
+                  .finally(() => setCarryReceivableBusy(false));
+              }}
+            >
+              {carryReceivableBusy ? "Đang kết chuyển…" : "Kết chuyển phải thu → tháng sau"}
+            </Button>
+          </>
+        ) : (
+          <Button
+            type="button"
+            variant="primary"
+            size="sm"
+            className="min-h-8 self-end"
+            disabled={carryPayableBusy}
+            onClick={() => {
+              if (!confirm("Kết chuyển công nợ phải trả NCC sang đầu kỳ tháng sau?")) return;
+              setCarryPayableBusy(true);
+              void carryForwardPayablesOpeningToNextMonth(Number(year), Number(month))
+                .then((r) => {
+                  alert("Đã cập nhật " + r.upserted + " NCC cho tháng " + r.nextMonth + "/" + r.nextYear + ".");
+                  bumpPayable();
+                })
+                .catch((e) => alert(e instanceof Error ? e.message : "Lỗi"))
+                .finally(() => setCarryPayableBusy(false));
+            }}
+          >
+            {carryPayableBusy ? "Đang kết chuyển…" : "Kết chuyển phải trả → tháng sau"}
+          </Button>
+        )}
       </Card>
-      {showCharts ? <DebtChartsSection year={year} month={month} /> : null}
-      <ExcelDataGrid<DebtRow>
-        moduleId="debt_report"
-        title="Công nợ khách hàng (theo tháng)"
-        columns={columns}
-        list={listDebtReport}
-        prependFilters={prependFilters}
-        getRowId={(r) => r.partner_id}
-        renderRowDetail={renderDebtDetail}
-        rowDetailTitle={(r) => `Công nợ ${r.partner_code} · Tháng ${month}/${year}`}
-        reloadSignal={gridReload}
-      />
+
+      {tab === "receivables" && showCharts ? <DebtChartsSection year={year} month={month} /> : null}
+
+      {tab === "receivables" ? (
+        <ExcelDataGrid<DebtRow>
+          moduleId="debt_report"
+          title="Công nợ phải thu — khách hàng (theo tháng)"
+          columns={columnsReceivable}
+          list={listDebtReport}
+          prependFilters={prependFilters}
+          getRowId={(r) => r.partner_id}
+          renderRowDetail={renderDebtDetail}
+          rowDetailTitle={(r) => `Công nợ ${r.partner_code} · Tháng ${month}/${year}`}
+          reloadSignal={gridReceivable}
+        />
+      ) : (
+        <ExcelDataGrid<PayableRow>
+          moduleId="payables_report"
+          title="Công nợ phải trả — NCC (theo tháng)"
+          columns={columnsPayable}
+          list={listPayablesReport}
+          prependFilters={prependFilters}
+          getRowId={(r) => r.supplier_id}
+          renderRowDetail={renderPayableDetail}
+          rowDetailTitle={(r) => `Công nợ NCC ${r.supplier_code} · Tháng ${month}/${year}`}
+          reloadSignal={gridPayable}
+        />
+      )}
     </div>
   );
 }

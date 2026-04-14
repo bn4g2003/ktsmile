@@ -90,15 +90,8 @@ const quickLinks: {
 }[] = [
   {
     href: "/master/partners",
-    title: "Khách hàng",
-    desc: "Danh mục phòng khám/labo",
-    Icon: IconPartners,
-    panelClass: "bg-[#0f766e] hover:brightness-110",
-  },
-  {
-    href: "/master/suppliers",
-    title: "Nhà cung cấp",
-    desc: "Danh mục NCC riêng",
+    title: "Khách & NCC",
+    desc: "Danh mục khách hàng và nhà cung cấp",
     Icon: IconPartners,
     panelClass: "bg-[#0f766e] hover:brightness-110",
   },
@@ -132,15 +125,8 @@ const quickLinks: {
   },
   {
     href: "/accounting/debt",
-    title: "Công nợ phải thu",
-    desc: "Khách hàng theo tháng",
-    Icon: IconDebt,
-    panelClass: "bg-[#be123c] hover:brightness-110",
-  },
-  {
-    href: "/accounting/payables",
-    title: "Công nợ phải trả",
-    desc: "Nhà cung cấp theo tháng",
+    title: "Công nợ",
+    desc: "Phải thu khách & phải trả NCC",
     Icon: IconDebt,
     panelClass: "bg-[#be123c] hover:brightness-110",
   },

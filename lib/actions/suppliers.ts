@@ -62,7 +62,7 @@ export async function createSupplier(input: z.infer<typeof supplierSchema>) {
     is_active: row.is_active ?? true,
   });
   if (error) throw new Error(error.message);
-  revalidatePath("/master/suppliers");
+  revalidatePath("/master/partners");
 }
 
 export async function updateSupplier(id: string, input: z.infer<typeof supplierSchema>) {
@@ -70,14 +70,14 @@ export async function updateSupplier(id: string, input: z.infer<typeof supplierS
   const row = supplierSchema.parse(input);
   const { error } = await supabase.from("suppliers").update(row).eq("id", id);
   if (error) throw new Error(error.message);
-  revalidatePath("/master/suppliers");
+  revalidatePath("/master/partners");
 }
 
 export async function deleteSupplier(id: string) {
   const supabase = createSupabaseAdmin();
   const { error } = await supabase.from("suppliers").delete().eq("id", id);
   if (error) throw new Error(error.message);
-  revalidatePath("/master/suppliers");
+  revalidatePath("/master/partners");
 }
 
 export async function listSupplierPicker() {

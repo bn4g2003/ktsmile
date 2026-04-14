@@ -1,5 +1,5 @@
-import { PayablesPage } from "@/components/modules/accounting/payables-page";
+import { redirect } from "next/navigation";
 
 export default function Page() {
-  return <PayablesPage />;
+  redirect("/accounting/debt?tab=payables");
 }

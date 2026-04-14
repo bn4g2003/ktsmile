@@ -140,6 +140,6 @@ export async function carryForwardPayablesOpeningToNextMonth(
     upserted += 1;
   }
 
-  revalidatePath("/accounting/payables");
+  revalidatePath("/accounting/debt");
   return { nextYear, nextMonth, upserted };
 }
