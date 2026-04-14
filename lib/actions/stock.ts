@@ -16,13 +16,13 @@ export type StockDocumentRow = {
   document_date: string;
   movement_type: "inbound" | "outbound";
   posting_status: "draft" | "posted";
-  partner_id: string | null;
+  supplier_id: string | null;
   reason: string | null;
   notes: string | null;
   created_at: string;
   updated_at: string;
-  partner_code?: string | null;
-  partner_name?: string | null;
+  supplier_code?: string | null;
+  supplier_name?: string | null;
   line_count: number;
 };
 
@@ -32,7 +32,7 @@ export type StockDocumentHeader = {
   document_date: string;
   movement_type: "inbound" | "outbound";
   posting_status: "draft" | "posted";
-  partner_id: string | null;
+  supplier_id: string | null;
   reason: string | null;
   notes: string | null;
 };
@@ -55,7 +55,7 @@ export async function listStockDocuments(
 
   const build = (usePostingFilter: boolean) => {
     let q = supabase.from("stock_documents").select(
-      "*, partners:partner_id(code,name), stock_lines(id)",
+      "*, suppliers:supplier_id(code,name), stock_lines(id)",
       { count: "exact" },
     );
 
@@ -90,7 +90,7 @@ export async function listStockDocuments(
   if (error) throw new Error(error.message);
 
   const rows: StockDocumentRow[] = (data ?? []).map((r: Record<string, unknown>) => {
-    const partners = r["partners"] as { code?: string; name?: string } | null;
+    const suppliers = r["suppliers"] as { code?: string; name?: string } | null;
     const sl = r["stock_lines"] as { id?: string }[] | null;
     const cnt = Array.isArray(sl) ? sl.length : 0;
     return {
@@ -99,13 +99,13 @@ export async function listStockDocuments(
       document_date: r["document_date"] as string,
       movement_type: r["movement_type"] as "inbound" | "outbound",
       posting_status: (r["posting_status"] as "draft" | "posted" | undefined) ?? "posted",
-      partner_id: (r["partner_id"] as string | null) ?? null,
+      supplier_id: (r["supplier_id"] as string | null) ?? null,
       reason: (r["reason"] as string | null) ?? null,
       notes: (r["notes"] as string | null) ?? null,
       created_at: r["created_at"] as string,
       updated_at: r["updated_at"] as string,
-      partner_code: partners?.code,
-      partner_name: partners?.name,
+      supplier_code: suppliers?.code,
+      supplier_name: suppliers?.name,
       line_count: cnt,
     };
   });
@@ -117,7 +117,7 @@ const docSchema = z.object({
   document_number: z.string().min(1).max(100),
   document_date: z.string().min(1),
   movement_type: z.enum(["inbound", "outbound"]),
-  partner_id: z.string().uuid().optional().nullable(),
+  supplier_id: z.string().uuid().optional().nullable(),
   reason: z.string().max(500).optional().nullable(),
   notes: z.string().max(2000).optional().nullable(),
 });
@@ -178,7 +178,7 @@ export async function createOutboundStockRequest(input: z.infer<typeof outboundR
       document_date,
       movement_type: "outbound",
       posting_status: "draft",
-      partner_id: null,
+      supplier_id: null,
       reason: row.reason?.trim() || "Yêu cầu xuất kho",
       notes: null,
     })
@@ -231,7 +231,7 @@ export async function getStockDocumentById(id: string): Promise<StockDocumentHea
     document_date: data["document_date"] as string,
     movement_type: data["movement_type"] as "inbound" | "outbound",
     posting_status: (data["posting_status"] as "draft" | "posted" | undefined) ?? "posted",
-    partner_id: (data["partner_id"] as string | null) ?? null,
+    supplier_id: (data["supplier_id"] as string | null) ?? null,
     reason: (data["reason"] as string | null) ?? null,
     notes: (data["notes"] as string | null) ?? null,
   };
@@ -315,13 +315,13 @@ export async function getStockDocumentPrintPayload(
   const { data: row, error } = await supabase
     .from("stock_documents")
     .select(
-      "document_number, document_date, movement_type, reason, notes, partners:partner_id(code,name)",
+      "document_number, document_date, movement_type, reason, notes, suppliers:supplier_id(code,name)",
     )
     .eq("id", documentId)
     .single();
   if (error || !row) throw new Error(error?.message ?? "Không tìm thấy phiếu.");
 
-  const partners = row["partners"] as { code?: string; name?: string } | null;
+  const suppliers = row["suppliers"] as { code?: string; name?: string } | null;
 
   const { data: lineRows, error: le } = await supabase
     .from("stock_lines")
@@ -346,8 +346,8 @@ export async function getStockDocumentPrintPayload(
     document_number: row["document_number"] as string,
     document_date: row["document_date"] as string,
     movement_type: row["movement_type"] as "inbound" | "outbound",
-    partner_code: partners?.code ?? null,
-    partner_name: partners?.name ?? null,
+    partner_code: suppliers?.code ?? null,
+    partner_name: suppliers?.name ?? null,
     reason: (row["reason"] as string | null) ?? null,
     notes: (row["notes"] as string | null) ?? null,
     lines,

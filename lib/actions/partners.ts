@@ -10,7 +10,7 @@ export type PartnerRow = {
   id: string;
   code: string;
   name: string;
-  partner_type: "customer_clinic" | "customer_labo" | "supplier";
+  partner_type: "customer_clinic" | "customer_labo";
   representative_name: string | null;
   phone: string | null;
   address: string | null;
@@ -79,9 +79,9 @@ async function listPartnersScoped(
   return { rows: (data ?? []) as PartnerRow[], total: count ?? 0 };
 }
 
-/** Tất cả loại (dùng khi cần danh sách không giới hạn tab). */
+/** Tất cả đối tác khách hàng (phòng khám/labo). */
 export async function listPartners(args: ListArgs): Promise<ListResult<PartnerRow>> {
-  return listPartnersScoped(args, null);
+  return listPartnersScoped(args, ["customer_clinic", "customer_labo"]);
 }
 
 /** Chỉ khách phòng khám & labo — dùng tab Khách hàng. */
@@ -89,15 +89,10 @@ export async function listCustomerPartners(args: ListArgs): Promise<ListResult<P
   return listPartnersScoped(args, ["customer_clinic", "customer_labo"]);
 }
 
-/** Chỉ nhà cung cấp — dùng tab NCC. */
-export async function listSupplierPartners(args: ListArgs): Promise<ListResult<PartnerRow>> {
-  return listPartnersScoped(args, ["supplier"]);
-}
-
 const partnerSchema = z.object({
   code: z.string().min(1).max(200),
   name: z.string().min(1).max(500),
-  partner_type: z.enum(["customer_clinic", "customer_labo", "supplier"]),
+  partner_type: z.enum(["customer_clinic", "customer_labo"]),
   representative_name: z.string().max(500).optional().nullable(),
   phone: z.string().max(100).optional().nullable(),
   address: z.string().max(1000).optional().nullable(),
@@ -138,14 +133,7 @@ export async function deletePartner(id: string) {
 }
 
 export async function listPartnerPicker() {
-  const supabase = createSupabaseAdmin();
-  const { data, error } = await supabase
-    .from("partners")
-    .select("id, code, name")
-    .order("code", { ascending: true })
-    .limit(3000);
-  if (error) throw new Error(error.message);
-  return (data ?? []) as { id: string; code: string; name: string }[];
+  return listCustomerPartnerPicker();
 }
 
 /** Chỉ khách (phòng khám / labo) — đơn phục hình không chọn NCC. */

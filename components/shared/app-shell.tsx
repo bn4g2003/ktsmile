@@ -18,7 +18,8 @@ const groups: { title: string; items: { href: string; label: string }[] }[] = [
   {
     title: "Danh mục",
     items: [
-      { href: "/master/partners", label: "Đối tác" },
+      { href: "/master/partners", label: "Khách hàng" },
+      { href: "/master/suppliers", label: "Nhà cung cấp" },
       { href: "/master/products", label: "Sản phẩm" },
       { href: "/master/employees", label: "Nhân sự" },
       { href: "/master/prices", label: "Giá theo KH" },
@@ -38,7 +39,8 @@ const groups: { title: string; items: { href: string; label: string }[] }[] = [
     items: [
       { href: "/accounting/sales", label: "Doanh số & GBTT" },
       { href: "/accounting/cash", label: "Sổ quỹ" },
-      { href: "/accounting/debt", label: "Công nợ" },
+      { href: "/accounting/debt", label: "Công nợ phải thu" },
+      { href: "/accounting/payables", label: "Công nợ phải trả NCC" },
     ],
   },
 ];

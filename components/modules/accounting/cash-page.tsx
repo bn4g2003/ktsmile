@@ -23,7 +23,8 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { DetailPreview } from "@/components/ui/detail-preview";
 import { Textarea } from "@/components/ui/textarea";
-import { listPartnerPicker } from "@/lib/actions/partners";
+import { listCustomerPartnerPicker } from "@/lib/actions/partners";
+import { listSupplierPicker } from "@/lib/actions/suppliers";
 import { formatCashDirection } from "@/lib/format/labels";
 import { CashFlowChartsSection } from "@/components/modules/accounting/cash-flow-charts-section";
 import { CashReceiptPrintButton } from "@/components/shared/reports/cash-receipt-print-button";
@@ -50,6 +51,7 @@ export function CashPage() {
   const [open, setOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<CashRow | null>(null);
   const [partners, setPartners] = React.useState<{ id: string; code: string; name: string }[]>([]);
+  const [suppliers, setSuppliers] = React.useState<{ id: string; code: string; name: string }[]>([]);
   const [pending, setPending] = React.useState(false);
   const [err, setErr] = React.useState<string | null>(null);
   const [tdate, setTdate] = React.useState("");
@@ -59,6 +61,7 @@ export function CashPage() {
   const [category, setCategory] = React.useState("");
   const [amount, setAmount] = React.useState("0");
   const [partnerId, setPartnerId] = React.useState("");
+  const [supplierId, setSupplierId] = React.useState("");
   const [payerName, setPayerName] = React.useState("");
   const [desc, setDesc] = React.useState("");
   const [refType, setRefType] = React.useState("");
@@ -66,7 +69,8 @@ export function CashPage() {
   const [showCharts, setShowCharts] = React.useState(true);
 
   React.useEffect(() => {
-    void listPartnerPicker().then(setPartners).catch(() => {});
+    void listCustomerPartnerPicker().then(setPartners).catch(() => {});
+    void listSupplierPicker().then(setSuppliers).catch(() => {});
   }, []);
 
   const reset = () => {
@@ -78,6 +82,7 @@ export function CashPage() {
     setCategory("");
     setAmount("0");
     setPartnerId("");
+    setSupplierId("");
     setPayerName("");
     setDesc("");
     setRefType("");
@@ -99,6 +104,7 @@ export function CashPage() {
     setCategory(row.business_category);
     setAmount(String(row.amount));
     setPartnerId(row.partner_id ?? "");
+    setSupplierId(row.supplier_id ?? "");
     setPayerName(row.payer_name ?? "");
     setDesc(row.description ?? "");
     setRefType(row.reference_type ?? "");
@@ -120,6 +126,7 @@ export function CashPage() {
         business_category: category.trim(),
         amount: Number(amount),
         partner_id: partnerId || null,
+        supplier_id: supplierId || null,
         payer_name: payerName.trim() || null,
         description: desc.trim() || null,
         reference_type: refType.trim() || null,
@@ -174,8 +181,10 @@ export function CashPage() {
         meta: { filterKey: "business_category", filterType: "text" },
       },
       { accessorKey: "amount", header: "Số tiền" },
-      { accessorKey: "partner_code", header: "Mã ĐT" },
-      { accessorKey: "partner_name", header: "Đối tượng" },
+      { accessorKey: "partner_code", header: "Mã KH" },
+      { accessorKey: "partner_name", header: "Khách hàng" },
+      { accessorKey: "supplier_code", header: "Mã NCC" },
+      { accessorKey: "supplier_name", header: "Nhà cung cấp" },
       { accessorKey: "payer_name", header: "Người nộp" },
       {
         id: "actions",
@@ -213,8 +222,10 @@ export function CashPage() {
           { label: "Thu / Chi", value: formatCashDirection(row.direction) },
           { label: "Nghiệp vụ", value: row.business_category },
           { label: "Số tiền", value: row.amount },
-          { label: "Mã ĐT", value: row.partner_code },
-          { label: "Đối tượng", value: row.partner_name },
+          { label: "Mã KH", value: row.partner_code },
+          { label: "Khách hàng", value: row.partner_name },
+          { label: "Mã NCC", value: row.supplier_code },
+          { label: "Nhà cung cấp", value: row.supplier_name },
           { label: "Người nộp", value: row.payer_name },
           { label: "Diễn giải", value: row.description, span: "full" },
           { label: "Reference type", value: row.reference_type },
@@ -313,12 +324,23 @@ export function CashPage() {
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="c-p">Đối tượng</Label>
+              <Label htmlFor="c-p">Khách hàng (phiếu thu)</Label>
               <Select id="c-p" value={partnerId} onChange={(e) => setPartnerId(e.target.value)}>
                 <option value="">—</option>
                 {partners.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.code} — {p.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="c-s">NCC (phiếu chi)</Label>
+              <Select id="c-s" value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
+                <option value="">—</option>
+                {suppliers.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.code} — {s.name}
                   </option>
                 ))}
               </Select>

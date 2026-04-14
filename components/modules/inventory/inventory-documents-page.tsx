@@ -26,7 +26,7 @@ import { Select } from "@/components/ui/select";
 import { DetailPreview } from "@/components/ui/detail-preview";
 import { Textarea } from "@/components/ui/textarea";
 import { StockVoucherPrintButton } from "@/components/shared/reports/stock-voucher-print-button";
-import { listPartnerPicker } from "@/lib/actions/partners";
+import { listSupplierPicker } from "@/lib/actions/suppliers";
 import { formatMovement, formatPostingStatus } from "@/lib/format/labels";
 import { listProductPicker } from "@/lib/actions/products";
 import {
@@ -57,13 +57,13 @@ export function InventoryDocumentsPage() {
   }, [router]);
   const [open, setOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<StockDocumentRow | null>(null);
-  const [partners, setPartners] = React.useState<{ id: string; code: string; name: string }[]>([]);
+  const [suppliers, setSuppliers] = React.useState<{ id: string; code: string; name: string }[]>([]);
   const [pending, setPending] = React.useState(false);
   const [err, setErr] = React.useState<string | null>(null);
   const [docNum, setDocNum] = React.useState("");
   const [docDate, setDocDate] = React.useState("");
   const [mov, setMov] = React.useState<"inbound" | "outbound">("inbound");
-  const [partnerId, setPartnerId] = React.useState("");
+  const [supplierId, setSupplierId] = React.useState("");
   const [reason, setReason] = React.useState("");
   const [notes, setNotes] = React.useState("");
   const [openRequest, setOpenRequest] = React.useState(false);
@@ -76,7 +76,7 @@ export function InventoryDocumentsPage() {
   const [reqErr, setReqErr] = React.useState<string | null>(null);
 
   React.useEffect(() => {
-    void listPartnerPicker().then(setPartners).catch(() => {});
+    void listSupplierPicker().then(setSuppliers).catch(() => {});
   }, []);
 
   React.useEffect(() => {
@@ -89,7 +89,7 @@ export function InventoryDocumentsPage() {
     setDocNum("");
     setDocDate(new Date().toISOString().slice(0, 10));
     setMov("inbound");
-    setPartnerId("");
+    setSupplierId("");
     setReason("");
     setNotes("");
     setErr(null);
@@ -137,7 +137,7 @@ export function InventoryDocumentsPage() {
     setDocNum(row.document_number);
     setDocDate(row.document_date);
     setMov(row.movement_type);
-    setPartnerId(row.partner_id ?? "");
+    setSupplierId(row.supplier_id ?? "");
     setReason(row.reason ?? "");
     setNotes(row.notes ?? "");
     setErr(null);
@@ -153,7 +153,7 @@ export function InventoryDocumentsPage() {
         document_number: docNum.trim(),
         document_date: docDate,
         movement_type: mov,
-        partner_id: partnerId || null,
+        supplier_id: supplierId || null,
         reason: reason.trim() || null,
         notes: notes.trim() || null,
       };
@@ -225,8 +225,8 @@ export function InventoryDocumentsPage() {
         },
         cell: ({ getValue }) => formatPostingStatus(String(getValue())),
       },
-      { accessorKey: "partner_code", header: "Mã ĐT" },
-      { accessorKey: "partner_name", header: "Đối tác" },
+      { accessorKey: "supplier_code", header: "Mã NCC" },
+      { accessorKey: "supplier_name", header: "Nhà cung cấp" },
       { accessorKey: "line_count", header: "Số dòng" },
       {
         id: "actions",
@@ -261,8 +261,8 @@ export function InventoryDocumentsPage() {
           { label: "Ngày", value: row.document_date },
           { label: "Loại", value: formatMovement(row.movement_type) },
           { label: "Ghi tồn", value: formatPostingStatus(row.posting_status) },
-          { label: "Mã ĐT", value: row.partner_code },
-          { label: "Đối tác", value: row.partner_name },
+          { label: "Mã NCC", value: row.supplier_code },
+          { label: "Nhà cung cấp", value: row.supplier_name },
           { label: "Số dòng", value: row.line_count },
           { label: "Lý do", value: row.reason, span: "full" },
           { label: "Ghi chú", value: row.notes, span: "full" },
@@ -329,10 +329,10 @@ export function InventoryDocumentsPage() {
               </Select>
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="sd-p">Đối tác (tuỳ chọn)</Label>
-              <Select id="sd-p" value={partnerId} onChange={(e) => setPartnerId(e.target.value)}>
+              <Label htmlFor="sd-p">Nhà cung cấp (tuỳ chọn)</Label>
+              <Select id="sd-p" value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
                 <option value="">—</option>
-                {partners.map((p) => (
+                {suppliers.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.code} — {p.name}
                   </option>

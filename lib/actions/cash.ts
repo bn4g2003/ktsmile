@@ -18,6 +18,7 @@ export type CashRow = {
   business_category: string;
   amount: number;
   partner_id: string | null;
+  supplier_id: string | null;
   payer_name: string | null;
   description: string | null;
   reference_type: string | null;
@@ -26,6 +27,8 @@ export type CashRow = {
   updated_at: string;
   partner_code?: string | null;
   partner_name?: string | null;
+  supplier_code?: string | null;
+  supplier_name?: string | null;
 };
 
 const cashSchema = z.object({
@@ -36,6 +39,7 @@ const cashSchema = z.object({
   business_category: z.string().min(1).max(200),
   amount: z.coerce.number().positive(),
   partner_id: z.string().uuid().optional().nullable(),
+  supplier_id: z.string().uuid().optional().nullable(),
   payer_name: z.string().max(500).optional().nullable(),
   description: z.string().max(2000).optional().nullable(),
   reference_type: z.string().max(100).optional().nullable(),
@@ -54,6 +58,7 @@ function cashInsertPayload(row: z.infer<typeof cashSchema>) {
     business_category: row.business_category,
     amount: row.amount,
     partner_id: row.partner_id ?? null,
+    supplier_id: row.supplier_id ?? null,
     payer_name: row.payer_name?.trim() ? row.payer_name.trim() : null,
     description: row.description ?? null,
     reference_type: row.reference_type ?? null,
@@ -63,22 +68,23 @@ function cashInsertPayload(row: z.infer<typeof cashSchema>) {
 
 /** Có `payer_name` (migration 20260419120000). */
 const CASH_LIST_SELECT_FULL =
-  "id, transaction_date, doc_number, payment_channel, direction, business_category, amount, partner_id, payer_name, description, reference_type, reference_id, created_at, updated_at, partners!cash_transactions_partner_id_fkey(code,name)";
+  "id, transaction_date, doc_number, payment_channel, direction, business_category, amount, partner_id, supplier_id, payer_name, description, reference_type, reference_id, created_at, updated_at, partners!cash_transactions_partner_id_fkey(code,name), suppliers!cash_transactions_supplier_id_fkey(code,name)";
 
 /** Schema ban đầu, chưa có cột payer_name. */
 const CASH_LIST_SELECT_LEGACY =
-  "id, transaction_date, doc_number, payment_channel, direction, business_category, amount, partner_id, description, reference_type, reference_id, created_at, updated_at, partners!cash_transactions_partner_id_fkey(code,name)";
+  "id, transaction_date, doc_number, payment_channel, direction, business_category, amount, partner_id, supplier_id, description, reference_type, reference_id, created_at, updated_at, partners!cash_transactions_partner_id_fkey(code,name), suppliers!cash_transactions_supplier_id_fkey(code,name)";
 
 /** Không nhúng partners (tránh lỗi embed hiếm gặp). */
 const CASH_LIST_SELECT_NO_EMBED =
-  "id, transaction_date, doc_number, payment_channel, direction, business_category, amount, partner_id, payer_name, description, reference_type, reference_id, created_at, updated_at";
+  "id, transaction_date, doc_number, payment_channel, direction, business_category, amount, partner_id, supplier_id, payer_name, description, reference_type, reference_id, created_at, updated_at";
 
 /** Vừa không embed vừa chưa có cột payer_name (migration chưa chạy + FK embed lỗi). */
 const CASH_LIST_SELECT_MINIMAL =
-  "id, transaction_date, doc_number, payment_channel, direction, business_category, amount, partner_id, description, reference_type, reference_id, created_at, updated_at";
+  "id, transaction_date, doc_number, payment_channel, direction, business_category, amount, partner_id, supplier_id, description, reference_type, reference_id, created_at, updated_at";
 
 function mapCashListRow(r: Record<string, unknown>): CashRow {
   const partners = r["partners"] as { code?: string; name?: string } | null;
+  const suppliers = r["suppliers"] as { code?: string; name?: string } | null;
   return {
     id: r["id"] as string,
     transaction_date: r["transaction_date"] as string,
@@ -88,6 +94,7 @@ function mapCashListRow(r: Record<string, unknown>): CashRow {
     business_category: r["business_category"] as string,
     amount: finiteNumber(r["amount"]),
     partner_id: (r["partner_id"] as string | null) ?? null,
+    supplier_id: (r["supplier_id"] as string | null) ?? null,
     payer_name: (r["payer_name"] as string | null) ?? null,
     description: (r["description"] as string | null) ?? null,
     reference_type: (r["reference_type"] as string | null) ?? null,
@@ -96,6 +103,8 @@ function mapCashListRow(r: Record<string, unknown>): CashRow {
     updated_at: r["updated_at"] as string,
     partner_code: partners?.code ?? null,
     partner_name: partners?.name ?? null,
+    supplier_code: suppliers?.code ?? null,
+    supplier_name: suppliers?.name ?? null,
   };
 }
 
@@ -176,7 +185,8 @@ export async function createCashTransaction(input: z.infer<typeof cashSchema>) {
     isSupabaseSchemaDriftError(error.message) &&
     Object.prototype.hasOwnProperty.call(payload, "payer_name")
   ) {
-    const { payer_name: _omit, ...legacyPayload } = payload;
+    const { payer_name, ...legacyPayload } = payload;
+    void payer_name;
     const r2 = await supabase.from("cash_transactions").insert(legacyPayload);
     error = r2.error;
   }
@@ -197,7 +207,8 @@ export async function updateCashTransaction(
     isSupabaseSchemaDriftError(error.message) &&
     Object.prototype.hasOwnProperty.call(payload, "payer_name")
   ) {
-    const { payer_name: _omit, ...legacyPayload } = payload;
+    const { payer_name, ...legacyPayload } = payload;
+    void payer_name;
     const r2 = await supabase.from("cash_transactions").update(legacyPayload).eq("id", id);
     error = r2.error;
   }
