@@ -327,6 +327,9 @@ export function ExcelDataGrid<T>({
         base.push({
           id: "actions",
           header: "Thao tác",
+          size: 64,
+          minSize: 52,
+          maxSize: 80,
           enableHiding: false,
           meta: { filterType: "none" as const },
           cell: ({ row }: CellContext<T, unknown>) => (
@@ -357,7 +360,16 @@ export function ExcelDataGrid<T>({
       const [actionsCol] = base.splice(actionsIdx, 1);
       base.push(actionsCol);
     }
-    return base;
+    return base.map((col) => {
+      if (col.id !== "actions") return col;
+      const prevSize = typeof col.size === "number" ? col.size : 150;
+      return {
+        ...col,
+        size: Math.min(prevSize, 68),
+        minSize: typeof col.minSize === "number" ? Math.min(col.minSize, 52) : 52,
+        maxSize: typeof col.maxSize === "number" ? Math.min(col.maxSize, 80) : 80,
+      };
+    });
   }, [columns, renderRowDetail]);
 
   const hasColumnFilters = React.useMemo(() => {
@@ -669,7 +681,8 @@ export function ExcelDataGrid<T>({
                         style={{ width: h.column.getSize() }}
                         className={cn(
                           "px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--on-surface-faint)] first:pl-4 last:pr-4",
-                          h.column.id === "actions" && "sticky right-0 z-20 bg-[var(--surface-card)] shadow-[-6px_0_12px_rgba(0,0,0,0.1)] border-l border-[var(--border-ghost)]"
+                          h.column.id === "actions" &&
+                            "sticky right-0 z-20 w-[68px] max-w-[68px] !px-2 text-center text-[10px] leading-tight bg-[var(--surface-card)] shadow-[-6px_0_12px_rgba(0,0,0,0.1)] border-l border-[var(--border-ghost)]",
                         )}
                       >
                         {h.isPlaceholder
@@ -689,7 +702,8 @@ export function ExcelDataGrid<T>({
                           key={col.id}
                           className={cn(
                             "px-3 py-2 first:pl-4 last:pr-4",
-                            col.id === "actions" && "sticky right-0 z-20 bg-[var(--surface-muted)] shadow-[-4px_0_8px_rgba(0,0,0,0.05)]"
+                            col.id === "actions" &&
+                              "sticky right-0 z-20 w-[68px] max-w-[68px] !px-2 bg-[var(--surface-muted)] shadow-[-4px_0_8px_rgba(0,0,0,0.05)]",
                           )}
                         >
                           <span className="sr-only">filter</span>
@@ -703,7 +717,8 @@ export function ExcelDataGrid<T>({
                           key={col.id}
                           className={cn(
                             "min-w-[9.5rem] px-3 py-2 align-top first:pl-4 last:pr-4",
-                            col.id === "actions" && "sticky right-0 z-20 bg-[var(--surface-muted)] shadow-[-6px_0_12px_rgba(0,0,0,0.1)] border-l border-[var(--border-ghost)]"
+                            col.id === "actions" &&
+                              "sticky right-0 z-20 w-[68px] max-w-[68px] !min-w-0 !px-2 bg-[var(--surface-muted)] shadow-[-6px_0_12px_rgba(0,0,0,0.1)] border-l border-[var(--border-ghost)]",
                           )}
                         >
                           <GridMultiSelectFilter
@@ -721,7 +736,8 @@ export function ExcelDataGrid<T>({
                         key={col.id}
                         className={cn(
                           "px-3 py-2 first:pl-4 last:pr-4",
-                          col.id === "actions" && "sticky right-0 z-20 bg-[var(--surface-muted)] shadow-[-4px_0_8px_rgba(0,0,0,0.05)]"
+                          col.id === "actions" &&
+                            "sticky right-0 z-20 w-[68px] max-w-[68px] !min-w-0 !px-2 bg-[var(--surface-muted)] shadow-[-4px_0_8px_rgba(0,0,0,0.05)]",
                         )}
                       >
                         <Input
@@ -770,8 +786,9 @@ export function ExcelDataGrid<T>({
                           style={{ width: cell.column.getSize() }}
                           className={cn(
                             "px-3 py-2 align-middle text-[var(--on-surface)] first:pl-4 last:pr-4 transition-colors",
-                            cell.column.id === "actions" && "sticky right-0 z-10 shadow-[-6px_0_12px_rgba(0,0,0,0.1)] border-l border-[var(--border-ghost)]",
-                            cell.column.id === "actions" && (i % 2 === 1 ? "bg-[var(--surface-row-b)]" : "bg-[var(--surface-card)]")
+                            cell.column.id === "actions" &&
+                              "sticky right-0 z-10 w-[68px] max-w-[68px] !px-2 text-center shadow-[-6px_0_12px_rgba(0,0,0,0.1)] border-l border-[var(--border-ghost)]",
+                            cell.column.id === "actions" && (i % 2 === 1 ? "bg-[var(--surface-row-b)]" : "bg-[var(--surface-card)]"),
                           )}
                         >
                           {flexRender(cell.column.columnDef.cell, cell.getContext())}

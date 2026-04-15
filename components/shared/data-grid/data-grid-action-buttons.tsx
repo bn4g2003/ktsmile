@@ -139,6 +139,7 @@ export function DataGridRowActionsMenu({
           type="button"
           className={cn(
             compact,
+            "h-6 min-h-6 min-w-[1.75rem] px-0 text-[15px] leading-none",
             "bg-[var(--surface-card)] text-[var(--on-surface-muted)] ring-1 ring-[var(--border-ghost)] hover:bg-[var(--surface-muted)] hover:text-[var(--on-surface)]",
             className,
           )}

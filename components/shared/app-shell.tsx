@@ -8,37 +8,53 @@ import { DEMO_LOGIN_EMAIL } from "@/lib/auth/demo-session";
 import { cn } from "@/lib/utils/cn";
 import { AppHeader } from "@/components/shared/app-header";
 import { BrandLogo } from "@/components/shared/brand-logo";
+import {
+  NavIconCash,
+  NavIconCatalog,
+  NavIconChart,
+  NavIconDashboard,
+  NavIconDebt,
+  NavIconOrders,
+  NavIconPartners,
+  NavIconPriceTag,
+  NavIconReview,
+  NavIconStock,
+  NavIconTeam,
+  NavIconWarehouseDoc,
+} from "@/components/shared/nav-icons";
 import { Button } from "@/components/ui/button";
 
-const groups: { title: string; items: { href: string; label: string }[] }[] = [
+type NavIcon = React.ComponentType<{ className?: string }>;
+
+const groups: { title: string; items: { href: string; label: string; Icon: NavIcon }[] }[] = [
   {
     title: "Tổng quan",
-    items: [{ href: "/", label: "Dashboard" }],
+    items: [{ href: "/", label: "Dashboard", Icon: NavIconDashboard }],
   },
   {
     title: "Danh mục",
     items: [
-      { href: "/master/partners", label: "Khách & NCC" },
-      { href: "/master/products", label: "SP & NVL" },
-      { href: "/master/employees", label: "Nhân sự" },
-      { href: "/master/prices", label: "Giá theo KH" },
+      { href: "/master/partners", label: "Khách & NCC", Icon: NavIconPartners },
+      { href: "/master/products", label: "SP & NVL", Icon: NavIconCatalog },
+      { href: "/master/employees", label: "Nhân sự", Icon: NavIconTeam },
+      { href: "/master/prices", label: "Giá theo KH", Icon: NavIconPriceTag },
     ],
   },
   {
     title: "Vận hành",
     items: [
-      { href: "/orders", label: "Đơn hàng" },
-      { href: "/orders/review", label: "Kiểm tra đơn" },
-      { href: "/inventory/documents", label: "Kho — Phiếu" },
-      { href: "/inventory/stock", label: "Tồn kho" },
+      { href: "/orders", label: "Đơn hàng", Icon: NavIconOrders },
+      { href: "/orders/review", label: "Kiểm tra đơn", Icon: NavIconReview },
+      { href: "/inventory/documents", label: "Kho — Phiếu", Icon: NavIconWarehouseDoc },
+      { href: "/inventory/stock", label: "Tồn kho", Icon: NavIconStock },
     ],
   },
   {
     title: "Kế toán",
     items: [
-      { href: "/accounting/sales", label: "Doanh số & GBTT" },
-      { href: "/accounting/cash", label: "Sổ quỹ" },
-      { href: "/accounting/debt", label: "Công nợ" },
+      { href: "/accounting/sales", label: "Doanh số & GBTT", Icon: NavIconChart },
+      { href: "/accounting/cash", label: "Sổ quỹ", Icon: NavIconCash },
+      { href: "/accounting/debt", label: "Công nợ", Icon: NavIconDebt },
     ],
   },
 ];
@@ -102,18 +118,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     item.href === "/"
                       ? pathname === "/"
                       : pathname === item.href || pathname.startsWith(item.href + "/");
+                  const Icon = item.Icon;
                   return (
                     <li key={item.href}>
                       <Link
                         href={item.href}
                         className={cn(
-                          "flex min-h-11 items-center rounded-[var(--radius-lg)] px-3 text-sm font-medium transition",
+                          "flex min-h-11 items-center gap-2.5 rounded-[var(--radius-lg)] px-3 text-sm font-medium transition",
                           active
                             ? "bg-[var(--primary-muted)] font-semibold text-[var(--primary)]"
                             : "text-[var(--on-surface-muted)] hover:bg-[var(--surface-muted)] hover:text-[var(--on-surface)]",
                         )}
                       >
-                        {item.label}
+                        <Icon className={active ? "opacity-100" : "opacity-70"} />
+                        <span className="min-w-0 truncate">{item.label}</span>
                       </Link>
                     </li>
                   );
