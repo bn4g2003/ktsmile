@@ -175,11 +175,11 @@ export async function listCashTransactions(
   throw new Error(lastMessage || "Không tải được sổ quỹ.");
 }
 
-export async function createCashTransaction(input: z.infer<typeof cashSchema>) {
+export async function createCashTransaction(input: z.infer<typeof cashSchema>): Promise<{ id: string }> {
   const supabase = createSupabaseAdmin();
   const row = cashSchema.parse(input);
   const payload = cashInsertPayload(row);
-  let { error } = await supabase.from("cash_transactions").insert(payload);
+  let { data, error } = await supabase.from("cash_transactions").insert(payload).select("id").single();
   if (
     error &&
     isSupabaseSchemaDriftError(error.message) &&
@@ -187,11 +187,14 @@ export async function createCashTransaction(input: z.infer<typeof cashSchema>) {
   ) {
     const { payer_name, ...legacyPayload } = payload;
     void payer_name;
-    const r2 = await supabase.from("cash_transactions").insert(legacyPayload);
+    const r2 = await supabase.from("cash_transactions").insert(legacyPayload).select("id").single();
+    data = r2.data;
     error = r2.error;
   }
-  if (error) throw new Error(error.message);
+  if (error || !data) throw new Error(error?.message ?? "Không tạo được chứng từ.");
   revalidatePath("/accounting/cash");
+  revalidatePath("/accounting/debt");
+  return { id: data["id"] as string };
 }
 
 export async function updateCashTransaction(
@@ -214,6 +217,7 @@ export async function updateCashTransaction(
   }
   if (error) throw new Error(error.message);
   revalidatePath("/accounting/cash");
+  revalidatePath("/accounting/debt");
 }
 
 export async function deleteCashTransaction(id: string) {
@@ -221,6 +225,7 @@ export async function deleteCashTransaction(id: string) {
   const { error } = await supabase.from("cash_transactions").delete().eq("id", id);
   if (error) throw new Error(error.message);
   revalidatePath("/accounting/cash");
+  revalidatePath("/accounting/debt");
 }
 
 export type CashFlowTotals = {
@@ -372,10 +377,13 @@ export async function getCashFlowTotalsForRange(
 }
 
 const CASH_RECEIPT_SELECT_FULL =
-  "doc_number, transaction_date, payment_channel, direction, business_category, amount, payer_name, description, partners!cash_transactions_partner_id_fkey(code,name)";
+  "doc_number, transaction_date, payment_channel, direction, business_category, amount, payer_name, description, partners!cash_transactions_partner_id_fkey(code,name), suppliers!cash_transactions_supplier_id_fkey(code,name)";
 
 const CASH_RECEIPT_SELECT_LEGACY =
   "doc_number, transaction_date, payment_channel, direction, business_category, amount, description, partners!cash_transactions_partner_id_fkey(code,name)";
+
+const CASH_RECEIPT_SELECT_WITH_SUPPLIER_ONLY =
+  "doc_number, transaction_date, payment_channel, direction, business_category, amount, payer_name, description, suppliers!cash_transactions_supplier_id_fkey(code,name)";
 
 const CASH_RECEIPT_SELECT_NO_EMBED =
   "doc_number, transaction_date, payment_channel, direction, business_category, amount, payer_name, description";
@@ -387,6 +395,7 @@ export async function getCashReceiptPrintPayload(id: string): Promise<CashReceip
   const supabase = createSupabaseAdmin();
   const selects = [
     CASH_RECEIPT_SELECT_FULL,
+    CASH_RECEIPT_SELECT_WITH_SUPPLIER_ONLY,
     CASH_RECEIPT_SELECT_LEGACY,
     CASH_RECEIPT_SELECT_NO_EMBED,
     CASH_RECEIPT_SELECT_MINIMAL,
@@ -398,6 +407,7 @@ export async function getCashReceiptPrintPayload(id: string): Promise<CashReceip
     if (!error && data) {
       const row = data as unknown as Record<string, unknown>;
       const partners = row["partners"] as { code?: string; name?: string } | null | undefined;
+      const suppliers = row["suppliers"] as { code?: string; name?: string } | null | undefined;
       return {
         doc_number: row["doc_number"] as string,
         transaction_date: row["transaction_date"] as string,
@@ -408,6 +418,8 @@ export async function getCashReceiptPrintPayload(id: string): Promise<CashReceip
         payer_name: (row["payer_name"] as string | null) ?? null,
         partner_code: partners?.code ?? null,
         partner_name: partners?.name ?? null,
+        supplier_code: suppliers?.code ?? null,
+        supplier_name: suppliers?.name ?? null,
         description: (row["description"] as string | null) ?? null,
       };
     }

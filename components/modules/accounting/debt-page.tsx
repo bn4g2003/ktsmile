@@ -6,11 +6,15 @@ import { useRouter } from "next/navigation";
 import { ExcelDataGrid } from "@/components/shared/data-grid/excel-data-grid";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { DetailPreview } from "@/components/ui/detail-preview";
 import { DetailTabStrip } from "@/components/ui/detail-tab-strip";
+import { DebtReportRowDetailPanel } from "@/components/modules/accounting/debt-report-row-detail-panel";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { DebtChartsSection } from "@/components/modules/accounting/debt-charts-section";
+import {
+  DebtSettlementModal,
+  type DebtSettlementModalState,
+} from "@/components/modules/accounting/debt-settlement-modal";
 import { importDebtOpeningFromExcel } from "@/lib/actions/debt-import";
 import {
   carryForwardOpeningToNextMonth,
@@ -42,6 +46,7 @@ export function DebtPage({ initialTab = "receivables" }: { initialTab?: DebtTab 
   const [importBusy, setImportBusy] = React.useState(false);
   const [carryReceivableBusy, setCarryReceivableBusy] = React.useState(false);
   const [carryPayableBusy, setCarryPayableBusy] = React.useState(false);
+  const [settlementModal, setSettlementModal] = React.useState<DebtSettlementModalState>(null);
 
   const bumpReceivable = React.useCallback(() => {
     setGridReceivable((n) => n + 1);
@@ -60,6 +65,14 @@ export function DebtPage({ initialTab = "receivables" }: { initialTab?: DebtTab 
 
   const prependFilters = React.useMemo(() => ({ year, month }), [year, month]);
 
+  const openReceivableSettlement = React.useCallback((row: DebtRow) => {
+    setSettlementModal({ kind: "receivable", row });
+  }, []);
+
+  const openPayableSettlement = React.useCallback((row: PayableRow) => {
+    setSettlementModal({ kind: "payable", row });
+  }, []);
+
   const columnsReceivable = React.useMemo<ColumnDef<DebtRow, unknown>[]>(
     () => [
       { accessorKey: "partner_code", header: "Mã KH" },
@@ -68,8 +81,20 @@ export function DebtPage({ initialTab = "receivables" }: { initialTab?: DebtTab 
       { accessorKey: "orders_month", header: "PS bán (tháng)" },
       { accessorKey: "receipts_month", header: "Đã thu (tháng)" },
       { accessorKey: "closing", header: "Nợ cuối kỳ" },
+      {
+        id: "record_payment",
+        header: "Ghi thu",
+        size: 108,
+        enableHiding: false,
+        meta: { filterType: "none" as const },
+        cell: ({ row }) => (
+          <Button type="button" variant="secondary" size="sm" onClick={() => openReceivableSettlement(row.original)}>
+            Thu tiền
+          </Button>
+        ),
+      },
     ],
-    [],
+    [openReceivableSettlement],
   );
 
   const columnsPayable = React.useMemo<ColumnDef<PayableRow, unknown>[]>(
@@ -80,8 +105,20 @@ export function DebtPage({ initialTab = "receivables" }: { initialTab?: DebtTab 
       { accessorKey: "inbound_month", header: "PS nhập (tháng)" },
       { accessorKey: "payments_month", header: "Đã trả (tháng)" },
       { accessorKey: "closing", header: "Nợ cuối kỳ" },
+      {
+        id: "record_payment",
+        header: "Ghi chi",
+        size: 108,
+        enableHiding: false,
+        meta: { filterType: "none" as const },
+        cell: ({ row }) => (
+          <Button type="button" variant="secondary" size="sm" onClick={() => openPayableSettlement(row.original)}>
+            Trả NCC
+          </Button>
+        ),
+      },
     ],
-    [],
+    [openPayableSettlement],
   );
 
   const onPickExcel = () => fileImportRef.current?.click();
@@ -121,37 +158,31 @@ export function DebtPage({ initialTab = "receivables" }: { initialTab?: DebtTab 
     return Array.from({ length: 8 }, (_, i) => String(y - i));
   }, [now]);
 
-  const renderDebtDetail = React.useCallback((row: DebtRow) => {
-    return (
-      <DetailPreview
-        fields={[
-          { label: "Mã KH", value: row.partner_code },
-          { label: "Tên KH", value: row.partner_name },
-          { label: "Nợ đầu kỳ", value: row.opening },
-          { label: "PS bán (tháng)", value: row.orders_month },
-          { label: "Đã thu (tháng)", value: row.receipts_month },
-          { label: "Nợ cuối kỳ", value: row.closing },
-          { label: "Partner ID", value: row.partner_id, span: "full" },
-        ]}
+  const renderDebtDetail = React.useCallback(
+    (row: DebtRow) => (
+      <DebtReportRowDetailPanel
+        variant="receivable"
+        row={row}
+        year={year}
+        month={month}
+        onOpenSettlement={() => openReceivableSettlement(row)}
       />
-    );
-  }, []);
+    ),
+    [year, month, openReceivableSettlement],
+  );
 
-  const renderPayableDetail = React.useCallback((row: PayableRow) => {
-    return (
-      <DetailPreview
-        fields={[
-          { label: "Mã NCC", value: row.supplier_code },
-          { label: "Tên NCC", value: row.supplier_name },
-          { label: "Nợ đầu kỳ", value: row.opening },
-          { label: "PS nhập (tháng)", value: row.inbound_month },
-          { label: "Đã trả (tháng)", value: row.payments_month },
-          { label: "Nợ cuối kỳ", value: row.closing },
-          { label: "Supplier ID", value: row.supplier_id, span: "full" },
-        ]}
+  const renderPayableDetail = React.useCallback(
+    (row: PayableRow) => (
+      <DebtReportRowDetailPanel
+        variant="payable"
+        row={row}
+        year={year}
+        month={month}
+        onOpenSettlement={() => openPayableSettlement(row)}
       />
-    );
-  }, []);
+    ),
+    [year, month, openPayableSettlement],
+  );
 
   return (
     <div className="space-y-5">
@@ -303,6 +334,15 @@ export function DebtPage({ initialTab = "receivables" }: { initialTab?: DebtTab 
           reloadSignal={gridPayable}
         />
       )}
+
+      <DebtSettlementModal
+        state={settlementModal}
+        onClose={() => setSettlementModal(null)}
+        year={year}
+        month={month}
+        onRecordedReceivable={bumpReceivable}
+        onRecordedPayable={bumpPayable}
+      />
     </div>
   );
 }

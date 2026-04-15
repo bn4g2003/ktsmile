@@ -12,11 +12,14 @@ export type CashReceiptPrintPayload = {
   payer_name: string | null;
   partner_code: string | null;
   partner_name: string | null;
+  supplier_code: string | null;
+  supplier_name: string | null;
   description: string | null;
 };
 
 export function cashReceiptPrintTitle(p: CashReceiptPrintPayload): string {
-  return `Phiếu thu · ${p.doc_number} — KT Smile Lab`;
+  const kind = p.direction === "payment" ? "Phiếu chi" : "Phiếu thu";
+  return `${kind} · ${p.doc_number} — KT Smile Lab`;
 }
 
 export function buildCashReceiptBodyHtml(p: CashReceiptPrintPayload): string {
@@ -25,8 +28,19 @@ export function buildCashReceiptBodyHtml(p: CashReceiptPrintPayload): string {
     p.partner_code || p.partner_name
       ? `${escapeHtml(p.partner_code ?? "")}${p.partner_code && p.partner_name ? " — " : ""}${escapeHtml(p.partner_name ?? "")}`
       : "—";
+  const supplierLine =
+    p.supplier_code || p.supplier_name
+      ? `${escapeHtml(p.supplier_code ?? "")}${p.supplier_code && p.supplier_name ? " — " : ""}${escapeHtml(p.supplier_name ?? "")}`
+      : "—";
+  const h1 = p.direction === "payment" ? "Phiếu chi" : "Phiếu thu";
+  const counterpartyLabel = p.direction === "payment" ? "Đối tượng (NCC)" : "Đối tượng (KH)";
+  const counterpartyValue = p.direction === "payment" ? supplierLine : partnerLine;
+  const payerRow =
+    p.direction === "payment"
+      ? ""
+      : `<tr><th>Người nộp</th><td>${escapeHtml(p.payer_name ?? "—")}</td></tr>`;
   return `
-    <h1>Phiếu thu</h1>
+    <h1>${h1}</h1>
     <p class="muted">Số chứng từ: <strong>${escapeHtml(p.doc_number)}</strong> · Ngày: ${escapeHtml(p.transaction_date)} · ${escapeHtml(gen)}</p>
     <table class="kv">
       <tbody>
@@ -34,8 +48,8 @@ export function buildCashReceiptBodyHtml(p: CashReceiptPrintPayload): string {
         <tr><th>Nghiệp vụ</th><td>${escapeHtml(p.business_category)}</td></tr>
         <tr><th>Số tiền</th><td><strong>${escapeHtml(formatVnd(p.amount))}</strong></td></tr>
         <tr><th>Kênh thanh toán</th><td>${escapeHtml(p.payment_channel)}</td></tr>
-        <tr><th>Người nộp</th><td>${escapeHtml(p.payer_name ?? "—")}</td></tr>
-        <tr><th>Đối tượng (KH)</th><td>${partnerLine}</td></tr>
+        ${payerRow}
+        <tr><th>${counterpartyLabel}</th><td>${counterpartyValue}</td></tr>
         <tr><th>Diễn giải</th><td>${escapeHtml(p.description ?? "—")}</td></tr>
       </tbody>
     </table>
