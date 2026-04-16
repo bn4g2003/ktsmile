@@ -11,11 +11,11 @@ export type PermissionPresetId = (typeof PERMISSION_PRESETS)[number]["id"];
 
 export const NAV_PERMISSION_RULES: Record<PermissionPresetId, string[]> = {
   admin: ["*"],
-  manager: ["/", "/master/partners", "/master/products", "/master/employees", "/orders", "/orders/review", "/inventory/documents", "/inventory/stock", "/accounting/sales", "/accounting/cash", "/accounting/debt"],
-  accountant: ["/", "/master/partners", "/orders", "/accounting/sales", "/accounting/cash", "/accounting/debt"],
+  manager: ["/", "/master/partners", "/master/products", "/master/employees", "/orders", "/orders/review", "/inventory/documents", "/inventory/stock", "/accounting/sales", "/accounting/cash", "/accounting/debt", "/hr/attendance", "/hr/payroll"],
+  accountant: ["/", "/master/partners", "/orders", "/accounting/sales", "/accounting/cash", "/accounting/debt", "/hr/payroll"],
   sales: ["/", "/master/partners", "/master/prices", "/orders", "/orders/review", "/accounting/sales", "/accounting/debt"],
-  inventory: ["/", "/master/products", "/orders", "/inventory/documents", "/inventory/stock"],
-  staff: ["/", "/orders"],
+  inventory: ["/", "/master/products", "/orders", "/inventory/documents", "/inventory/stock", "/hr/attendance"],
+  staff: ["/", "/orders", "/hr/attendance"],
 };
 
 export function permissionPresetLabel(id: string | null | undefined) {

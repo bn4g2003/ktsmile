@@ -17,6 +17,7 @@ import {
   NavIconOrders,
   NavIconPartners,
   NavIconPriceTag,
+  NavIconPayroll,
   NavIconReview,
   NavIconStock,
   NavIconTeam,
@@ -45,6 +46,13 @@ const groups: { title: string; items: NavItem[] }[] = [
       { href: "/master/products", label: "SP & NVL", Icon: NavIconCatalog },
       { href: "/master/employees", label: "Nhân sự", Icon: NavIconTeam },
       { href: "/master/prices", label: "Giá theo KH", Icon: NavIconPriceTag },
+    ],
+  },
+  {
+    title: "Nhân sự",
+    items: [
+      { href: "/hr/attendance", label: "Chấm công", Icon: NavIconTeam },
+      { href: "/hr/payroll", label: "Tính lương", Icon: NavIconPayroll },
     ],
   },
   {

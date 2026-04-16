@@ -11,6 +11,8 @@ const ROUTE_LABELS: Record<string, string> = {
   "/master/products": "SP & NVL",
   "/master/employees": "Nhân sự",
   "/master/prices": "Giá theo KH",
+  "/hr/attendance": "Chấm công",
+  "/hr/payroll": "Tính lương",
   "/orders": "Đơn hàng",
   "/orders/review": "Kiểm tra đơn",
   "/inventory/documents": "Kho — Phiếu",
@@ -26,6 +28,7 @@ const PARENT_SEGMENT_LABELS: Record<string, string> = {
   inventory: "Kho",
   accounting: "Kế toán",
   orders: "Đơn hàng",
+  hr: "Nhân sự",
 };
 
 function breadcrumbsForPath(pathname: string): { href: string; label: string }[] {

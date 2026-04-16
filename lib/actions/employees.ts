@@ -109,3 +109,30 @@ export async function deleteEmployee(id: string) {
   if (error) throw new Error(error.message);
   revalidatePath("/master/employees");
 }
+
+export type EmployeePickerRow = {
+  id: string;
+  code: string;
+  full_name: string;
+  base_salary: number;
+  is_active: boolean;
+};
+
+export async function listEmployeePicker(activeOnly = true): Promise<EmployeePickerRow[]> {
+  const supabase = createSupabaseAdmin();
+  let q = supabase
+    .from("employees")
+    .select("id, code, full_name, base_salary, is_active")
+    .order("code", { ascending: true })
+    .limit(500);
+  if (activeOnly) q = q.eq("is_active", true);
+  const { data, error } = await q;
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((r) => ({
+    id: r["id"] as string,
+    code: r["code"] as string,
+    full_name: r["full_name"] as string,
+    base_salary: Number(r["base_salary"] ?? 0),
+    is_active: Boolean(r["is_active"]),
+  }));
+}

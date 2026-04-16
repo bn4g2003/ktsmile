@@ -141,3 +141,12 @@ export function NavIconDebt({ className }: { className?: string }) {
     </Svg>
   );
 }
+
+export function NavIconPayroll({ className }: { className?: string }) {
+  return (
+    <Svg className={className}>
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="M7 9h10M7 13h6M15.5 15.5h.01" />
+    </Svg>
+  );
+}
