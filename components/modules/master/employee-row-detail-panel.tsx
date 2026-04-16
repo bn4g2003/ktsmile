@@ -37,6 +37,10 @@ export function EmployeeRowDetailPanel({ row }: { row: EmployeeRow }) {
             { label: "Mã NV", value: row.code },
             { label: "Họ tên", value: row.full_name },
             { label: "Vai trò", value: row.role },
+            { label: "Quyền hạn", value: row.permissions ?? "—", span: "full" },
+            { label: "SĐT", value: row.phone ?? "—" },
+            { label: "Email", value: row.email ?? "—" },
+            { label: "Địa chỉ", value: row.address ?? "—", span: "full" },
             { label: "Hoạt động", value: row.is_active ? "Có" : "Không" },
           ]}
         />
@@ -83,6 +87,19 @@ export function EmployeeRowDetailPanel({ row }: { row: EmployeeRow }) {
                 ),
                 span: "full",
               },
+              { label: "Username nội bộ", value: row.username ?? "—" },
+              {
+                label: "Mật khẩu lưu DB",
+                value: row.password_plain ? (
+                  <code className="break-all rounded bg-[var(--surface-muted)] px-2 py-1 text-xs">
+                    {row.password_plain}
+                  </code>
+                ) : (
+                  "—"
+                ),
+                span: "full",
+              },
+              { label: "Ghi chú", value: row.notes ?? "—", span: "full" },
               { label: "Tạo lúc", value: row.created_at },
               { label: "Cập nhật lần cuối", value: row.updated_at },
             ]}

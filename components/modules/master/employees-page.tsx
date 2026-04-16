@@ -42,7 +42,14 @@ export function EmployeesPage() {
   const [code, setCode] = React.useState("");
   const [fullName, setFullName] = React.useState("");
   const [role, setRole] = React.useState("");
+  const [permissions, setPermissions] = React.useState("");
   const [salary, setSalary] = React.useState("0");
+  const [phone, setPhone] = React.useState("");
+  const [email, setEmail] = React.useState("");
+  const [address, setAddress] = React.useState("");
+  const [username, setUsername] = React.useState("");
+  const [passwordPlain, setPasswordPlain] = React.useState("");
+  const [notes, setNotes] = React.useState("");
   const [isActive, setIsActive] = React.useState(true);
   const fileImportRef = React.useRef<HTMLInputElement>(null);
   const [importBusy, setImportBusy] = React.useState(false);
@@ -52,7 +59,14 @@ export function EmployeesPage() {
     setCode("");
     setFullName("");
     setRole("");
+    setPermissions("");
     setSalary("0");
+    setPhone("");
+    setEmail("");
+    setAddress("");
+    setUsername("");
+    setPasswordPlain("");
+    setNotes("");
     setIsActive(true);
     setErr(null);
   };
@@ -67,7 +81,14 @@ export function EmployeesPage() {
     setCode(row.code);
     setFullName(row.full_name);
     setRole(row.role);
+    setPermissions(row.permissions ?? "");
     setSalary(String(row.base_salary));
+    setPhone(row.phone ?? "");
+    setEmail(row.email ?? "");
+    setAddress(row.address ?? "");
+    setUsername(row.username ?? "");
+    setPasswordPlain(row.password_plain ?? "");
+    setNotes(row.notes ?? "");
     setIsActive(row.is_active);
     setErr(null);
     setOpen(true);
@@ -82,7 +103,14 @@ export function EmployeesPage() {
         code: code.trim(),
         full_name: fullName.trim(),
         role: role.trim(),
+        permissions: permissions.trim() || null,
         base_salary: Number(salary),
+        phone: phone.trim() || null,
+        email: email.trim() || null,
+        address: address.trim() || null,
+        username: username.trim() || null,
+        password_plain: passwordPlain || null,
+        notes: notes.trim() || null,
         is_active: isActive,
       };
       if (editing) await updateEmployee(editing.id, payload);
@@ -146,6 +174,7 @@ export function EmployeesPage() {
         meta: { filterKey: "full_name", filterType: "text" },
       },
       { accessorKey: "role", header: "Vai trò" },
+      { accessorKey: "permissions", header: "Quyền hạn" },
       { accessorKey: "base_salary", header: "Lương CB" },
       {
         accessorKey: "auth_user_id",
@@ -237,6 +266,10 @@ export function EmployeesPage() {
               <Input id="e-role" value={role} onChange={(e) => setRole(e.target.value)} required />
             </div>
             <div className="grid gap-2 sm:col-span-2">
+              <Label htmlFor="e-perm">Quyền hạn</Label>
+              <Input id="e-perm" value={permissions} onChange={(e) => setPermissions(e.target.value)} />
+            </div>
+            <div className="grid gap-2 sm:col-span-2">
               <Label htmlFor="e-sal">Lương cơ bản</Label>
               <Input
                 id="e-sal"
@@ -247,6 +280,34 @@ export function EmployeesPage() {
                 onChange={(e) => setSalary(e.target.value)}
                 required
               />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="e-phone">Số điện thoại</Label>
+              <Input id="e-phone" value={phone} onChange={(e) => setPhone(e.target.value)} />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="e-email">Email</Label>
+              <Input id="e-email" value={email} onChange={(e) => setEmail(e.target.value)} />
+            </div>
+            <div className="grid gap-2 sm:col-span-2">
+              <Label htmlFor="e-address">Địa chỉ</Label>
+              <Input id="e-address" value={address} onChange={(e) => setAddress(e.target.value)} />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="e-username">Tên đăng nhập nội bộ</Label>
+              <Input id="e-username" value={username} onChange={(e) => setUsername(e.target.value)} />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="e-password">Mật khẩu (lưu DB trực tiếp)</Label>
+              <Input
+                id="e-password"
+                value={passwordPlain}
+                onChange={(e) => setPasswordPlain(e.target.value)}
+              />
+            </div>
+            <div className="grid gap-2 sm:col-span-2">
+              <Label htmlFor="e-notes">Ghi chú</Label>
+              <Input id="e-notes" value={notes} onChange={(e) => setNotes(e.target.value)} />
             </div>
             <div className="flex items-center gap-3 sm:col-span-2">
               <input

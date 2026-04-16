@@ -11,7 +11,14 @@ export type EmployeeRow = {
   code: string;
   full_name: string;
   role: string;
+  permissions: string | null;
   base_salary: number;
+  phone: string | null;
+  email: string | null;
+  address: string | null;
+  username: string | null;
+  password_plain: string | null;
+  notes: string | null;
   auth_user_id: string | null;
   is_active: boolean;
   created_at: string;
@@ -46,15 +53,32 @@ const schema = z.object({
   code: z.string().min(1).max(100),
   full_name: z.string().min(1).max(500),
   role: z.string().min(1).max(200),
+  permissions: z.string().max(3000).optional().nullable(),
   base_salary: z.coerce.number().min(0),
+  phone: z.string().max(50).optional().nullable(),
+  email: z.string().max(255).optional().nullable(),
+  address: z.string().max(1000).optional().nullable(),
+  username: z.string().max(100).optional().nullable(),
+  password_plain: z.string().max(255).optional().nullable(),
+  notes: z.string().max(3000).optional().nullable(),
   is_active: z.boolean().optional(),
 });
 
 export async function createEmployee(input: z.infer<typeof schema>) {
   const supabase = createSupabaseAdmin();
   const row = schema.parse(input);
-  const { error } = await supabase.from("employees").insert({
+  const patch = {
     ...row,
+    permissions: row.permissions?.trim() ? row.permissions.trim() : null,
+    phone: row.phone?.trim() ? row.phone.trim() : null,
+    email: row.email?.trim() ? row.email.trim() : null,
+    address: row.address?.trim() ? row.address.trim() : null,
+    username: row.username?.trim() ? row.username.trim() : null,
+    password_plain: row.password_plain?.trim() ? row.password_plain : null,
+    notes: row.notes?.trim() ? row.notes.trim() : null,
+  };
+  const { error } = await supabase.from("employees").insert({
+    ...patch,
     is_active: row.is_active ?? true,
   });
   if (error) throw new Error(error.message);
@@ -64,7 +88,17 @@ export async function createEmployee(input: z.infer<typeof schema>) {
 export async function updateEmployee(id: string, input: z.infer<typeof schema>) {
   const supabase = createSupabaseAdmin();
   const row = schema.parse(input);
-  const { error } = await supabase.from("employees").update(row).eq("id", id);
+  const patch = {
+    ...row,
+    permissions: row.permissions?.trim() ? row.permissions.trim() : null,
+    phone: row.phone?.trim() ? row.phone.trim() : null,
+    email: row.email?.trim() ? row.email.trim() : null,
+    address: row.address?.trim() ? row.address.trim() : null,
+    username: row.username?.trim() ? row.username.trim() : null,
+    password_plain: row.password_plain?.trim() ? row.password_plain : null,
+    notes: row.notes?.trim() ? row.notes.trim() : null,
+  };
+  const { error } = await supabase.from("employees").update(patch).eq("id", id);
   if (error) throw new Error(error.message);
   revalidatePath("/master/employees");
 }
