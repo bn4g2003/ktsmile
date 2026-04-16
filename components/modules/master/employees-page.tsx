@@ -19,7 +19,9 @@ import {
 import { EmployeeRowDetailPanel } from "@/components/modules/master/employee-row-detail-panel";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
 import { importEmployeesFromExcel } from "@/lib/actions/employees-import";
+import { PERMISSION_PRESETS, permissionPresetLabel } from "@/lib/auth/permission-presets";
 import {
   createEmployee,
   deleteEmployee,
@@ -174,7 +176,11 @@ export function EmployeesPage() {
         meta: { filterKey: "full_name", filterType: "text" },
       },
       { accessorKey: "role", header: "Vai trò" },
-      { accessorKey: "permissions", header: "Quyền hạn" },
+      {
+        accessorKey: "permissions",
+        header: "Quyền hạn",
+        cell: ({ getValue }) => permissionPresetLabel((getValue() as string | null) ?? null),
+      },
       { accessorKey: "base_salary", header: "Lương CB" },
       {
         accessorKey: "auth_user_id",
@@ -267,7 +273,14 @@ export function EmployeesPage() {
             </div>
             <div className="grid gap-2 sm:col-span-2">
               <Label htmlFor="e-perm">Quyền hạn</Label>
-              <Input id="e-perm" value={permissions} onChange={(e) => setPermissions(e.target.value)} />
+              <Select id="e-perm" value={permissions} onChange={(e) => setPermissions(e.target.value)}>
+                <option value="">-- Chọn quyền --</option>
+                {PERMISSION_PRESETS.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.label}
+                  </option>
+                ))}
+              </Select>
             </div>
             <div className="grid gap-2 sm:col-span-2">
               <Label htmlFor="e-sal">Lương cơ bản</Label>
@@ -298,7 +311,7 @@ export function EmployeesPage() {
               <Input id="e-username" value={username} onChange={(e) => setUsername(e.target.value)} />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="e-password">Mật khẩu (lưu DB trực tiếp)</Label>
+              <Label htmlFor="e-password">Mật khẩu</Label>
               <Input
                 id="e-password"
                 value={passwordPlain}

@@ -23,10 +23,17 @@ import {
   NavIconWarehouseDoc,
 } from "@/components/shared/nav-icons";
 import { Button } from "@/components/ui/button";
+import { Select } from "@/components/ui/select";
+import {
+  NAV_PERMISSION_RULES,
+  PERMISSION_PRESETS,
+  type PermissionPresetId,
+} from "@/lib/auth/permission-presets";
 
 type NavIcon = React.ComponentType<{ className?: string }>;
+type NavItem = { href: string; label: string; Icon: NavIcon };
 
-const groups: { title: string; items: { href: string; label: string; Icon: NavIcon }[] }[] = [
+const groups: { title: string; items: NavItem[] }[] = [
   {
     title: "Tổng quan",
     items: [{ href: "/", label: "Dashboard", Icon: NavIconDashboard }],
@@ -62,6 +69,7 @@ const groups: { title: string; items: { href: string; label: string; Icon: NavIc
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [navOpen, setNavOpen] = React.useState(false);
+  const [navPermission, setNavPermission] = React.useState<PermissionPresetId>("admin");
 
   React.useEffect(() => {
     setNavOpen(false);
@@ -75,6 +83,29 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [navOpen]);
+
+  React.useEffect(() => {
+    const saved = window.localStorage.getItem("ktsmile-nav-permission");
+    if (!saved) return;
+    if (PERMISSION_PRESETS.some((p) => p.id === saved)) {
+      setNavPermission(saved as PermissionPresetId);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    window.localStorage.setItem("ktsmile-nav-permission", navPermission);
+  }, [navPermission]);
+
+  const visibleGroups = React.useMemo(() => {
+    const allowed = NAV_PERMISSION_RULES[navPermission] ?? [];
+    const allowAll = allowed.includes("*");
+    return groups
+      .map((g) => ({
+        ...g,
+        items: g.items.filter((it) => allowAll || allowed.includes(it.href)),
+      }))
+      .filter((g) => g.items.length > 0);
+  }, [navPermission]);
 
   return (
     <div className="min-h-screen">
@@ -107,7 +138,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </Link>
         </div>
         <nav className="flex flex-1 flex-col gap-6 overflow-y-auto px-3 py-5">
-          {groups.map((g) => (
+          {visibleGroups.map((g) => (
             <div key={g.title}>
               <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--on-surface-faint)]">
                 {g.title}
@@ -142,6 +173,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </nav>
         <div className="border-t border-[var(--border-ghost)] p-4">
           <div className="flex flex-col gap-2 rounded-[var(--radius-lg)] bg-[var(--surface-muted)] p-3">
+            <div className="grid gap-1">
+              <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--on-surface-faint)]">
+                Quyền điều hướng
+              </p>
+              <Select
+                value={navPermission}
+                onChange={(e) => setNavPermission(e.target.value as PermissionPresetId)}
+                className="h-9 text-xs"
+              >
+                {PERMISSION_PRESETS.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.label}
+                  </option>
+                ))}
+              </Select>
+            </div>
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--primary-muted)] text-sm font-bold text-[var(--primary)]">
                 U

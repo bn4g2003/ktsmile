@@ -3,6 +3,7 @@
 import * as React from "react";
 import { DetailPreview } from "@/components/ui/detail-preview";
 import { DetailTabStrip } from "@/components/ui/detail-tab-strip";
+import { permissionPresetLabel } from "@/lib/auth/permission-presets";
 import type { EmployeeRow } from "@/lib/actions/employees";
 
 function fmtMoney(n: number) {
@@ -37,7 +38,7 @@ export function EmployeeRowDetailPanel({ row }: { row: EmployeeRow }) {
             { label: "Mã NV", value: row.code },
             { label: "Họ tên", value: row.full_name },
             { label: "Vai trò", value: row.role },
-            { label: "Quyền hạn", value: row.permissions ?? "—", span: "full" },
+            { label: "Quyền hạn", value: permissionPresetLabel(row.permissions), span: "full" },
             { label: "SĐT", value: row.phone ?? "—" },
             { label: "Email", value: row.email ?? "—" },
             { label: "Địa chỉ", value: row.address ?? "—", span: "full" },
