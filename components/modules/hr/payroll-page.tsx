@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import {
   calculatePayrollPreview,
+  getPayrollRunLines,
   listPayrollRuns,
   upsertPayrollRun,
   type PayrollPreviewRow,
@@ -63,9 +64,16 @@ export function PayrollPage() {
         Number(standardDays),
         Number(otRate),
       );
+      const existing = await getPayrollRunLines(Number(year), Number(month));
+      const allowanceMap: Record<string, string> = {};
+      const deductionMap: Record<string, string> = {};
+      for (const r of existing) {
+        allowanceMap[r.employee_id] = String(r.allowance);
+        deductionMap[r.employee_id] = String(r.deduction);
+      }
       setPreview(rows);
-      setAllowanceByEmp({});
-      setDeductionByEmp({});
+      setAllowanceByEmp(allowanceMap);
+      setDeductionByEmp(deductionMap);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Không tính được bảng lương");
     } finally {

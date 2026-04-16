@@ -1,12 +1,11 @@
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { LoginForm } from "@/components/modules/auth/login-form";
 import { BrandLogo } from "@/components/shared/brand-logo";
-import { DEMO_SESSION_COOKIE, DEMO_SESSION_VALUE } from "@/lib/auth/demo-session";
+import { getCurrentUser } from "@/lib/auth/current-user";
 
 export default async function LoginPage() {
-  const jar = await cookies();
-  if (jar.get(DEMO_SESSION_COOKIE)?.value === DEMO_SESSION_VALUE) {
+  const currentUser = await getCurrentUser();
+  if (currentUser) {
     redirect("/");
   }
   return (

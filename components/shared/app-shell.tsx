@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import * as React from "react";
-import { demoLogout } from "@/lib/actions/demo-auth";
-import { DEMO_LOGIN_EMAIL } from "@/lib/auth/demo-session";
+import { logout } from "@/lib/actions/auth";
+import type { CurrentUser } from "@/lib/auth/current-user";
 import { cn } from "@/lib/utils/cn";
 import { AppHeader } from "@/components/shared/app-header";
 import { BrandLogo } from "@/components/shared/brand-logo";
@@ -24,11 +24,10 @@ import {
   NavIconWarehouseDoc,
 } from "@/components/shared/nav-icons";
 import { Button } from "@/components/ui/button";
-import { Select } from "@/components/ui/select";
 import {
   NAV_PERMISSION_RULES,
-  PERMISSION_PRESETS,
-  type PermissionPresetId,
+  permissionPresetLabel,
+  resolvePermissionPreset,
 } from "@/lib/auth/permission-presets";
 
 type NavIcon = React.ComponentType<{ className?: string }>;
@@ -74,10 +73,16 @@ const groups: { title: string; items: NavItem[] }[] = [
   },
 ];
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+export function AppShell({
+  children,
+  currentUser,
+}: {
+  children: React.ReactNode;
+  currentUser: CurrentUser;
+}) {
   const pathname = usePathname();
   const [navOpen, setNavOpen] = React.useState(false);
-  const [navPermission, setNavPermission] = React.useState<PermissionPresetId>("admin");
+  const navPermission = resolvePermissionPreset(currentUser.permissions);
 
   React.useEffect(() => {
     setNavOpen(false);
@@ -91,18 +96,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [navOpen]);
-
-  React.useEffect(() => {
-    const saved = window.localStorage.getItem("ktsmile-nav-permission");
-    if (!saved) return;
-    if (PERMISSION_PRESETS.some((p) => p.id === saved)) {
-      setNavPermission(saved as PermissionPresetId);
-    }
-  }, []);
-
-  React.useEffect(() => {
-    window.localStorage.setItem("ktsmile-nav-permission", navPermission);
-  }, [navPermission]);
 
   const visibleGroups = React.useMemo(() => {
     const allowed = NAV_PERMISSION_RULES[navPermission] ?? [];
@@ -181,32 +174,21 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </nav>
         <div className="border-t border-[var(--border-ghost)] p-4">
           <div className="flex flex-col gap-2 rounded-[var(--radius-lg)] bg-[var(--surface-muted)] p-3">
-            <div className="grid gap-1">
-              <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--on-surface-faint)]">
-                Quyền điều hướng
-              </p>
-              <Select
-                value={navPermission}
-                onChange={(e) => setNavPermission(e.target.value as PermissionPresetId)}
-                className="h-9 text-xs"
-              >
-                {PERMISSION_PRESETS.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.label}
-                  </option>
-                ))}
-              </Select>
-            </div>
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--primary-muted)] text-sm font-bold text-[var(--primary)]">
-                U
+                {currentUser.full_name.trim().charAt(0).toUpperCase() || "U"}
               </div>
               <div className="min-w-0">
-                <p className="truncate text-sm font-semibold text-[var(--on-surface)]">updev</p>
-                <p className="truncate text-xs text-[var(--on-surface-muted)]">{DEMO_LOGIN_EMAIL}</p>
+                <p className="truncate text-sm font-semibold text-[var(--on-surface)]">{currentUser.full_name}</p>
+                <p className="truncate text-xs text-[var(--on-surface-muted)]">
+                  {currentUser.email ?? currentUser.code}
+                </p>
+                <p className="truncate text-[11px] text-[var(--on-surface-faint)]">
+                  {permissionPresetLabel(currentUser.permissions)}
+                </p>
               </div>
             </div>
-            <form action={demoLogout}>
+            <form action={logout}>
               <Button type="submit" variant="ghost" size="sm" className="h-8 w-full text-xs">
                 Đăng xuất
               </Button>

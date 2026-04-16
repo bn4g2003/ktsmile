@@ -1,8 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { demoLogin } from "@/lib/actions/demo-auth";
-import { DEMO_LOGIN_EMAIL } from "@/lib/auth/demo-session";
+import { login } from "@/lib/actions/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,20 +16,20 @@ export function LoginForm() {
       action={async (fd) => {
         setPending(true);
         setErr(null);
-        const res = await demoLogin(fd);
+        const res = await login(fd);
         if (res?.error) setErr(res.error);
         setPending(false);
       }}
     >
       {err ? <p className="text-sm text-[#b91c1c]">{err}</p> : null}
       <div className="grid gap-2">
-        <Label htmlFor="login-email">Email</Label>
+        <Label htmlFor="login-account">Tài khoản</Label>
         <Input
-          id="login-email"
-          name="email"
-          type="email"
+          id="login-account"
+          name="account"
+          type="text"
           autoComplete="username"
-          defaultValue={DEMO_LOGIN_EMAIL}
+          placeholder="username / email / mã NV"
           required
         />
       </div>
@@ -41,7 +40,6 @@ export function LoginForm() {
           name="password"
           type="password"
           autoComplete="current-password"
-          defaultValue="123456"
           required
         />
       </div>

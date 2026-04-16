@@ -1,9 +1,9 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { DEMO_SESSION_COOKIE, DEMO_SESSION_VALUE } from "@/lib/auth/demo-session";
+import { AUTH_SESSION_COOKIE } from "@/lib/auth/session";
 
 export function middleware(request: NextRequest) {
-  if (request.cookies.get(DEMO_SESSION_COOKIE)?.value === DEMO_SESSION_VALUE) {
+  if (request.cookies.get(AUTH_SESSION_COOKIE)?.value) {
     return NextResponse.next();
   }
   return NextResponse.redirect(new URL("/login", request.url));
@@ -14,6 +14,7 @@ export const config = {
     "/",
     "/orders/:path*",
     "/master/:path*",
+    "/hr/:path*",
     "/inventory/:path*",
     "/accounting/:path*",
   ],

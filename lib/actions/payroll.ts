@@ -210,6 +210,13 @@ export type PayrollHistoryRow = {
   total_net_salary: number;
 };
 
+export type PayrollRunLineRow = {
+  employee_id: string;
+  allowance: number;
+  deduction: number;
+  note: string | null;
+};
+
 export async function listPayrollRuns(limit = 24): Promise<PayrollHistoryRow[]> {
   const supabase = createSupabaseAdmin();
   const { data: runs, error } = await supabase
@@ -241,5 +248,29 @@ export async function listPayrollRuns(limit = 24): Promise<PayrollHistoryRow[]> 
     standard_work_days: Number(r["standard_work_days"] ?? 0),
     overtime_rate_per_hour: Number(r["overtime_rate_per_hour"] ?? 0),
     total_net_salary: Math.round(totals.get(r["id"] as string) ?? 0),
+  }));
+}
+
+export async function getPayrollRunLines(year: number, month: number): Promise<PayrollRunLineRow[]> {
+  const supabase = createSupabaseAdmin();
+  const { data: run, error: runErr } = await supabase
+    .from("payroll_runs")
+    .select("id")
+    .eq("year", year)
+    .eq("month", month)
+    .maybeSingle();
+  if (runErr) throw new Error(runErr.message);
+  if (!run) return [];
+  const { data, error } = await supabase
+    .from("payroll_lines")
+    .select("employee_id, allowance, deduction, note")
+    .eq("run_id", run["id"] as string)
+    .limit(2000);
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((r) => ({
+    employee_id: r["employee_id"] as string,
+    allowance: Number(r["allowance"] ?? 0),
+    deduction: Number(r["deduction"] ?? 0),
+    note: (r["note"] as string | null) ?? null,
   }));
 }

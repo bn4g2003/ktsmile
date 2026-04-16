@@ -22,3 +22,9 @@ export function permissionPresetLabel(id: string | null | undefined) {
   if (!id) return "—";
   return PERMISSION_PRESETS.find((p) => p.id === id)?.label ?? id;
 }
+
+export function resolvePermissionPreset(id: string | null | undefined): PermissionPresetId {
+  if (!id) return "staff";
+  const found = PERMISSION_PRESETS.find((p) => p.id === id);
+  return (found?.id ?? "staff") as PermissionPresetId;
+}
