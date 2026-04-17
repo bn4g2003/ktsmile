@@ -793,19 +793,20 @@ export async function getDailyDeliveryNotePayload(
     .order("order_number", { ascending: true })
     .limit(500);
   if (oErr) throw new Error(oErr.message);
-  if (!(orders ?? []).length) {
-    throw new Error("Không có đơn nào của lab này trong ngày đã chọn.");
-  }
   const orderIds = (orders ?? []).map((o) => o.id as string);
-  const { data: lines, error: lErr } = await supabase
-    .from("lab_order_lines")
-    .select("order_id,tooth_positions,quantity,shade,products:product_id(code,name)")
-    .in("order_id", orderIds)
-    .order("created_at", { ascending: true })
-    .limit(5000);
-  if (lErr) throw new Error(lErr.message);
+  let lines: Record<string, unknown>[] = [];
+  if (orderIds.length > 0) {
+    const { data: lineData, error: lErr } = await supabase
+      .from("lab_order_lines")
+      .select("order_id,tooth_positions,quantity,shade,products:product_id(code,name)")
+      .in("order_id", orderIds)
+      .order("created_at", { ascending: true })
+      .limit(5000);
+    if (lErr) throw new Error(lErr.message);
+    lines = (lineData ?? []) as Record<string, unknown>[];
+  }
   const linesByOrder = new Map<string, { product_code: string; product_name: string; tooth_positions: string; quantity: number; shade: string | null }[]>();
-  for (const row of lines ?? []) {
+  for (const row of lines) {
     const oid = row["order_id"] as string;
     const pr = row["products"] as { code?: string; name?: string } | null;
     const arr = linesByOrder.get(oid) ?? [];

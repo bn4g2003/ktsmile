@@ -684,7 +684,13 @@ export function OrdersPage() {
             >
               {importBusy ? "Đang nhập…" : "Nhập Excel"}
             </Button>
-            <Button variant="secondary" size="sm" type="button" onClick={openDeliveryPrint}>
+            <Button
+              variant="secondary"
+              size="sm"
+              type="button"
+              onClick={openDeliveryPrint}
+              className="ring-1 ring-[color-mix(in_srgb,var(--primary)_28%,transparent)]"
+            >
               In phiếu giao ngày
             </Button>
             <Button variant="primary" size="sm" type="button" onClick={openCreate}>

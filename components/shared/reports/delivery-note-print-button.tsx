@@ -41,6 +41,11 @@ export function DeliveryNotePrintButton({
         void (async () => {
           try {
             const payload = await getDailyDeliveryNotePayload(partnerId, deliveryDate);
+            if (!payload.orders.length) {
+              w.close();
+              alert("Không có đơn hàng của lab này trong ngày đã chọn.");
+              return;
+            }
             const title = deliveryNotePrintTitle(payload);
             writeAndPrintToWindow(w, buildPrintShell(title, buildDeliveryNoteBodyHtml(payload)));
           } catch (e) {
