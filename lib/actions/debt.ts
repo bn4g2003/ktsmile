@@ -142,6 +142,10 @@ export async function listDebtReport(args: ListArgs): Promise<ListResult<DebtRow
         r.partner_name.toLowerCase().includes(g),
     );
   }
+  const codeFilter = args.filters.partner_code?.trim().toLowerCase() ?? "";
+  if (codeFilter) rows = rows.filter((r) => r.partner_code.toLowerCase().includes(codeFilter));
+  const nameFilter = args.filters.partner_name?.trim().toLowerCase() ?? "";
+  if (nameFilter) rows = rows.filter((r) => r.partner_name.toLowerCase().includes(nameFilter));
 
   const total = rows.length;
   const sumClosing = rows.reduce((s, r) => s + r.closing, 0);

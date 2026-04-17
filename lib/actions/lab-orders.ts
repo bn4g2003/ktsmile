@@ -175,6 +175,18 @@ export async function listLabOrders(args: ListArgs): Promise<ListResult<LabOrder
     scalarsFull: LAB_ORDERS_LIST_SELECT_SCALARS_FULL,
     scalarsLegacy: LAB_ORDERS_LIST_SELECT_SCALARS_LEGACY,
   };
+  let partnerIdsByFilter: string[] | null = null;
+  const partnerCodeFilter = args.filters.partner_code?.trim();
+  const partnerNameFilter = args.filters.partner_name?.trim();
+  if (partnerCodeFilter || partnerNameFilter) {
+    let pq = supabase.from("partners").select("id").limit(5000);
+    if (partnerCodeFilter) pq = pq.ilike("code", "%" + partnerCodeFilter + "%");
+    if (partnerNameFilter) pq = pq.ilike("name", "%" + partnerNameFilter + "%");
+    const { data: pData, error: pErr } = await pq;
+    if (pErr) throw new Error(pErr.message);
+    partnerIdsByFilter = (pData ?? []).map((r) => r.id as string);
+    if (!partnerIdsByFilter.length) return { rows: [], total: 0 };
+  }
 
   let lastMessage = "";
   for (let i = 0; i < tiers.length; i++) {
@@ -194,6 +206,7 @@ export async function listLabOrders(args: ListArgs): Promise<ListResult<LabOrder
     else if (st.length > 1) q = q.in("status", st);
     if (filters.order_number?.trim())
       q = q.ilike("order_number", "%" + filters.order_number.trim() + "%");
+    if (partnerIdsByFilter) q = q.in("partner_id", partnerIdsByFilter);
     if (filters.received_from?.trim()) q = q.gte("received_at", filters.received_from.trim());
     if (filters.received_to?.trim()) q = q.lte("received_at", filters.received_to.trim());
     // Lọc theo tên bệnh nhân, nha khoa (cột trực tiếp trên lab_orders)

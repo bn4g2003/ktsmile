@@ -105,6 +105,10 @@ export async function listPayablesReport(args: ListArgs): Promise<ListResult<Pay
   if (g) {
     rows = rows.filter((r) => r.supplier_code.toLowerCase().includes(g) || r.supplier_name.toLowerCase().includes(g));
   }
+  const codeFilter = args.filters.supplier_code?.trim().toLowerCase() ?? "";
+  if (codeFilter) rows = rows.filter((r) => r.supplier_code.toLowerCase().includes(codeFilter));
+  const nameFilter = args.filters.supplier_name?.trim().toLowerCase() ?? "";
+  if (nameFilter) rows = rows.filter((r) => r.supplier_name.toLowerCase().includes(nameFilter));
 
   const total = rows.length;
   const sumClosing = rows.reduce((acc, row) => acc + row.closing, 0);

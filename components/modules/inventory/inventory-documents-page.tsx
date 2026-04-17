@@ -323,12 +323,12 @@ export function InventoryDocumentsPage({ initialTab = "inbound" }: { initialTab?
         header: "Ngày",
         meta: { filterKey: "document_date_from", filterType: "text" },
       },
-      // {
-      //   id: "document_date_to",
-      //   header: "Đến",
-      //   meta: { filterKey: "document_date_to", filterType: "text" },
-      //   cell: () => "",
-      // },
+      {
+        id: "document_date_to",
+        header: "Đến",
+        meta: { filterKey: "document_date_to", filterType: "text" },
+        cell: () => "",
+      },
       {
         accessorKey: "movement_type",
         header: "Loại",
@@ -349,8 +349,8 @@ export function InventoryDocumentsPage({ initialTab = "inbound" }: { initialTab?
         },
         cell: ({ getValue }) => formatPostingStatus(String(getValue())),
       },
-      { accessorKey: "supplier_code", header: "Mã NCC" },
-      { accessorKey: "supplier_name", header: "Nhà cung cấp" },
+      { accessorKey: "supplier_code", header: "Mã NCC", meta: { filterKey: "supplier_code", filterType: "text" } },
+      { accessorKey: "supplier_name", header: "Nhà cung cấp", meta: { filterKey: "supplier_name", filterType: "text" } },
       // { accessorKey: "line_count", header: "Số dòng" },
       {
         accessorKey: "total_quantity",

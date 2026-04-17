@@ -132,8 +132,8 @@ export function StockLevelsPage({ initialTab = "nvl" }: { initialTab?: StockTab 
   const baseColumns = React.useMemo<ColumnDef<ProductStockRow, unknown>[]>(
     () => [
       { accessorKey: "product_code", header: "Mã SP", meta: { filterKey: "product_code", filterType: "text" } },
-      { accessorKey: "product_name", header: "Tên SP" },
-      { accessorKey: "unit", header: "ĐVT" },
+      { accessorKey: "product_name", header: "Tên SP", meta: { filterKey: "product_name", filterType: "text" } },
+      { accessorKey: "unit", header: "ĐVT", meta: { filterKey: "unit", filterType: "text" } },
       {
         accessorKey: "product_usage",
         header: "Phạm vi",

@@ -75,8 +75,8 @@ export function DebtPage({ initialTab = "receivables" }: { initialTab?: DebtTab 
 
   const columnsReceivable = React.useMemo<ColumnDef<DebtRow, unknown>[]>(
     () => [
-      { accessorKey: "partner_code", header: "Mã KH" },
-      { accessorKey: "partner_name", header: "Tên KH" },
+      { accessorKey: "partner_code", header: "Mã KH", meta: { filterKey: "partner_code", filterType: "text" } },
+      { accessorKey: "partner_name", header: "Tên KH", meta: { filterKey: "partner_name", filterType: "text" } },
       { accessorKey: "opening", header: "Nợ đầu kỳ" },
       { accessorKey: "orders_month", header: "PS bán (tháng)" },
       { accessorKey: "receipts_month", header: "Đã thu (tháng)" },
@@ -99,8 +99,8 @@ export function DebtPage({ initialTab = "receivables" }: { initialTab?: DebtTab 
 
   const columnsPayable = React.useMemo<ColumnDef<PayableRow, unknown>[]>(
     () => [
-      { accessorKey: "supplier_code", header: "Mã NCC" },
-      { accessorKey: "supplier_name", header: "Tên NCC" },
+      { accessorKey: "supplier_code", header: "Mã NCC", meta: { filterKey: "supplier_code", filterType: "text" } },
+      { accessorKey: "supplier_name", header: "Tên NCC", meta: { filterKey: "supplier_name", filterType: "text" } },
       { accessorKey: "opening", header: "Nợ đầu kỳ" },
       { accessorKey: "inbound_month", header: "PS nhập (tháng)" },
       { accessorKey: "payments_month", header: "Đã trả (tháng)" },

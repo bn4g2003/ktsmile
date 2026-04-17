@@ -61,6 +61,20 @@ export async function listStockDocuments(
   const supabase = createSupabaseAdmin();
   const { page, pageSize, globalSearch, filters } = args;
   const ps = decodeMultiFilter(filters.posting_status);
+  let supplierIdsByFilter: string[] | null = null;
+  if (filters.supplier_code?.trim() || filters.supplier_name?.trim()) {
+    let sq = supabase.from("suppliers").select("id").limit(5000);
+    if (filters.supplier_code?.trim()) {
+      sq = sq.ilike("code", "%" + filters.supplier_code.trim() + "%");
+    }
+    if (filters.supplier_name?.trim()) {
+      sq = sq.ilike("name", "%" + filters.supplier_name.trim() + "%");
+    }
+    const { data, error } = await sq;
+    if (error) throw new Error(error.message);
+    supplierIdsByFilter = (data ?? []).map((r) => r.id as string);
+    if (!supplierIdsByFilter.length) return { rows: [], total: 0 };
+  }
 
   const build = (usePostingFilter: boolean) => {
     let q = supabase.from("stock_documents").select(
@@ -86,6 +100,7 @@ export async function listStockDocuments(
       q = q.gte("document_date", filters.document_date_from.trim());
     if (filters.document_date_to?.trim())
       q = q.lte("document_date", filters.document_date_to.trim());
+    if (supplierIdsByFilter) q = q.in("supplier_id", supplierIdsByFilter);
 
     const from = (page - 1) * pageSize;
     const to = from + pageSize - 1;
@@ -652,6 +667,12 @@ export async function listProductStock(
     if (filters.product_code?.trim()) {
       qNvl = qNvl.ilike("material_code", "%" + filters.product_code.trim() + "%");
     }
+    if (filters.product_name?.trim()) {
+      qNvl = qNvl.ilike("material_name", "%" + filters.product_name.trim() + "%");
+    }
+    if (filters.unit?.trim()) {
+      qNvl = qNvl.ilike("unit", "%" + filters.unit.trim() + "%");
+    }
     const from = (page - 1) * pageSize;
     const to = from + pageSize - 1;
     qNvl = qNvl.order("material_code", { ascending: true }).range(from, to);
@@ -681,6 +702,10 @@ export async function listProductStock(
   }
   if (filters.product_code?.trim())
     q = q.ilike("product_code", "%" + filters.product_code.trim() + "%");
+  if (filters.product_name?.trim())
+    q = q.ilike("product_name", "%" + filters.product_name.trim() + "%");
+  if (filters.unit?.trim())
+    q = q.ilike("unit", "%" + filters.unit.trim() + "%");
 
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;

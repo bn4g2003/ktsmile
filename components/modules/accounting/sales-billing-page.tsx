@@ -109,9 +109,9 @@ export function SalesBillingPage() {
         meta: { filterKey: "received_to", filterType: "text" },
         cell: () => "",
       },
-      { accessorKey: "partner_code", header: "Mã KH" },
-      { accessorKey: "partner_name", header: "Khách" },
-      { accessorKey: "patient_name", header: "Bệnh nhân" },
+      { accessorKey: "partner_code", header: "Mã KH", meta: { filterKey: "partner_code", filterType: "text" } },
+      { accessorKey: "partner_name", header: "Khách", meta: { filterKey: "partner_name", filterType: "text" } },
+      { accessorKey: "patient_name", header: "Bệnh nhân", meta: { filterKey: "patient_name", filterType: "text" } },
       {
         accessorKey: "total_amount",
         header: "Cộng dòng",

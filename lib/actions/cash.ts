@@ -115,6 +115,34 @@ export async function listCashTransactions(
   const { page, pageSize, globalSearch, filters } = args;
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
+  let partnerIdsByFilter: string[] | null = null;
+  if (args.filters.partner_code?.trim() || args.filters.partner_name?.trim()) {
+    let pq = supabase.from("partners").select("id").limit(5000);
+    if (args.filters.partner_code?.trim()) {
+      pq = pq.ilike("code", "%" + args.filters.partner_code.trim() + "%");
+    }
+    if (args.filters.partner_name?.trim()) {
+      pq = pq.ilike("name", "%" + args.filters.partner_name.trim() + "%");
+    }
+    const { data, error } = await pq;
+    if (error) throw new Error(error.message);
+    partnerIdsByFilter = (data ?? []).map((r) => r.id as string);
+    if (!partnerIdsByFilter.length) return { rows: [], total: 0 };
+  }
+  let supplierIdsByFilter: string[] | null = null;
+  if (args.filters.supplier_code?.trim() || args.filters.supplier_name?.trim()) {
+    let sq = supabase.from("suppliers").select("id").limit(5000);
+    if (args.filters.supplier_code?.trim()) {
+      sq = sq.ilike("code", "%" + args.filters.supplier_code.trim() + "%");
+    }
+    if (args.filters.supplier_name?.trim()) {
+      sq = sq.ilike("name", "%" + args.filters.supplier_name.trim() + "%");
+    }
+    const { data, error } = await sq;
+    if (error) throw new Error(error.message);
+    supplierIdsByFilter = (data ?? []).map((r) => r.id as string);
+    if (!supplierIdsByFilter.length) return { rows: [], total: 0 };
+  }
 
   const selects = [
     CASH_LIST_SELECT_FULL,
@@ -146,8 +174,13 @@ export async function listCashTransactions(
     else if (dirs.length > 1) q = q.in("direction", dirs);
     if (filters.payment_channel?.trim())
       q = q.ilike("payment_channel", "%" + filters.payment_channel.trim() + "%");
+    if (filters.doc_number?.trim())
+      q = q.ilike("doc_number", "%" + filters.doc_number.trim() + "%");
     if (filters.business_category?.trim())
       q = q.ilike("business_category", "%" + filters.business_category.trim() + "%");
+    if (filters.payer_name?.trim()) q = q.ilike("payer_name", "%" + filters.payer_name.trim() + "%");
+    if (partnerIdsByFilter) q = q.in("partner_id", partnerIdsByFilter);
+    if (supplierIdsByFilter) q = q.in("supplier_id", supplierIdsByFilter);
     if (filters.transaction_date_from?.trim())
       q = q.gte("transaction_date", filters.transaction_date_from.trim());
     if (filters.transaction_date_to?.trim())
