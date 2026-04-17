@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "react-odontogram/style.css";
 
 :root {
   /* Clinical OS–style: nền xám nhạt, thẻ trắng, navy primary */
