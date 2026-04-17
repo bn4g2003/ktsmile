@@ -45,6 +45,7 @@ import type { LabAccessoryKey } from "@/lib/lab/order-accessories";
 import { LAB_ORDER_ACCESSORY_DEFS, parseAccessoriesJson } from "@/lib/lab/order-accessories";
 import { LabToothPicker } from "@/components/modules/orders/lab-tooth-picker";
 import { LabOrderPrintButton } from "@/components/shared/reports/lab-order-print-button";
+import { DeliveryNotePrintButton } from "@/components/shared/reports/delivery-note-print-button";
 import { importLabOrdersFromExcel } from "@/lib/actions/lab-orders-import";
 import { parseToothPositionsToSet } from "@/lib/dental/fdi-teeth";
 import {
@@ -195,6 +196,9 @@ export function OrdersPage() {
   const [quickStatus, setQuickStatus] = React.useState<LabOrderRow["status"]>("draft");
   const [quickPending, setQuickPending] = React.useState(false);
   const [quickErr, setQuickErr] = React.useState<string | null>(null);
+  const [deliveryOpen, setDeliveryOpen] = React.useState(false);
+  const [deliveryPartnerId, setDeliveryPartnerId] = React.useState("");
+  const [deliveryDate, setDeliveryDate] = React.useState(new Date().toISOString().slice(0, 10));
 
   React.useEffect(() => {
     void listCustomerPartnerPicker().then(setPartners).catch(() => {});
@@ -250,6 +254,11 @@ export function OrdersPage() {
     reset();
     setOpen(true);
   };
+  const openDeliveryPrint = React.useCallback(() => {
+    setDeliveryPartnerId(partners[0]?.id ?? "");
+    setDeliveryDate(new Date().toISOString().slice(0, 10));
+    setDeliveryOpen(true);
+  }, [partners]);
 
   const openEdit = (row: LabOrderRow) => {
     setEditing(row);
@@ -674,6 +683,9 @@ export function OrdersPage() {
               onClick={onPickExcel}
             >
               {importBusy ? "Đang nhập…" : "Nhập Excel"}
+            </Button>
+            <Button variant="secondary" size="sm" type="button" onClick={openDeliveryPrint}>
+              In phiếu giao ngày
             </Button>
             <Button variant="primary" size="sm" type="button" onClick={openCreate}>
               Thêm đơn
@@ -1181,6 +1193,45 @@ export function OrdersPage() {
         pending={quickPending}
         error={quickErr}
       />
+      <Dialog open={deliveryOpen} onOpenChange={setDeliveryOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>In phiếu giao hàng theo ngày</DialogTitle>
+            <DialogDescription>
+              Gộp nhiều đơn / nhiều bệnh nhân của cùng một lab trong ngày thành một phiếu giao.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4">
+            <div className="grid gap-2">
+              <Label htmlFor="dg-partner">Lab / Khách hàng</Label>
+              <Select
+                id="dg-partner"
+                value={deliveryPartnerId}
+                onChange={(e) => setDeliveryPartnerId(e.target.value)}
+              >
+                <option value="">Chọn lab…</option>
+                {partners.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.code} — {p.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="dg-date">Ngày giao</Label>
+              <Input
+                id="dg-date"
+                type="date"
+                value={deliveryDate}
+                onChange={(e) => setDeliveryDate(e.target.value)}
+              />
+            </div>
+            <div className="flex justify-end">
+              <DeliveryNotePrintButton partnerId={deliveryPartnerId} deliveryDate={deliveryDate} />
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

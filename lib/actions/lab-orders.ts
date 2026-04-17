@@ -7,6 +7,7 @@ import { isSupabaseSchemaDriftError } from "@/lib/supabase/schema-drift";
 import type { ListArgs, ListResult } from "@/components/shared/data-grid/excel-data-grid";
 import { decodeMultiFilter } from "@/lib/grid/multi-filter";
 import type { LabOrderPrintLine, LabOrderPrintPayload } from "@/lib/reports/lab-order-html";
+import type { DeliveryNotePayload } from "@/lib/reports/delivery-note-html";
 import {
   type LabOrderStatus,
   isAllowedLabOrderStatusTransition,
@@ -764,6 +765,72 @@ export async function getLabOrderPrintPayload(orderId: string): Promise<LabOrder
     notes_coordination: (rec["notes_coordination"] as string | null) ?? null,
     accessories_summary: accessoriesSummaryFromRow(rec["accessories"]),
     lines,
+  };
+}
+
+export async function getDailyDeliveryNotePayload(
+  partnerId: string,
+  deliveryDate: string,
+): Promise<DeliveryNotePayload> {
+  const supabase = createSupabaseAdmin();
+  const date = deliveryDate.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error("Ngày giao không hợp lệ.");
+
+  const { data: partner, error: pErr } = await supabase
+    .from("partners")
+    .select("code,name")
+    .eq("id", partnerId)
+    .maybeSingle();
+  if (pErr) throw new Error(pErr.message);
+  if (!partner) throw new Error("Không tìm thấy khách hàng.");
+
+  const { data: orders, error: oErr } = await supabase
+    .from("lab_orders")
+    .select("id,order_number,patient_name,clinic_name,notes,status")
+    .eq("partner_id", partnerId)
+    .eq("received_at", date)
+    .neq("status", "cancelled")
+    .order("order_number", { ascending: true })
+    .limit(500);
+  if (oErr) throw new Error(oErr.message);
+  if (!(orders ?? []).length) {
+    throw new Error("Không có đơn nào của lab này trong ngày đã chọn.");
+  }
+  const orderIds = (orders ?? []).map((o) => o.id as string);
+  const { data: lines, error: lErr } = await supabase
+    .from("lab_order_lines")
+    .select("order_id,tooth_positions,quantity,shade,products:product_id(code,name)")
+    .in("order_id", orderIds)
+    .order("created_at", { ascending: true })
+    .limit(5000);
+  if (lErr) throw new Error(lErr.message);
+  const linesByOrder = new Map<string, { product_code: string; product_name: string; tooth_positions: string; quantity: number; shade: string | null }[]>();
+  for (const row of lines ?? []) {
+    const oid = row["order_id"] as string;
+    const pr = row["products"] as { code?: string; name?: string } | null;
+    const arr = linesByOrder.get(oid) ?? [];
+    arr.push({
+      product_code: pr?.code ?? "",
+      product_name: pr?.name ?? "",
+      tooth_positions: (row["tooth_positions"] as string) ?? "",
+      quantity: Number(row["quantity"] ?? 0),
+      shade: (row["shade"] as string | null) ?? null,
+    });
+    linesByOrder.set(oid, arr);
+  }
+
+  return {
+    partner_code: (partner["code"] as string | null) ?? null,
+    partner_name: (partner["name"] as string | null) ?? null,
+    delivery_date: date,
+    generated_at: new Date().toLocaleString("vi-VN"),
+    orders: (orders ?? []).map((o) => ({
+      order_number: o["order_number"] as string,
+      patient_name: o["patient_name"] as string,
+      clinic_name: (o["clinic_name"] as string | null) ?? null,
+      notes: (o["notes"] as string | null) ?? null,
+      lines: linesByOrder.get(o["id"] as string) ?? [],
+    })),
   };
 }
 
