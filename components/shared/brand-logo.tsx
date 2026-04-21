@@ -1,7 +1,7 @@
 import Image from "next/image";
 import { cn } from "@/lib/utils/cn";
 
-const LOGO_SRC = "/logo.jpg";
+const LOGO_SRC = "/logobaocao.png";
 
 type BrandLogoProps = {
   className?: string;

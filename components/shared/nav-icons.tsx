@@ -1,7 +1,7 @@
 import * as React from "react";
 import { cn } from "@/lib/utils/cn";
 
-const mono = "h-[18px] w-[18px] shrink-0 text-[currentColor]";
+const mono = "h-5 w-5 shrink-0 text-[currentColor]";
 
 type SvgProps = React.SVGProps<SVGSVGElement>;
 

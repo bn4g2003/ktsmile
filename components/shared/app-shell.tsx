@@ -65,7 +65,6 @@ const groups: { title: string; Icon: NavIcon; items: NavItem[] }[] = [
     items: [
       { href: "/accounting/cash", label: "Sổ quỹ", Icon: NavIconCash },
       { href: "/accounting/debt", label: "Công nợ khách hàng", Icon: NavIconDebt },
-      { href: "/accounting/sales", label: "Doanh số & GBTT", Icon: NavIconChart },
     ],
   },
   {
@@ -149,11 +148,11 @@ export function AppShell({
         aria-label="Điều hướng chính"
       >
         <div className="border-b border-[var(--border-ghost)] px-5 py-6">
-          <Link href="/" className="flex items-center gap-3">
-            <BrandLogo size={44} priority />
+          <Link href="/" className="flex items-center gap-3.5">
+            <BrandLogo size={52} priority />
             <div className="min-w-0">
-              <span className="text-lg font-bold tracking-tight text-[var(--primary)]">KT Smile Lab</span>
-              <span className="mt-0.5 block text-xs font-medium text-[var(--on-surface-muted)]">
+              <span className="text-xl font-bold tracking-tight text-[var(--primary)] uppercase">KT Smile Lab</span>
+              <span className="mt-0.5 block text-xs font-semibold text-[var(--on-surface-muted)]">
                 Hệ điều hành lab
               </span>
             </div>
@@ -174,7 +173,7 @@ export function AppShell({
                       : "text-[var(--on-surface-muted)] hover:bg-[var(--surface-muted)] hover:text-[var(--on-surface)]",
                   )}
                 >
-                  <GroupIcon className={cn("h-[18px] w-[18px] shrink-0", isExpanded ? "opacity-100" : "opacity-70")} />
+                  <GroupIcon className={cn("h-5 w-5 shrink-0", isExpanded ? "opacity-100" : "opacity-70")} />
                   <span className="flex-1 text-left">{g.title}</span>
                   <NavIconChevronDown
                     className={cn(

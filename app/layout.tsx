@@ -13,9 +13,9 @@ export const metadata: Metadata = {
   title: "KT Smile Lab",
   description: "Quản lý lab nha khoa",
   icons: {
-    icon: "/favicon.png",
-    shortcut: "/favicon.png",
-    apple: "/favicon.png",
+    icon: "/logobaocao.ico",
+    shortcut: "/logobaocao.ico",
+    apple: "/logobaocao.png",
   },
 };
 
