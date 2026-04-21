@@ -32,9 +32,10 @@ export function SalesReportPage() {
   const [detailLoading, setDetailLoading] = React.useState(false);
   const [dateRange, setDateRange] = React.useState({ from: "", to: "" });
 
-  // Khởi tạo ngày mặc định: đầu tháng đến hôm nay
-  const defaultFromDate = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
-  const defaultToDate = new Date().toISOString().split('T')[0];
+  // Lấy ngày đầu tháng và hôm nay
+  const today = new Date();
+  const defaultFromDate = React.useMemo(() => new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0], []);
+  const defaultToDate = React.useMemo(() => today.toISOString().split('T')[0], []);
 
   const openDetail = async (row: SalesReportRow, fromDate: string, toDate: string) => {
     setDetailPartner(row);
@@ -50,6 +51,11 @@ export function SalesReportPage() {
       setDetailLoading(false);
     }
   };
+
+  const [filters, setFilters] = React.useState<Record<string, string>>({
+    from_date: defaultFromDate,
+    to_date: defaultToDate,
+  });
 
   const columns = React.useMemo<ColumnDef<SalesReportRow, unknown>[]>(
     () => [
@@ -78,8 +84,7 @@ export function SalesReportPage() {
         header: "Chi tiết",
         enableHiding: false,
         meta: { filterType: "none" },
-        cell: ({ row, table }) => {
-          const filters = (table.options.meta as { filters?: Record<string, string> })?.filters ?? {};
+        cell: ({ row }) => {
           const fromDate = filters.from_date || defaultFromDate;
           const toDate = filters.to_date || defaultToDate;
           
@@ -95,36 +100,10 @@ export function SalesReportPage() {
         },
       },
     ],
-    [defaultFromDate, defaultToDate],
+    [defaultFromDate, defaultToDate, filters.from_date, filters.to_date],
   );
 
   const totalSales = detailOrders.reduce((sum, o) => sum + o.grand_total, 0);
-
-  const dateFilterToolbar = React.useMemo(
-    () => (
-      <div className="flex items-end gap-3">
-        <div className="grid gap-1.5">
-          <Label htmlFor="from_date" className="text-xs">Từ ngày</Label>
-          <Input
-            id="from_date"
-            type="date"
-            defaultValue={defaultFromDate}
-            className="h-9 w-40"
-          />
-        </div>
-        <div className="grid gap-1.5">
-          <Label htmlFor="to_date" className="text-xs">Đến ngày</Label>
-          <Input
-            id="to_date"
-            type="date"
-            defaultValue={defaultToDate}
-            className="h-9 w-40"
-          />
-        </div>
-      </div>
-    ),
-    [defaultFromDate, defaultToDate],
-  );
 
   return (
     <>
@@ -134,24 +113,30 @@ export function SalesReportPage() {
         columns={columns}
         list={listSalesReport}
         getRowId={(r) => r.partner_id}
-        prependFilters={
-          <div className="flex items-center gap-2">
-            <Label htmlFor="from_date_filter" className="text-sm">Từ ngày:</Label>
-            <Input
-              id="from_date_filter"
-              type="date"
-              defaultValue={defaultFromDate}
-              className="h-9 w-40"
-              data-filter-key="from_date"
-            />
-            <Label htmlFor="to_date_filter" className="text-sm">Đến ngày:</Label>
-            <Input
-              id="to_date_filter"
-              type="date"
-              defaultValue={defaultToDate}
-              className="h-9 w-40"
-              data-filter-key="to_date"
-            />
+        filters={filters}
+        onFiltersChange={setFilters}
+        toolbarExtra={
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2">
+              <Label htmlFor="from_date_filter" className="text-xs font-semibold uppercase tracking-wider text-[var(--on-surface-muted)]">Từ:</Label>
+              <Input
+                id="from_date_filter"
+                type="date"
+                value={filters.from_date ?? ""}
+                onChange={(e) => setFilters(prev => ({ ...prev, from_date: e.target.value }))}
+                className="h-9 w-36 text-xs"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <Label htmlFor="to_date_filter" className="text-xs font-semibold uppercase tracking-wider text-[var(--on-surface-muted)]">Đến:</Label>
+              <Input
+                id="to_date_filter"
+                type="date"
+                value={filters.to_date ?? ""}
+                onChange={(e) => setFilters(prev => ({ ...prev, to_date: e.target.value }))}
+                className="h-9 w-36 text-xs"
+              />
+            </div>
           </div>
         }
       />

@@ -403,7 +403,7 @@ export function OrderDetailPage() {
                     · Nha khoa: {String(header.clinic_name)}
                   </>
                 ) : null}{" "}
-                · BN: {String(header.patient_name)} · Ngày nhận: {formatDate(header.received_at)}
+                · BN: {String(header.patient_name)} · Ngày nhận: {formatDate(header.received_at as string)}
               </p>
               {header.order_category ? (
                 <p className="text-xs text-[var(--on-surface-muted)]">

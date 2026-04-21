@@ -14,7 +14,7 @@ type PriceQuotePrintButtonProps = {
   partnerId: string;
   label?: string;
   variant?: "primary" | "secondary" | "ghost";
-  size?: "sm" | "md" | "lg";
+  size?: "default" | "sm";
   className?: string;
 };
 
@@ -22,7 +22,7 @@ export function PriceQuotePrintButton({
   partnerId,
   label = "In báo giá",
   variant = "primary",
-  size = "sm",
+  size = "default",
   className,
 }: PriceQuotePrintButtonProps) {
   const [loading, setLoading] = React.useState(false);

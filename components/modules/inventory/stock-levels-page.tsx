@@ -88,14 +88,19 @@ export function StockLevelsPage({ initialTab = "nvl" }: { initialTab?: StockTab 
     setReqPending(true);
     setReqErr(null);
     try {
-      const newId = await createOutboundStockRequest({
-        product_id: reqProductId,
-        quantity: Number(reqQty),
-        reason: reqReason.trim() || null,
+      const { documentId } = await createOutboundStockRequest({
+        document_date: new Date().toISOString().slice(0, 10),
+        reason: reqReason.trim() || "Xuất từ tồn kho",
+        lines: [
+          {
+            product_id: reqProductId,
+            quantity: Number(reqQty),
+          },
+        ],
       });
       setOpenRequest(false);
       bumpGrid();
-      router.push("/inventory/documents/" + newId);
+      router.push("/inventory/documents/" + documentId);
     } catch (e2) {
       setReqErr(e2 instanceof Error ? e2.message : "Lỗi");
     } finally {

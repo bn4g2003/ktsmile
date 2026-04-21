@@ -50,7 +50,9 @@ export async function listSalesReport(args: ListArgs): Promise<ListResult<SalesR
   const partnerMap = new Map<string, SalesReportRow>();
   
   for (const order of orders ?? []) {
-    const partner = order.partners as { id: string; code: string; name: string };
+    const rawPartner = order.partners;
+    const partner = (Array.isArray(rawPartner) ? rawPartner[0] : rawPartner) as { id: string; code: string; name: string } | null;
+    if (!partner) continue;
     const partnerId = partner.id;
     
     if (!partnerMap.has(partnerId)) {

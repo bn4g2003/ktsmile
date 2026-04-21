@@ -9,7 +9,7 @@ export type PayrollExcelPayload = {
   rows: PayrollRunDetailRow[];
 };
 
-export function buildPayrollExcelBuffer(payload: PayrollExcelPayload): Buffer {
+export function buildPayrollExcelBuffer(payload: PayrollExcelPayload): any {
   const { year, month, standardWorkDays, overtimeRatePerHour, rows } = payload;
   const monthStr = String(month).padStart(2, "0");
   
@@ -152,7 +152,5 @@ export function buildPayrollExcelBuffer(payload: PayrollExcelPayload): Buffer {
   
   XLSX.utils.book_append_sheet(wb, ws, `BangLuong_${monthStr}_${year}`);
   
-  // Write to buffer
-  const buf = XLSX.write(wb, { bookType: "xlsx", type: "buffer" });
-  return buf;
+  return XLSX.write(wb, { bookType: "xlsx", type: "array" });
 }

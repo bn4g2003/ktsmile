@@ -329,7 +329,8 @@ export async function getPayrollRunDetail(year: number, month: number): Promise<
   if (error) throw new Error(error.message);
   
   return (data ?? []).map((r) => {
-    const emp = r.employees as { code: string; full_name: string; position: string | null; department: string | null } | null;
+    const rawEmp = r.employees;
+    const emp = (Array.isArray(rawEmp) ? rawEmp[0] : rawEmp) as { code: string; full_name: string; position: string | null; department: string | null } | null;
     return {
       employee_id: r.employee_id as string,
       employee_code: emp?.code ?? "",
