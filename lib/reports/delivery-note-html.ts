@@ -74,7 +74,8 @@ export function buildDeliveryNoteBodyHtml(p: DeliveryNotePayload): string {
 
   return `
     <h1>Phiếu giao hàng theo ngày</h1>
-    <p class="muted">Ngày giao: <strong>${escapeHtml(p.delivery_date)}</strong> · In lúc: ${escapeHtml(p.generated_at)}</p>
+    <p class="muted" style="text-align:center;">Ngày giao: <strong>${escapeHtml(p.delivery_date)}</strong></p>
+    <p class="muted" style="text-align:center;font-size:11px;">In lúc: ${escapeHtml(p.generated_at)}</p>
     <table class="kv">
       <tbody>
         <tr><th>Khách hàng / Lab</th><td>${who}</td></tr>

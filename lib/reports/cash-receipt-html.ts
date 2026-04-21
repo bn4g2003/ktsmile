@@ -41,7 +41,8 @@ export function buildCashReceiptBodyHtml(p: CashReceiptPrintPayload): string {
       : `<tr><th>Người nộp</th><td>${escapeHtml(p.payer_name ?? "—")}</td></tr>`;
   return `
     <h1>${h1}</h1>
-    <p class="muted">Số chứng từ: <strong>${escapeHtml(p.doc_number)}</strong> · Ngày: ${escapeHtml(p.transaction_date)} · ${escapeHtml(gen)}</p>
+    <p class="muted" style="text-align:center;">Số chứng từ: <strong>${escapeHtml(p.doc_number)}</strong> · Ngày: ${escapeHtml(p.transaction_date)}</p>
+    <p class="muted" style="text-align:center;font-size:11px;">In lúc: ${escapeHtml(gen)}</p>
     <table class="kv">
       <tbody>
         <tr><th>Loại</th><td>${escapeHtml(formatCashDirection(p.direction))}</td></tr>

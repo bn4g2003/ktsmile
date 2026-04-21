@@ -81,9 +81,10 @@ export function buildPaymentNoticeBodyHtml(p: PaymentNoticePrintPayload): string
     : "—";
 
   return `
-    <h1>Giấy báo thanh toán (chi tiết)</h1>
-    <p class="muted">Đơn gốc: <strong>${escapeHtml(p.order_number)}</strong> · Ngày nhận đơn: ${escapeHtml(p.received_at)} · In lúc: ${escapeHtml(gen)}</p>
-    <p class="muted">Số GBTT: <strong>${docLine}</strong> · Ghi nhận xuất: ${issueLine}</p>
+    <h1>Giấy báo thanh toán</h1>
+    <p class="muted" style="text-align:center;">Đơn gốc: <strong>${escapeHtml(p.order_number)}</strong> · Ngày nhận đơn: ${escapeHtml(p.received_at)}</p>
+    <p class="muted" style="text-align:center;">Số GBTT: <strong>${docLine}</strong> · Ghi nhận xuất: ${issueLine}</p>
+    <p class="muted" style="text-align:center;font-size:11px;">In lúc: ${escapeHtml(gen)}</p>
     <table class="kv">
       <tbody>
         <tr><th>Khách hàng</th><td>${partnerLine}</td></tr>

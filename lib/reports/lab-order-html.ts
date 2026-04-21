@@ -82,7 +82,8 @@ export function buildLabOrderBodyHtml(p: LabOrderPrintPayload): string {
       : null;
   return `
     <h1>Đơn hàng phục hình</h1>
-    <p class="muted">Số đơn: <strong>${escapeHtml(p.order_number)}</strong> · Ngày nhận: ${escapeHtml(p.received_at)} · ${escapeHtml(gen)}</p>
+    <p class="muted" style="text-align:center;">Số đơn: <strong>${escapeHtml(p.order_number)}</strong> · Ngày nhận: ${escapeHtml(p.received_at)}</p>
+    <p class="muted" style="text-align:center;font-size:11px;">In lúc: ${escapeHtml(gen)}</p>
     <table class="kv">
       <tbody>
         <tr><th>Khách hàng</th><td>${partnerLine}</td></tr>

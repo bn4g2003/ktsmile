@@ -51,7 +51,8 @@ export function buildStockVoucherBodyHtml(p: StockDocumentPrintPayload): string 
   const total = p.lines.reduce((s, l) => s + l.line_amount, 0);
   return `
     <h1>${escapeHtml(kind)}</h1>
-    <p class="muted">Số phiếu: <strong>${escapeHtml(p.document_number)}</strong> · Ngày: ${escapeHtml(p.document_date)} · ${escapeHtml(gen)}</p>
+    <p class="muted" style="text-align:center;">Số phiếu: <strong>${escapeHtml(p.document_number)}</strong> · Ngày: ${escapeHtml(p.document_date)}</p>
+    <p class="muted" style="text-align:center;font-size:11px;">In lúc: ${escapeHtml(gen)}</p>
     <table class="kv">
       <tbody>
         <tr><th>Loại phiếu</th><td>${escapeHtml(kind)}</td></tr>

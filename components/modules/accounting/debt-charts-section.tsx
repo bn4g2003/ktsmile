@@ -69,7 +69,8 @@ export function DebtChartsSection({ year, month }: { year: string; month: string
       .join("");
     return `
       <h1>Báo cáo công nợ khách hàng</h1>
-      <p class="muted">${escapeHtml(period)} · ${escapeHtml(gen)} · ${rows.length} dòng</p>
+      <p class="muted" style="text-align:center;">${escapeHtml(period)}</p>
+      <p class="muted" style="text-align:center;font-size:11px;">In lúc: ${escapeHtml(gen)} · ${rows.length} dòng</p>
       <table>
         <thead>
           <tr>

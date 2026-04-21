@@ -107,18 +107,13 @@ export function CashFlowChartsSection() {
     const gen = new Date().toLocaleString("vi-VN");
     const s = ledger;
     const head =
-      "<p style=\"font-weight:600;margin:0 0 2px\">" +
-      escapeHtml(LEDGER_COMPANY_NAME) +
-      "</p>" +
-      "<p class=\"muted\" style=\"margin:0 0 12px\">" +
-      escapeHtml(LEDGER_COMPANY_ADDRESS) +
-      "</p>" +
       "<h1>THU CHI VÀ TỒN QUỸ</h1>" +
-      "<p class=\"muted\">Từ ngày " +
+      "<p class=\"muted\" style=\"text-align:center;\">Từ ngày " +
       escapeHtml(formatDateVi(from)) +
-      " &nbsp; Đến ngày " +
+      " đến ngày " +
       escapeHtml(formatDateVi(to)) +
-      " · " +
+      "</p>" +
+      "<p class=\"muted\" style=\"text-align:center;font-size:11px;\">In lúc: " +
       escapeHtml(gen) +
       "</p>";
 
@@ -167,7 +162,7 @@ export function CashFlowChartsSection() {
       bodyRows +
       foot +
       "</tbody></table>" +
-      "<p class=\"muted\" style=\"margin-top:14px\">Tồn đầu kỳ = thu trừ chi trước ngày kỳ báo cáo. " +
+      "<p class=\"muted\" style=\"margin-top:14px;font-size:11px;\">Tồn đầu kỳ = thu trừ chi trước ngày kỳ báo cáo. " +
       "Tồn khi mở sổ hiển thị cùng giá trị (chưa có số khai sổ riêng). " +
       "Chi tiết chứng từ xem lưới Sổ quỹ.</p>"
     );

@@ -49,7 +49,7 @@ export function DashboardChartsSection({ data }: { data: DashboardChartsData }) 
       .join("");
     return `
       <h1>Báo cáo tổng quan</h1>
-      <p class="muted">KT Smile Lab · Tạo lúc ${escapeHtml(gen)}</p>
+      <p class="muted" style="text-align:center;font-size:11px;">In lúc: ${escapeHtml(gen)}</p>
       <h2>Đơn hàng theo trạng thái</h2>
       <table><thead><tr><th>Trạng thái</th><th class="num">Số đơn</th></tr></thead><tbody>${orderRows}</tbody></table>
       <h2>Tồn kho (top)</h2>
