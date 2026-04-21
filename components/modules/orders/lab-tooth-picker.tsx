@@ -9,6 +9,7 @@ import {
   FDI_UPPER_RIGHT,
   formatTeethSelection,
   parseToothPositionsToSet,
+  detectArchConnection,
 } from "@/lib/dental/fdi-teeth";
 
 type LabToothPickerProps = {
@@ -17,19 +18,6 @@ type LabToothPickerProps = {
   onChange: (toothPositions: string) => void;
   className?: string;
 };
-
-function ToothGlyph({ selected }: { selected: boolean }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      className={cn("h-3 w-3", selected ? "text-white" : "text-[var(--on-surface-muted)]")}
-      fill="currentColor"
-      aria-hidden
-    >
-      <path d="M12 3c-1.9 0-3.7.4-5 1.1-1.5.9-2.4 2.3-2.6 4-.3 2.2.5 4.4 1.4 6.4l.2.5c1.3 2.9 2 5 2.4 6.1.4 1.1 1.1 1.9 2.2 1.9 1.2 0 1.6-1 2-2.7.1-.4.2-.9.3-1.4.1.5.2 1 .3 1.4.4 1.7.8 2.7 2 2.7 1.1 0 1.8-.8 2.2-1.9.4-1.1 1.1-3.2 2.4-6.1l.2-.5c.9-2 1.7-4.2 1.4-6.4-.2-1.7-1.1-3.1-2.6-4-1.3-.7-3.1-1.1-5-1.1z" />
-    </svg>
-  );
-}
 
 function ToothBtn({
   num,
@@ -45,44 +33,43 @@ function ToothBtn({
       type="button"
       onClick={onToggle}
       className={cn(
-        "flex h-8 w-8 flex-col items-center justify-center gap-0.5 rounded text-[9px] font-semibold tabular-nums transition-colors",
+        "flex h-9 w-9 items-center justify-center rounded text-xs font-semibold tabular-nums transition-all",
         selected
-          ? "bg-[color-mix(in_srgb,var(--primary)_85%,white)] text-white ring-1 ring-[var(--primary)]"
-          : "bg-[var(--surface-card)] text-[var(--on-surface)] ring-1 ring-[var(--border-ghost)] hover:bg-[var(--surface)]",
+          ? "bg-[var(--primary)] text-white shadow-sm ring-2 ring-[var(--primary)] ring-offset-1"
+          : "bg-white text-[var(--on-surface-muted)] ring-1 ring-[var(--border-ghost)] hover:bg-[var(--surface)] hover:text-[var(--on-surface)] hover:ring-[var(--primary)]",
       )}
       aria-pressed={selected}
+      title={`Răng ${num}`}
     >
-      <ToothGlyph selected={selected} />
-      <span>{num}</span>
+      {num}
     </button>
   );
 }
 
-function ArchRow({
-  label,
+function QuadrantRow({
   teeth,
   set,
   toggle,
+  align = "left",
 }: {
-  label: string;
   teeth: readonly number[];
   set: Set<number>;
   toggle: (n: number) => void;
+  align?: "left" | "right";
 }) {
+  const teethArray = align === "right" ? [...teeth].reverse() : [...teeth];
   return (
-    <div className="space-y-1">
-      <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--on-surface-faint)]">{label}</p>
-      <div className="flex flex-wrap justify-center gap-1">
-        {teeth.map((n) => (
-          <ToothBtn key={n} num={n} selected={set.has(n)} onToggle={() => toggle(n)} />
-        ))}
-      </div>
+    <div className="flex gap-1">
+      {teethArray.map((n) => (
+        <ToothBtn key={n} num={n} selected={set.has(n)} onToggle={() => toggle(n)} />
+      ))}
     </div>
   );
 }
 
 export function LabToothPicker({ id, value, onChange, className }: LabToothPickerProps) {
   const set = React.useMemo(() => parseToothPositionsToSet(value), [value]);
+  const archConnection = React.useMemo(() => detectArchConnection(set), [set]);
 
   const toggle = React.useCallback(
     (n: number) => {
@@ -100,30 +87,66 @@ export function LabToothPicker({ id, value, onChange, className }: LabToothPicke
     <div
       id={id}
       className={cn(
-        "space-y-3 rounded-[var(--radius-md)] border border-[var(--border-ghost)] bg-[var(--surface-muted)] p-3",
+        "space-y-2 rounded-[var(--radius-md)] border border-[var(--border-ghost)] bg-[var(--surface-muted)] p-3",
         className,
       )}
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs font-semibold text-[var(--on-surface)]">Sơ đồ răng (FDI)</p>
-        <button
-          type="button"
-          className="text-xs font-medium text-[var(--primary)] underline-offset-2 hover:underline"
-          onClick={clear}
-        >
-          Xóa chọn
-        </button>
+        <div className="flex items-center gap-2">
+          <p className="text-xs font-semibold text-[var(--on-surface)]">Chọn răng</p>
+          {value.trim() && (
+            <span className="rounded bg-[var(--primary)] px-2 py-0.5 text-[10px] font-semibold text-white">
+              {value}
+            </span>
+          )}
+          {set.size > 0 && archConnection === "bridge" && (
+            <span className="rounded bg-amber-500 px-2 py-0.5 text-[10px] font-bold text-white">
+              CR
+            </span>
+          )}
+        </div>
+        {set.size > 0 && (
+          <button
+            type="button"
+            className="text-xs font-medium text-[var(--primary)] underline-offset-2 hover:underline"
+            onClick={clear}
+          >
+            Xóa ({set.size})
+          </button>
+        )}
       </div>
-      <div className="space-y-2 rounded-[var(--radius-sm)] bg-white p-2 ring-1 ring-[var(--border-ghost)]">
-        <ArchRow label="Hàm trên · Phải → Trái" teeth={FDI_UPPER_RIGHT} set={set} toggle={toggle} />
-        <ArchRow label="Hàm trên · Trái" teeth={FDI_UPPER_LEFT} set={set} toggle={toggle} />
-        <div className="border-t border-[var(--border-ghost)] pt-2" />
-        <ArchRow label="Hàm dưới · Trái" teeth={FDI_LOWER_LEFT} set={set} toggle={toggle} />
-        <ArchRow label="Hàm dưới · Phải" teeth={FDI_LOWER_RIGHT} set={set} toggle={toggle} />
+      
+      <div className="space-y-1.5 rounded-[var(--radius-sm)] bg-white p-2.5 shadow-sm">
+        {/* Hàm trên */}
+        <div className="flex items-center justify-center gap-1.5">
+          <QuadrantRow teeth={FDI_UPPER_RIGHT} set={set} toggle={toggle} align="right" />
+          <div className="h-9 w-px bg-[var(--border-ghost)]" />
+          <QuadrantRow teeth={FDI_UPPER_LEFT} set={set} toggle={toggle} align="left" />
+        </div>
+        
+        {/* Đường phân cách hàm */}
+        <div className="flex items-center gap-2 py-1">
+          <div className="h-px flex-1 bg-[var(--border-ghost)]" />
+          <span className="text-[9px] font-medium uppercase tracking-wider text-[var(--on-surface-faint)]">
+            Hàm trên / dưới
+          </span>
+          <div className="h-px flex-1 bg-[var(--border-ghost)]" />
+        </div>
+        
+        {/* Hàm dưới */}
+        <div className="flex items-center justify-center gap-1.5">
+          <QuadrantRow teeth={FDI_LOWER_RIGHT} set={set} toggle={toggle} align="right" />
+          <div className="h-9 w-px bg-[var(--border-ghost)]" />
+          <QuadrantRow teeth={FDI_LOWER_LEFT} set={set} toggle={toggle} align="left" />
+        </div>
       </div>
-      <p className="text-[11px] text-[var(--on-surface-muted)]">
-        Chọn bằng hình răng + số FDI. Đang chọn:{" "}
-        <strong className="text-[var(--on-surface)]">{value.trim() ? value : "—"}</strong> (đồng bộ ô «Vị trí răng»)
+      
+      <p className="text-[10px] text-[var(--on-surface-muted)]">
+        Click để chọn/bỏ chọn răng. {archConnection === "bridge" && set.size > 0 ? (
+          <strong className="text-amber-600">Cầu răng (CR)</strong>
+        ) : set.size > 0 ? (
+          <strong className="text-[var(--on-surface)]">Răng rời</strong>
+        ) : "Số răng theo chuẩn FDI (11-48)."}
       </p>
     </div>
   );

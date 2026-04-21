@@ -51,9 +51,9 @@ import {
   type LabOrderRow,
 } from "@/lib/actions/lab-orders";
 import { LabToothPicker } from "@/components/modules/orders/lab-tooth-picker";
+import { parseToothPositionsToSet, detectArchConnection } from "@/lib/dental/fdi-teeth";
 import {
   allowedLabOrderStatusTargets,
-  archConnectionOptions,
   canChangeLabOrderStatusFrom,
   formatArchConnection,
   formatCoordReviewStatus,
@@ -657,15 +657,44 @@ export function OrderDetailPage() {
             </div>
             <div className="grid gap-2 sm:col-span-2">
               <Label htmlFor="ln-tooth">Vị trí răng (FDI)</Label>
-              <LabToothPicker value={tooth} onChange={setTooth} />
+              <LabToothPicker 
+                value={tooth} 
+                onChange={(v) => {
+                  setTooth(v);
+                  const teethSet = parseToothPositionsToSet(v);
+                  const archConn = detectArchConnection(teethSet);
+                  setArchConnection(archConn);
+                  const count = teethSet.size;
+                  if (count > 0) {
+                    setToothCount(String(count));
+                    setQty(String(count));
+                  }
+                }}
+              />
               <Input
                 id="ln-tooth"
                 className="font-mono text-xs"
                 value={tooth}
-                onChange={(e) => setTooth(e.target.value)}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setTooth(v);
+                  const teethSet = parseToothPositionsToSet(v);
+                  const archConn = detectArchConnection(teethSet);
+                  setArchConnection(archConn);
+                  const count = teethSet.size;
+                  if (count > 0) {
+                    setToothCount(String(count));
+                    setQty(String(count));
+                  }
+                }}
                 placeholder="Hoặc nhập tay"
                 required
               />
+              <p className="text-[11px] text-[var(--on-surface-muted)]">
+                Tự động phát hiện: <strong className="text-[var(--on-surface)]">
+                  {archConnection === "bridge" ? "Cầu răng" : "Răng rời"}
+                </strong>
+              </p>
             </div>
             <div className="grid gap-2">
               <Label htmlFor="ln-shade">Màu</Label>
@@ -691,20 +720,6 @@ export function OrderDetailPage() {
                 onChange={(e) => setWorkType(e.target.value as "new_work" | "warranty")}
               >
                 {labOrderLineWorkTypeOptions.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </Select>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="ln-arch">Răng rời / Cầu</Label>
-              <Select
-                id="ln-arch"
-                value={archConnection}
-                onChange={(e) => setArchConnection(e.target.value as "unit" | "bridge")}
-              >
-                {archConnectionOptions.map((o) => (
                   <option key={o.value} value={o.value}>
                     {o.label}
                   </option>

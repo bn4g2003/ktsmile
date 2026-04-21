@@ -31,7 +31,6 @@ import { listCustomerPartnerPicker } from "@/lib/actions/partners";
 import { listProductPicker } from "@/lib/actions/products";
 import {
   allowedLabOrderStatusTargets,
-  archConnectionOptions,
   canChangeLabOrderStatusFrom,
   coordReviewStatusOptions,
   formatCoordReviewStatus,
@@ -47,7 +46,7 @@ import { LabToothPicker } from "@/components/modules/orders/lab-tooth-picker";
 import { LabOrderPrintButton } from "@/components/shared/reports/lab-order-print-button";
 import { DeliveryNotePrintButton } from "@/components/shared/reports/delivery-note-print-button";
 import { importLabOrdersFromExcel } from "@/lib/actions/lab-orders-import";
-import { parseToothPositionsToSet } from "@/lib/dental/fdi-teeth";
+import { parseToothPositionsToSet, detectArchConnection } from "@/lib/dental/fdi-teeth";
 import {
   createLabOrder,
   deleteLabOrder,
@@ -1013,12 +1012,14 @@ export function OrdersPage() {
                         <LabToothPicker
                           value={line.tooth_positions}
                           onChange={(v) => {
-                            const c = parseToothPositionsToSet(v).size;
+                            const teethSet = parseToothPositionsToSet(v);
+                            const c = teethSet.size;
                             const cs = c > 0 ? String(c) : "";
+                            const archConn = detectArchConnection(teethSet);
                             setDraftLines((prev) =>
                               prev.map((l) =>
                                 l.key === line.key
-                                  ? { ...l, tooth_positions: v, tooth_count: cs, qty: cs || "1" }
+                                  ? { ...l, tooth_positions: v, tooth_count: cs, qty: cs || "1", arch_connection: archConn }
                                   : l,
                               ),
                             );
@@ -1029,18 +1030,25 @@ export function OrdersPage() {
                           value={line.tooth_positions}
                           onChange={(e) => {
                             const v = e.target.value;
-                            const c = parseToothPositionsToSet(v).size;
+                            const teethSet = parseToothPositionsToSet(v);
+                            const c = teethSet.size;
                             const cs = c > 0 ? String(c) : "";
+                            const archConn = detectArchConnection(teethSet);
                             setDraftLines((prev) =>
                               prev.map((l) =>
                                 l.key === line.key
-                                  ? { ...l, tooth_positions: v, tooth_count: cs, qty: cs || "1" }
+                                  ? { ...l, tooth_positions: v, tooth_count: cs, qty: cs || "1", arch_connection: archConn }
                                   : l,
                               ),
                             );
                           }}
                           placeholder="Hoặc nhập tay: 11, 21, 36"
                         />
+                        <p className="text-[11px] text-[var(--on-surface-muted)]">
+                          Tự động phát hiện: <strong className="text-[var(--on-surface)]">
+                            {line.arch_connection === "bridge" ? "Cầu răng" : "Răng rời"}
+                          </strong>
+                        </p>
                       </div>
                       <div className="grid gap-2">
                         <Label>Màu sắc</Label>
@@ -1087,30 +1095,6 @@ export function OrdersPage() {
                           }
                         >
                           {labOrderLineWorkTypeOptions.map((o) => (
-                            <option key={o.value} value={o.value}>
-                              {o.label}
-                            </option>
-                          ))}
-                        </Select>
-                      </div>
-                      <div className="grid gap-2">
-                        <Label>Răng rời / Cầu</Label>
-                        <Select
-                          value={line.arch_connection}
-                          onChange={(e) =>
-                            setDraftLines((prev) =>
-                              prev.map((l) =>
-                                l.key === line.key
-                                  ? {
-                                      ...l,
-                                      arch_connection: e.target.value as DraftLine["arch_connection"],
-                                    }
-                                  : l,
-                              ),
-                            )
-                          }
-                        >
-                          {archConnectionOptions.map((o) => (
                             <option key={o.value} value={o.value}>
                               {o.label}
                             </option>
