@@ -289,68 +289,6 @@ function OrderFiltersPopover({
   );
 }
 
-function BatchPrintButton({
-  filters,
-  globalSearch,
-}: {
-  filters: Record<string, string>;
-  globalSearch: string;
-}) {
-  const [busy, setBusy] = React.useState(false);
-
-  const handlePrint = async () => {
-    setBusy(true);
-    const win = openBlankPrintTab();
-    if (!win) {
-      setBusy(false);
-      return;
-    }
-    try {
-      const res = await listLabOrders({
-        page: 1,
-        pageSize: 5000,
-        globalSearch,
-        filters,
-      });
-      let filtersDesc = "Tất cả đơn hàng";
-      const parts: string[] = [];
-      if (filters["received_from"]) parts.push("Từ " + formatDate(filters["received_from"]));
-      if (filters["received_to"]) parts.push("Đến " + formatDate(filters["received_to"]));
-      if (filters["status"]) {
-          const s = labOrderStatusOptions.find(o => o.value === filters["status"])?.label;
-          if (s) parts.push("Trạng thái: " + s);
-      }
-      if (parts.length) filtersDesc = "Bộ lọc: " + parts.join(", ");
-
-      const html = buildLabOrderListReportHtml({
-        filtersDesc,
-        rows: res.rows,
-        generatedAt: new Date().toLocaleString("vi-VN"),
-      });
-      writeAndPrintToWindow(win, buildPrintShell("Danh sách đơn hàng", html));
-    } catch (e) {
-      win.close();
-      alert(e instanceof Error ? e.message : "Lỗi in danh sách");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <Button
-      variant="secondary"
-      size="sm"
-      className="ring-1 ring-[color-mix(in_srgb,var(--primary)_28%,transparent)]"
-      disabled={busy}
-      onClick={() => void handlePrint()}
-    >
-      <svg className="mr-1.5 h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-      </svg>
-      {busy ? "Đang xử lý…" : "In kết quả lọc"}
-    </Button>
-  );
-}
 
 function BatchExcelButton({
   filters,
@@ -916,6 +854,14 @@ export function OrdersPage() {
         meta: { filterType: "none" },
         cell: ({ row }) => (
           <>
+            <DropdownMenuItem asChild>
+              <LabOrderPrintButton
+                orderId={row.original.id}
+                label="PDF"
+                variant="ghost"
+                className={dataGridPrintMenuItemButtonClassName}
+              />
+            </DropdownMenuItem>
             <DataGridMenuEditItem onSelect={() => openEdit(row.original)}>Sửa</DataGridMenuEditItem>
             <DataGridMenuDeleteItem onSelect={() => void onDelete(row.original)}>Xóa</DataGridMenuDeleteItem>
             <DataGridMenuLinkItem href={"/orders/" + row.original.id}>Dòng SP</DataGridMenuLinkItem>
@@ -968,7 +914,6 @@ export function OrdersPage() {
               In phiếu giao ngày
             </Button>
             <OrderFiltersPopover filters={filters} setFilters={setFilters} partners={partners} />
-            <BatchPrintButton filters={filters} globalSearch={globalSearch} />
             <BatchExcelButton filters={filters} globalSearch={globalSearch} />
             <Button variant="primary" size="sm" type="button" onClick={openCreate}>
               Thêm đơn
