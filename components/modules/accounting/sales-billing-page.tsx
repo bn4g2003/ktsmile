@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { formatDate } from "@/lib/format/date";
 
 export function SalesBillingPage() {
   const router = useRouter();
@@ -102,7 +103,7 @@ export function SalesBillingPage() {
           </Link>
         ),
       },
-      { accessorKey: "received_at", header: "Ngày nhận", meta: { filterKey: "received_from", filterType: "text" } },
+      { accessorKey: "received_at", header: "Ngày nhận", meta: { filterKey: "received_from", filterType: "text" }, cell: ({ row }) => formatDate(row.original.received_at) },
       { accessorKey: "partner_code", header: "Mã KH", meta: { filterKey: "partner_code", filterType: "text" } },
       { accessorKey: "partner_name", header: "Khách", meta: { filterKey: "partner_name", filterType: "text" } },
       { accessorKey: "patient_name", header: "Bệnh nhân", meta: { filterKey: "patient_name", filterType: "text" } },

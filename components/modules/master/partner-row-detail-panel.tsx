@@ -68,7 +68,7 @@ function PartnerOrdersBlock({ partnerId }: { partnerId: string }) {
                 </Link>
               </td>
               <td className="px-3 py-2 tabular-nums text-[var(--on-surface-muted)]">
-                {o.received_at?.slice(0, 10) ?? "—"}
+                {formatDate(o.received_at)}
               </td>
               <td className="max-w-[10rem] truncate px-3 py-2">{o.patient_name}</td>
               <td className="px-3 py-2">
