@@ -57,19 +57,12 @@ export function buildLabOrderBodyHtml(p: LabOrderPrintPayload): string {
       (l, i) =>
         `<tr>
           <td class="num">${i + 1}</td>
-          <td>${escapeHtml(l.product_code)}</td>
+          <td style="width:70px;">${escapeHtml(l.product_code)}</td>
           <td>${escapeHtml(l.product_name)}</td>
-          <td>${escapeHtml(l.unit || "—")}</td>
-          <td>${escapeHtml(l.tooth_positions)}</td>
-          <td>${escapeHtml(l.shade ?? "—")}</td>
-          <td class="num">${escapeHtml(l.tooth_count != null ? String(l.tooth_count) : "—")}</td>
-          <td>${escapeHtml(formatLabOrderLineWorkType(l.work_type))}</td>
-          <td>${escapeHtml(formatArchConnection(l.arch_connection ?? "unit"))}</td>
-          <td class="num">${escapeHtml(fmtQty(l.quantity))}</td>
-          <td class="num">${escapeHtml(formatVnd(l.unit_price))}</td>
-          <td class="num">${escapeHtml(String(l.discount_percent))}</td>
-          <td class="num">${escapeHtml(formatVnd(l.discount_amount ?? 0))}</td>
-          <td class="num">${escapeHtml(formatVnd(l.line_amount))}</td>
+          <td style="width:120px;">${escapeHtml(l.tooth_positions)}${l.shade ? ` · ${escapeHtml(l.shade)}` : ""}</td>
+          <td class="num" style="width:40px;">${escapeHtml(fmtQty(l.quantity))}</td>
+          <td class="num" style="width:85px;">${escapeHtml(formatVnd(l.unit_price))}</td>
+          <td class="num" style="width:105px;"><strong>${escapeHtml(formatVnd(l.line_amount))}</strong></td>
           <td>${escapeHtml(l.notes ?? "—")}</td>
         </tr>`,
     )
@@ -82,57 +75,75 @@ export function buildLabOrderBodyHtml(p: LabOrderPrintPayload): string {
         (p.patient_gender ? (p.patient_year_of_birth != null ? " · " : "") + formatPatientGender(p.patient_gender) : "")
       : null;
   return `
-    <h1>Đơn hàng phục hình</h1>
+    <h1 style="color:#2563eb;">PHIẾU XÁC NHẬN ĐƠN HÀNG</h1>
     <p class="muted" style="text-align:center;">Số đơn: <strong>${escapeHtml(p.order_number)}</strong> · Ngày nhận: ${escapeHtml(p.received_at)}</p>
-    <p class="muted" style="text-align:center;font-size:11px;">In lúc: ${escapeHtml(gen)}</p>
-    <table class="kv">
-      <tbody>
-        <tr><th>Khách hàng</th><td>${partnerLine}</td></tr>
-        <tr><th>Nha khoa</th><td>${escapeHtml(p.clinic_name ?? "—")}</td></tr>
-        <tr><th>Bệnh nhân</th><td>${escapeHtml(p.patient_name)}</td></tr>
-        ${cat ? `<tr><th>Loại hàng</th><td>${escapeHtml(cat)}</td></tr>` : ""}
-        ${yearG ? `<tr><th>Năm sinh / giới</th><td>${escapeHtml(yearG)}</td></tr>` : ""}
-        ${p.due_completion_at ? `<tr><th>Hẹn hoàn thành</th><td>${escapeHtml(formatDateTime(p.due_completion_at))}</td></tr>` : ""}
-        ${p.due_delivery_at ? `<tr><th>Hẹn giao</th><td>${escapeHtml(formatDateTime(p.due_delivery_at))}</td></tr>` : ""}
-        ${p.clinical_indication ? `<tr><th>Chỉ định</th><td>${escapeHtml(p.clinical_indication)}</td></tr>` : ""}
-        ${p.margin_summary ? `<tr><th>Viền</th><td>${escapeHtml(p.margin_summary)}</td></tr>` : ""}
-        ${p.accessories_summary ? `<tr><th>Phụ kiện</th><td>${escapeHtml(p.accessories_summary)}</td></tr>` : ""}
-        ${p.notes_accounting ? `<tr><th>Ghi chú kế toán</th><td>${escapeHtml(p.notes_accounting)}</td></tr>` : ""}
-        ${p.notes_coordination ? `<tr><th>Ghi chú điều phối</th><td>${escapeHtml(p.notes_coordination)}</td></tr>` : ""}
-        <tr><th>Trạng thái</th><td>${escapeHtml(formatOrderStatus(p.status))}</td></tr>
-        <tr><th>Ghi chú đơn</th><td>${escapeHtml(p.notes ?? "—")}</td></tr>
-      </tbody>
-    </table>
-    <h2>Chi tiết sản phẩm</h2>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px;">
+      <table class="kv">
+        <tbody>
+          <tr><th>TÊN KH</th><td>: ${partnerLine}</td></tr>
+          <tr><th>NHA KHOA</th><td>: ${escapeHtml(p.clinic_name ?? "—")}</td></tr>
+          <tr><th>BỆNH NHÂN</th><td>: ${escapeHtml(p.patient_name)}</td></tr>
+          ${cat ? `<tr><th>LOẠI HÀNG</th><td>: ${escapeHtml(cat)}</td></tr>` : ""}
+          ${yearG ? `<tr><th>NĂM SINH/GT</th><td>: ${escapeHtml(yearG)}</td></tr>` : ""}
+        </tbody>
+      </table>
+      <table class="kv">
+        <tbody>
+          <tr><th>HẸN HOÀN THÀNH</th><td>: ${p.due_completion_at ? escapeHtml(formatDateTime(p.due_completion_at)) : "—"}</td></tr>
+          <tr><th>HẸN GIAO</th><td>: ${p.due_delivery_at ? escapeHtml(formatDateTime(p.due_delivery_at)) : "—"}</td></tr>
+          <tr><th>GIỎ HÀNG</th><td>: ${escapeHtml(p.accessories_summary ?? "—")}</td></tr>
+          <tr><th>TRẠNG THÁI</th><td>: ${escapeHtml(formatOrderStatus(p.status))}</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    ${p.clinical_indication ? `<div style="margin-bottom:10px;font-size:11px;"><strong>CHỈ ĐỊNH:</strong> ${escapeHtml(p.clinical_indication)}</div>` : ""}
+
     <table>
       <thead>
-        <tr>
-          <th class="num">STT</th>
-          <th>Mã SP</th>
-          <th>Tên SP</th>
-          <th>ĐVT</th>
-          <th>Vị trí răng</th>
-          <th>Màu</th>
-          <th class="num">Số răng</th>
-          <th>Loại SP</th>
-          <th>Rời/Cầu</th>
-          <th class="num">SL</th>
-          <th class="num">Đơn giá</th>
-          <th class="num">CK %</th>
-          <th class="num">Giảm VNĐ</th>
-          <th class="num">Thành tiền</th>
-          <th>Ghi chú</th>
+        <tr style="background:#2563eb;color:#fff;">
+          <th class="num" style="color:#fff;">STT</th>
+          <th style="color:#fff;">MÃ SP</th>
+          <th style="color:#fff;">TÊN SẢN PHẨM</th>
+          <th style="color:#fff;">RĂNG/MÀU</th>
+          <th class="num" style="color:#fff;">SL</th>
+          <th class="num" style="color:#fff;">ĐƠN GIÁ</th>
+          <th class="num" style="color:#fff;">THÀNH TIỀN</th>
+          <th style="color:#fff;">GHI CHÚ</th>
         </tr>
       </thead>
-      <tbody>${rows || `<tr><td colspan="15">Chưa có dòng.</td></tr>`}</tbody>
+      <tbody>${rows || `<tr><td colspan="8">Chưa có dòng.</td></tr>`}</tbody>
       <tfoot>
-        <tr>
-          <th colspan="13" class="num">Cộng</th>
-          <th class="num">${escapeHtml(formatVnd(total))}</th>
-          <th></th>
+        <tr class="total-row">
+          <td colspan="6" class="num" style="font-weight:700;border:none;">TỔNG CỘNG:</td>
+          <td class="num" style="font-weight:800;font-size:13px;background:#f1f5f9;">${escapeHtml(formatVnd(total))}</td>
+          <td style="border:none;"></td>
         </tr>
       </tfoot>
     </table>
+
+    <div style="margin-top:20px;font-size:11px;color:#64748b;">
+      <p>Ghi chú đơn: ${escapeHtml(p.notes ?? "—")}</p>
+      ${p.notes_accounting ? `<p>Ghi chú kế toán: ${escapeHtml(p.notes_accounting)}</p>` : ""}
+    </div>
+
+    <div style="margin-top:40px;display:flex;justify-content:space-between;align-items:flex-start;">
+      <div style="font-size:11px;font-style:italic;max-width:60%;color:#64748b;">
+        * Vui lòng kiểm tra kỹ thông tin đơn hàng khi nhận phiếu. Trân trọng cảm ơn!
+      </div>
+      <div style="text-align:center;min-width:200px;">
+        <div style="font-size:11px;">${new Date().toLocaleDateString("vi-VN", { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</div>
+        <div style="font-weight:700;margin-top:5px;">NGƯỜI LẬP PHIẾU</div>
+        <div style="margin-top:50px;font-size:10px;color:#94a3b8;">(Ký và ghi rõ họ tên)</div>
+      </div>
+    </div>
+
+    <style>
+      table:not(.kv) th { background-color: #2563eb !important; border-color: #1e40af !important; color: #fff !important; }
+      td { height: 22px; }
+      table.kv th { background: none !important; color: #1e293b !important; }
+    </style>
   `;
 }
 

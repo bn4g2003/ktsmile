@@ -7,6 +7,17 @@ export type LabOrderListReportPayload = {
   filtersDesc: string;
   generatedAt: string;
   rows: LabOrderRow[];
+  customerHeader?: {
+    name: string;
+    address?: string;
+    phone?: string;
+    taxCode?: string;
+  };
+  stats?: {
+    prevBalance?: number;
+    discount?: number;
+    paid?: number;
+  };
 };
 
 export function buildLabOrderListReportHtml(p: LabOrderListReportPayload): string {
@@ -15,62 +26,109 @@ export function buildLabOrderListReportHtml(p: LabOrderListReportPayload): strin
       (r, i) => `
     <tr>
       <td class="num">${i + 1}</td>
-      <td><strong>${escapeHtml(r.order_number)}</strong></td>
-      <td>${escapeHtml(r.partner_code ?? "")} — ${escapeHtml(r.partner_name ?? "")}</td>
-      <td>${escapeHtml(formatDate(r.received_at))}</td>
-      <td>${escapeHtml(r.patient_name)}</td>
-      <td>${escapeHtml(r.clinic_name ?? "—")}</td>
-      <td><span class="badge badge-${r.status}">${escapeHtml(formatOrderStatus(r.status))}</span></td>
-      <td class="num"><strong>${r.total_amount.toLocaleString("vi-VN")}</strong></td>
+      <td style="width:55px;">${escapeHtml(formatDate(r.received_at))}</td>
+      <td style="width:110px;">${escapeHtml(r.clinic_name ?? "") || "—"}</td>
+      <td style="width:130px;"><strong>${escapeHtml(r.patient_name)}</strong></td>
+      <td>${escapeHtml(r.order_number)}</td>
+      <td style="width:85px;">${escapeHtml(r.tooth_positions_summary || "")}</td>
+      <td class="num" style="width:35px;">1</td>
+      <td class="num" style="width:85px;">${r.total_amount.toLocaleString("vi-VN")}</td>
+      <td class="num" style="width:95px;"><strong>${r.total_amount.toLocaleString("vi-VN")}</strong></td>
+      <td>${escapeHtml(r.notes || "")}</td>
     </tr>
   `,
     )
     .join("");
 
-  const totalAmount = p.rows.reduce((sum, r) => sum + r.total_amount, 0);
+  const subtotal = p.rows.reduce((sum, r) => sum + r.total_amount, 0);
+  const discount = p.stats?.discount ?? 0;
+  const prevBalance = p.stats?.prevBalance ?? 0;
+  const paid = p.stats?.paid ?? 0;
+  const finalBalance = prevBalance + subtotal - discount - paid;
 
   return `
-    <h1>Danh sách đơn hàng phục hình</h1>
-    <p class="muted" style="text-align:center;">${escapeHtml(p.filtersDesc)}</p>
-    <p class="muted" style="text-align:center;font-size:11px;">In lúc: ${escapeHtml(p.generatedAt)} · Số lượng: ${p.rows.length} đơn</p>
+    <h1 style="color:#2563eb;margin-bottom:5px;">HOÁ ĐƠN PHÒNG NHA / LABO</h1>
+    
+    <div style="margin-bottom:15px;">
+      <table class="kv" style="width:auto;">
+        <tbody>
+          <tr><th>TÊN KH</th><td>: ${escapeHtml(p.customerHeader?.name ?? "—")}</td></tr>
+          <tr><th>ĐỊA CHỈ</th><td>: ${escapeHtml(p.customerHeader?.address ?? "—")}</td></tr>
+          <tr><th>MST</th><td>: ${escapeHtml(p.customerHeader?.taxCode ?? "—")}</td></tr>
+          <tr><th>SĐT</th><td>: ${escapeHtml(p.customerHeader?.phone ?? "—")}</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div style="text-align:center;font-weight:700;margin-bottom:10px;font-size:14px;text-transform:uppercase;">
+      ${escapeHtml(p.filtersDesc)}
+    </div>
 
     <table>
       <thead>
-        <tr>
-          <th class="num" style="width:40px;">STT</th>
-          <th style="width:120px;">Số đơn</th>
-          <th>Khách hàng</th>
-          <th style="width:100px;">Ngày nhận</th>
-          <th>Bệnh nhân</th>
-          <th>Nha khoa</th>
-          <th style="width:100px;">Trạng thái</th>
-          <th class="num" style="width:110px;">Tổng tiền</th>
+        <tr style="background:#2563eb;color:#fff;">
+          <th class="num" style="width:30px;color:#fff;">STT</th>
+          <th style="color:#fff;">NGÀY</th>
+          <th style="color:#fff;">NHA KHOA</th>
+          <th style="color:#fff;">TÊN BỆNH NHÂN</th>
+          <th style="color:#fff;">SẢN PHẨM</th>
+          <th style="color:#fff;">VỊ TRÍ RĂNG</th>
+          <th class="num" style="color:#fff;">SL</th>
+          <th class="num" style="color:#fff;">ĐƠN GIÁ</th>
+          <th class="num" style="color:#fff;">THÀNH TIỀN</th>
+          <th style="color:#fff;">GHI CHÚ</th>
         </tr>
       </thead>
       <tbody>
-        ${rowsHtml || '<tr><td colspan="8" style="text-align:center;padding:24px;color:#666;">Không có dữ liệu phù hợp bộ lọc.</td></tr>'}
+        ${rowsHtml || '<tr><td colspan="10" style="text-align:center;padding:20px;">Không có dữ liệu.</td></tr>'}
       </tbody>
-      ${p.rows.length > 0 ? `
       <tfoot>
-        <tr>
-          <td colspan="7" style="text-align:right;font-weight:700;">TỔNG CỘNG (${p.rows.length} đơn):</td>
-          <td class="num" style="font-weight:700;font-size:14px;">${totalAmount.toLocaleString("vi-VN")}</td>
+        <tr class="total-row">
+          <td colspan="8" class="num" style="border:none;">CỘNG TIỀN HÀNG :</td>
+          <td class="num" style="border-left:1px solid #cbd5e1;background:#f8fafc;">${subtotal.toLocaleString("vi-VN")}</td>
+          <td style="border:none;"></td>
+        </tr>
+        <tr class="total-row">
+          <td colspan="8" class="num" style="border:none;">CHIẾT KHẤU GIẢM :</td>
+          <td class="num" style="border-left:1px solid #cbd5e1;">${discount.toLocaleString("vi-VN")}</td>
+          <td style="border:none;"></td>
+        </tr>
+        <tr class="total-row">
+          <td colspan="8" class="num" style="border:none;">NỢ ĐẦU KỲ :</td>
+          <td class="num" style="border-left:1px solid #cbd5e1;">${prevBalance.toLocaleString("vi-VN")}</td>
+          <td style="border:none;"></td>
+        </tr>
+        <tr class="total-row">
+          <td colspan="8" class="num" style="border:none;">THANH TOÁN TRONG KỲ :</td>
+          <td class="num" style="border-left:1px solid #cbd5e1;">${paid.toLocaleString("vi-VN")}</td>
+          <td style="border:none;"></td>
+        </tr>
+        <tr class="total-row" style="background:#2563eb;color:#fff;">
+          <td colspan="8" class="num" style="border:none;color:#fff;font-weight:800;">TỔNG CỘNG NỢ CUỐI KỲ :</td>
+          <td class="num" style="border-left:1px solid #cbd5e1;color:#fff;font-weight:800;font-size:13px;">${finalBalance.toLocaleString("vi-VN")}</td>
+          <td style="border:none;"></td>
         </tr>
       </tfoot>
-      ` : ''}
     </table>
 
+    <div style="margin-top:20px;display:flex;justify-content:space-between;align-items:flex-start;">
+      <div style="font-size:11px;font-style:italic;max-width:60%;">
+        <p>Số tiền bằng chữ: <strong>${paid > 0 ? "... (đã bao gồm thanh toán)" : "—"}</strong></p>
+        <p style="margin-top:5px;color:#64748b;">* Nếu có bất kỳ sai sót nào hoặc thắc mắc cần hỗ trợ quý khách vui lòng liên hệ với Lab khi nhận được phiếu này. Xin chân thành cảm ơn!</p>
+      </div>
+      <div style="text-align:center;min-width:200px;">
+        <div style="font-size:11px;">${new Date().toLocaleDateString("vi-VN", { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</div>
+        <div style="font-weight:700;margin-top:5px;">NGƯỜI LẬP PHIẾU</div>
+        <div style="margin-top:50px;font-size:10px;color:#94a3b8;">(Ký và ghi rõ họ tên)</div>
+      </div>
+    </div>
+
     <style>
-      table { font-size: 11px; }
-      th { white-space: nowrap; }
-      .badge { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 600; text-transform: uppercase; }
-      .badge-draft { background: #e2e8f0; color: #475569; }
-      .badge-in_progress { background: #dcfce7; color: #166534; }
-      .badge-completed { background: #dbeafe; color: #1e40af; }
-      .badge-delivered { background: #fef9c3; color: #854d0e; }
-      .badge-cancelled { background: #fee2e2; color: #991b1b; }
+      th { background-color: #2563eb !important; color:#fff !important; }
+      td { height: 18px; font-size: 10px; }
+      .num { font-size: 10.5px; }
       @media print {
-        .badge { border: 1px solid #ccc; }
+        th { background-color: #2563eb !important; -webkit-print-color-adjust: exact; }
       }
     </style>
   `;

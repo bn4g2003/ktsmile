@@ -150,3 +150,11 @@ export function NavIconPayroll({ className }: { className?: string }) {
     </Svg>
   );
 }
+
+export function NavIconChevronDown({ className }: { className?: string }) {
+  return (
+    <Svg className={className}>
+      <path d="m6 9 6 6 6-6" />
+    </Svg>
+  );
+}

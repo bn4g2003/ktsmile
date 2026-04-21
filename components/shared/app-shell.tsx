@@ -22,6 +22,7 @@ import {
   NavIconStock,
   NavIconTeam,
   NavIconWarehouseDoc,
+  NavIconChevronDown,
 } from "@/components/shared/nav-icons";
 import { Button } from "@/components/ui/button";
 import {
@@ -33,43 +34,47 @@ import {
 type NavIcon = React.ComponentType<{ className?: string }>;
 type NavItem = { href: string; label: string; Icon: NavIcon };
 
-const groups: { title: string; items: NavItem[] }[] = [
+const groups: { title: string; Icon: NavIcon; items: NavItem[] }[] = [
   {
-    title: "Tổng quan",
+    title: "TỔNG QUAN",
+    Icon: NavIconDashboard,
     items: [{ href: "/", label: "Dashboard", Icon: NavIconDashboard }],
   },
   {
-    title: "Danh mục",
+    title: "KINH DOANH",
+    Icon: NavIconOrders,
     items: [
+      { href: "/orders", label: "Đơn hàng", Icon: NavIconOrders },
+      { href: "/orders/review", label: "Kiểm tra đơn", Icon: NavIconReview },
       { href: "/master/partners", label: "Khách & NCC", Icon: NavIconPartners },
-      { href: "/master/products", label: "SP & NVL", Icon: NavIconCatalog },
-      { href: "/master/employees", label: "Nhân sự", Icon: NavIconTeam },
       { href: "/master/prices", label: "Giá theo KH", Icon: NavIconPriceTag },
     ],
   },
   {
-    title: "Nhân sự",
+    title: "KHO HÀNG",
+    Icon: NavIconStock,
     items: [
+      { href: "/master/products", label: "Sản phẩm & NVL", Icon: NavIconCatalog },
+      { href: "/inventory/stock", label: "Tồn kho", Icon: NavIconStock },
+      { href: "/inventory/documents", label: "Phiếu nhập xuất", Icon: NavIconWarehouseDoc },
+    ],
+  },
+  {
+    title: "TÀI CHÍNH",
+    Icon: NavIconChart,
+    items: [
+      { href: "/accounting/cash", label: "Sổ quỹ", Icon: NavIconCash },
+      { href: "/accounting/debt", label: "Công nợ khách hàng", Icon: NavIconDebt },
+      { href: "/accounting/sales", label: "Doanh số & GBTT", Icon: NavIconChart },
+    ],
+  },
+  {
+    title: "NHÂN SỰ",
+    Icon: NavIconTeam,
+    items: [
+      { href: "/master/employees", label: "Hồ sơ nhân sự", Icon: NavIconTeam },
       { href: "/hr/attendance", label: "Chấm công", Icon: NavIconTeam },
       { href: "/hr/payroll", label: "Tính lương", Icon: NavIconPayroll },
-    ],
-  },
-  {
-    title: "Vận hành",
-    items: [
-      { href: "/orders", label: "Đơn hàng", Icon: NavIconOrders },
-      { href: "/orders/review", label: "Kiểm tra đơn", Icon: NavIconReview },
-      { href: "/inventory/documents", label: "Kho — Phiếu", Icon: NavIconWarehouseDoc },
-      { href: "/inventory/stock", label: "Tồn kho", Icon: NavIconStock },
-    ],
-  },
-  {
-    title: "Kế toán",
-    items: [
-      { href: "/accounting/revenue", label: "Doanh số theo KH", Icon: NavIconChart },
-      { href: "/accounting/sales", label: "Doanh số & GBTT", Icon: NavIconChart },
-      { href: "/accounting/cash", label: "Sổ quỹ", Icon: NavIconCash },
-      { href: "/accounting/debt", label: "Công nợ", Icon: NavIconDebt },
     ],
   },
 ];
@@ -83,10 +88,25 @@ export function AppShell({
 }) {
   const pathname = usePathname();
   const [navOpen, setNavOpen] = React.useState(false);
+  const [expandedGroup, setExpandedGroup] = React.useState<string | null>(null);
   const navPermission = resolvePermissionPreset(currentUser.permissions);
 
   React.useEffect(() => {
     setNavOpen(false);
+  }, [pathname]);
+
+  // Auto-expand the group containing the current pathname
+  React.useEffect(() => {
+    const activeGroup = groups.find((g) =>
+      g.items.some((item) =>
+        item.href === "/"
+          ? pathname === "/"
+          : pathname === item.href || pathname.startsWith(item.href + "/"),
+      ),
+    );
+    if (activeGroup) {
+      setExpandedGroup(activeGroup.title);
+    }
   }, [pathname]);
 
   React.useEffect(() => {
@@ -122,7 +142,7 @@ export function AppShell({
       />
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 flex w-[min(100%,260px)] max-w-[85vw] flex-col bg-[var(--surface-sidebar)] shadow-[var(--shadow-sidebar)] transition-transform duration-200 ease-out",
+          "fixed inset-y-0 left-0 z-50 flex w-[280px] max-w-[85vw] flex-col bg-[var(--surface-sidebar)] shadow-[var(--shadow-sidebar)] transition-transform duration-200 ease-out",
           navOpen ? "translate-x-0" : "-translate-x-full",
           "md:translate-x-0",
         )}
@@ -139,39 +159,65 @@ export function AppShell({
             </div>
           </Link>
         </div>
-        <nav className="flex flex-1 flex-col gap-6 overflow-y-auto px-3 py-5">
-          {visibleGroups.map((g) => (
-            <div key={g.title}>
-              <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--on-surface-faint)]">
-                {g.title}
-              </p>
-              <ul className="flex flex-col gap-0.5">
-                {g.items.map((item) => {
-                  const active =
-                    item.href === "/"
-                      ? pathname === "/"
-                      : pathname === item.href || pathname.startsWith(item.href + "/");
-                  const Icon = item.Icon;
-                  return (
-                    <li key={item.href}>
-                      <Link
-                        href={item.href}
-                        className={cn(
-                          "flex min-h-11 items-center gap-2.5 rounded-[var(--radius-lg)] px-3 text-sm font-medium transition",
-                          active
-                            ? "bg-[var(--primary-muted)] font-semibold text-[var(--primary)]"
-                            : "text-[var(--on-surface-muted)] hover:bg-[var(--surface-muted)] hover:text-[var(--on-surface)]",
-                        )}
-                      >
-                        <Icon className={active ? "opacity-100" : "opacity-70"} />
-                        <span className="min-w-0 truncate">{item.label}</span>
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          ))}
+        <nav className="flex flex-1 flex-col gap-1 overflow-y-auto px-3 py-5">
+          {visibleGroups.map((g) => {
+            const isExpanded = expandedGroup === g.title;
+            const GroupIcon = g.Icon;
+            return (
+              <div key={g.title} className="flex flex-col">
+                <button
+                  onClick={() => setExpandedGroup(isExpanded ? null : g.title)}
+                  className={cn(
+                    "flex min-h-[44px] w-full items-center gap-2.5 rounded-[var(--radius-lg)] px-3 text-[11px] font-bold uppercase tracking-[0.12em] transition-all",
+                    isExpanded
+                      ? "bg-[var(--surface-muted)] text-[var(--primary)]"
+                      : "text-[var(--on-surface-muted)] hover:bg-[var(--surface-muted)] hover:text-[var(--on-surface)]",
+                  )}
+                >
+                  <GroupIcon className={cn("h-[18px] w-[18px] shrink-0", isExpanded ? "opacity-100" : "opacity-70")} />
+                  <span className="flex-1 text-left">{g.title}</span>
+                  <NavIconChevronDown
+                    className={cn(
+                      "h-3.5 w-3.5 transition-transform duration-200",
+                      isExpanded ? "rotate-0" : "-rotate-90",
+                    )}
+                  />
+                </button>
+                <div
+                  className={cn(
+                    "grid transition-[grid-template-rows] duration-200 ease-in-out",
+                    isExpanded ? "grid-rows-[1fr] py-1" : "grid-rows-[0fr]",
+                  )}
+                >
+                  <ul className="flex flex-col gap-0.5 overflow-hidden pl-7">
+                    {g.items.map((item) => {
+                      const active =
+                        item.href === "/"
+                          ? pathname === "/"
+                          : pathname === item.href || pathname.startsWith(item.href + "/");
+                      const Icon = item.Icon;
+                      return (
+                        <li key={item.href}>
+                          <Link
+                            href={item.href}
+                            className={cn(
+                              "flex min-h-11 items-center gap-2.5 rounded-[var(--radius-lg)] px-3 text-sm font-medium transition",
+                              active
+                                ? "bg-[var(--primary-muted)] font-semibold text-[var(--primary)]"
+                                : "text-[var(--on-surface-muted)] hover:bg-[var(--surface-muted)] hover:text-[var(--on-surface)]",
+                            )}
+                          >
+                            <Icon className={active ? "opacity-100" : "opacity-70"} />
+                            <span className="min-w-0 truncate">{item.label}</span>
+                          </Link>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              </div>
+            );
+          })}
         </nav>
         <div className="border-t border-[var(--border-ghost)] p-4">
           <div className="flex flex-col gap-2 rounded-[var(--radius-lg)] bg-[var(--surface-muted)] p-3">
@@ -198,7 +244,7 @@ export function AppShell({
         </div>
       </aside>
 
-      <div className="flex min-h-screen min-w-0 flex-1 flex-col pl-0 md:pl-[260px]">
+      <div className="flex min-h-screen min-w-0 flex-1 flex-col pl-0 md:pl-[280px]">
         <AppHeader onOpenNav={() => setNavOpen(true)} />
         <main className="flex-1 px-4 pb-8 pt-4 sm:px-6 sm:pb-10 sm:pt-6">
           <div className="mx-auto max-w-[min(100%,112rem)]">{children}</div>
