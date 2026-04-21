@@ -24,6 +24,7 @@ import { StockVoucherPrintButton } from "@/components/shared/reports/stock-vouch
 import { Card } from "@/components/ui/card";
 import { DetailPreview } from "@/components/ui/detail-preview";
 import { formatMovement, formatPostingStatus } from "@/lib/format/labels";
+import { formatDate } from "@/lib/format/date";
 import { listProductPicker } from "@/lib/actions/products";
 import { getProductSupplyMatch, type ProductSupplyMatch } from "@/lib/actions/product-suppliers";
 import {
@@ -206,11 +207,23 @@ export function InventoryDocumentDetailPage() {
 
   const columns = React.useMemo<ColumnDef<StockLineRow, unknown>[]>(
     () => [
-      { accessorKey: "product_code", header: "Mã SP" },
-      { accessorKey: "product_name", header: "Tên SP" },
-      { accessorKey: "quantity", header: "SL" },
-      { accessorKey: "unit_price", header: "Đơn giá" },
-      { accessorKey: "line_amount", header: "Thành tiền" },
+      { accessorKey: "product_code", header: "Mã NVL" },
+      { accessorKey: "product_name", header: "Tên NVL" },
+      {
+        accessorKey: "quantity",
+        header: "Số lượng",
+        cell: ({ getValue }) => Number(getValue() ?? 0).toLocaleString("vi-VN"),
+      },
+      {
+        accessorKey: "unit_price",
+        header: "Giá",
+        cell: ({ getValue }) => Number(getValue() ?? 0).toLocaleString("vi-VN"),
+      },
+      {
+        accessorKey: "line_amount",
+        header: "Thành tiền",
+        cell: ({ getValue }) => Number(getValue() ?? 0).toLocaleString("vi-VN"),
+      },
       {
         id: "actions",
         header: "Thao tác",
@@ -237,7 +250,7 @@ export function InventoryDocumentDetailPage() {
           { label: "Đơn giá", value: row.unit_price },
           { label: "Thành tiền", value: row.line_amount },
           { label: "ID dòng", value: row.id, span: "full" },
-          { label: "Tạo lúc", value: row.created_at },
+          { label: "Tạo lúc", value: formatDate(row.created_at) },
         ]}
       />
     );

@@ -4,6 +4,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import {
   createPartnerPrice,
   deletePartnerPrice,
@@ -11,11 +12,18 @@ import {
   updatePartnerPrice,
 } from "@/lib/actions/partner-prices";
 import { cn } from "@/lib/utils/cn";
+import { PriceQuotePrintButton } from "@/components/shared/reports/price-quote-print-button";
 
 type MatrixData = {
   partners: { id: string; code: string; name: string }[];
   products: { id: string; code: string; name: string; unit_price: number }[];
   overrides: { id: string; partner_id: string; product_id: string; unit_price: number }[];
+};
+
+type PriceChange = {
+  productId: string;
+  newPrice: string;
+  existingId?: string;
 };
 
 export function PricesPage() {
@@ -25,13 +33,17 @@ export function PricesPage() {
   const [error, setError] = React.useState<string | null>(null);
   const [searchTerm, setSearchTerm] = React.useState("");
   const [selectedPartnerId, setSelectedPartnerId] = React.useState<string | null>(null);
-  const [updatingId, setUpdatingId] = React.useState<string | null>(null);
+  const [saving, setSaving] = React.useState(false);
+  
+  // Track pending changes
+  const [pendingChanges, setPendingChanges] = React.useState<Map<string, PriceChange>>(new Map());
 
   const fetchData = React.useCallback(async () => {
     try {
       setLoading(true);
       const res = await getPriceMatrix();
       setData(res);
+      setPendingChanges(new Map()); // Clear pending changes after refresh
       // Auto-select first partner on desktop if none selected
       if (res.partners.length > 0 && !selectedPartnerId && window.innerWidth >= 1024) {
         setSelectedPartnerId(res.partners[0].id);
@@ -59,42 +71,69 @@ export function PricesPage() {
     return data?.partners.find((p) => p.id === selectedPartnerId);
   }, [data, selectedPartnerId]);
 
-  const handlePriceChange = async (
-    partnerId: string,
+  const handlePriceInputChange = (
     productId: string,
     newPrice: string,
     existingId?: string,
   ) => {
-    const val = Number(newPrice);
-    if (Number.isNaN(val)) return;
-
-    const key = `${partnerId}-${productId}`;
-    setUpdatingId(key);
-    try {
+    const key = `${selectedPartnerId}-${productId}`;
+    const newChanges = new Map(pendingChanges);
+    
+    if (newPrice.trim() === "") {
+      // Mark for deletion if there's an existing override
       if (existingId) {
-        if (newPrice.trim() === "" || val <= 0) {
-          await deletePartnerPrice(existingId);
-        } else {
-          await updatePartnerPrice(existingId, {
-            partner_id: partnerId,
-            product_id: productId,
+        newChanges.set(key, { productId, newPrice: "", existingId });
+      } else {
+        newChanges.delete(key);
+      }
+    } else {
+      newChanges.set(key, { productId, newPrice, existingId });
+    }
+    
+    setPendingChanges(newChanges);
+  };
+
+  const saveAllChanges = async () => {
+    if (!selectedPartnerId || pendingChanges.size === 0) return;
+    
+    setSaving(true);
+    try {
+      for (const [, change] of pendingChanges) {
+        const val = Number(change.newPrice);
+        
+        if (change.existingId) {
+          if (change.newPrice.trim() === "" || val <= 0) {
+            await deletePartnerPrice(change.existingId);
+          } else {
+            await updatePartnerPrice(change.existingId, {
+              partner_id: selectedPartnerId,
+              product_id: change.productId,
+              unit_price: val,
+            });
+          }
+        } else if (change.newPrice.trim() !== "" && val > 0) {
+          await createPartnerPrice({
+            partner_id: selectedPartnerId,
+            product_id: change.productId,
             unit_price: val,
           });
         }
-      } else if (newPrice.trim() !== "" && val > 0) {
-        await createPartnerPrice({
-          partner_id: partnerId,
-          product_id: productId,
-          unit_price: val,
-        });
       }
-      const res = await getPriceMatrix();
-      setData(res);
+      
+      await fetchData();
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Lỗi cập nhật giá");
+      alert(e instanceof Error ? e.message : "Lỗi lưu thay đổi");
     } finally {
-      setUpdatingId(null);
+      setSaving(false);
     }
+  };
+
+  const discardChanges = () => {
+    setPendingChanges(new Map());
+    // Force re-render inputs by toggling partner
+    const currentId = selectedPartnerId;
+    setSelectedPartnerId(null);
+    setTimeout(() => setSelectedPartnerId(currentId), 0);
   };
 
   if (loading && !data) return <div className="p-8 text-center text-[var(--on-surface-muted)]">Đang tải dữ liệu...</div>;
@@ -121,7 +160,13 @@ export function PricesPage() {
           {filteredPartners.map((p) => (
             <button
               key={p.id}
-              onClick={() => setSelectedPartnerId(p.id)}
+              onClick={() => {
+                if (pendingChanges.size > 0) {
+                  if (!confirm("Có thay đổi chưa lưu. Bỏ qua thay đổi?")) return;
+                  setPendingChanges(new Map());
+                }
+                setSelectedPartnerId(p.id);
+              }}
               className={cn(
                 "w-full text-left px-3 py-2.5 rounded-md transition-all group",
                 selectedPartnerId === p.id 
@@ -153,7 +198,13 @@ export function PricesPage() {
                 <Button 
                   variant="ghost" 
                   size="sm" 
-                  onClick={() => setSelectedPartnerId(null)}
+                  onClick={() => {
+                    if (pendingChanges.size > 0) {
+                      if (!confirm("Có thay đổi chưa lưu. Bỏ qua thay đổi?")) return;
+                      setPendingChanges(new Map());
+                    }
+                    setSelectedPartnerId(null);
+                  }}
                   className="lg:hidden h-8 w-8 p-0"
                 >
                   <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -170,7 +221,39 @@ export function PricesPage() {
                   </p>
                 </div>
               </div>
-              <Button variant="secondary" size="sm" onClick={fetchData} className="shrink-0 h-8 px-2 sm:px-3 text-xs sm:text-sm">Làm mới</Button>
+              <div className="flex items-center gap-2">
+                {pendingChanges.size > 0 && (
+                  <>
+                    <span className="text-xs text-amber-600 font-semibold hidden sm:inline">
+                      {pendingChanges.size} thay đổi
+                    </span>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={discardChanges}
+                      className="h-8 px-2 sm:px-3 text-xs"
+                    >
+                      Hủy
+                    </Button>
+                    <Button 
+                      variant="primary" 
+                      size="sm" 
+                      onClick={saveAllChanges}
+                      disabled={saving}
+                      className="h-8 px-2 sm:px-3 text-xs"
+                    >
+                      {saving ? "Đang lưu..." : "Lưu thay đổi"}
+                    </Button>
+                  </>
+                )}
+                <PriceQuotePrintButton 
+                  partnerId={selectedPartner.id} 
+                  label="In báo giá"
+                  variant="secondary"
+                  size="sm"
+                />
+                <Button variant="secondary" size="sm" onClick={fetchData} className="shrink-0 h-8 px-2 sm:px-3 text-xs sm:text-sm">Làm mới</Button>
+              </div>
             </div>
 
             <div className="flex-1 overflow-auto p-3 sm:p-6">
@@ -190,14 +273,19 @@ export function PricesPage() {
                       const override = data.overrides.find(
                         (o) => o.partner_id === selectedPartner.id && o.product_id === product.id
                       );
-                      const isUpdating = updatingId === `${selectedPartner.id}-${product.id}`;
+                      const changeKey = `${selectedPartner.id}-${product.id}`;
+                      const pendingChange = pendingChanges.get(changeKey);
+                      const hasChanges = pendingChange !== undefined;
                       
                       const currentDiscount = override 
                         ? Math.round((1 - override.unit_price / product.unit_price) * 100) 
                         : 0;
 
                       return (
-                        <tr key={product.id} className="hover:bg-[var(--surface-muted)] transition-colors group">
+                        <tr key={product.id} className={cn(
+                          "hover:bg-[var(--surface-muted)] transition-colors group",
+                          hasChanges && "bg-amber-50"
+                        )}>
                           <td className="px-4 py-3">
                             <div className="font-bold text-[var(--on-surface)] group-hover:text-[var(--primary)] transition-colors leading-tight">{product.name}</div>
                             <div className="text-[9px] text-[var(--on-surface-faint)] uppercase font-semibold mt-0.5">{product.code}</div>
@@ -213,50 +301,41 @@ export function PricesPage() {
                                 placeholder="0"
                                 className="h-7 text-xs text-center border-none bg-transparent focus:ring-0 tabular-nums font-semibold text-[var(--accent-purple)] placeholder:text-[var(--on-surface-faint)] px-1"
                                 defaultValue={override ? currentDiscount : ""}
-                                onBlur={(e) => {
+                                onChange={(e) => {
                                   const pct = parseFloat(e.target.value);
                                   if (!isNaN(pct)) {
                                     const newPrice = Math.round(product.unit_price * (1 - pct / 100));
-                                    if (newPrice !== (override?.unit_price ?? product.unit_price)) {
-                                      void handlePriceChange(selectedPartner.id, product.id, newPrice.toString(), override?.id);
-                                    }
-                                  } else if (e.target.value === "" && override) {
-                                    void handlePriceChange(selectedPartner.id, product.id, "", override.id);
+                                    handlePriceInputChange(product.id, newPrice.toString(), override?.id);
+                                  } else if (e.target.value === "") {
+                                    handlePriceInputChange(product.id, "", override?.id);
                                   }
                                 }}
-                                disabled={isUpdating}
                               />
                               <span className="text-[9px] font-bold text-[var(--accent-purple)] pr-0.5">%</span>
                             </div>
                           </td>
 
                           <td className="px-3 py-2">
-                            <Input
-                              type="number"
-                              defaultValue={override ? override.unit_price.toString() : ""}
+                            <CurrencyInput
+                              value={override ? override.unit_price.toString() : ""}
                               placeholder={product.unit_price.toString()}
                               className={cn(
                                 "h-7 text-xs text-center tabular-nums transition-all border-dashed px-1",
                                 override 
                                   ? "border-[var(--primary)] font-bold text-[var(--primary)] bg-[color-mix(in_srgb,var(--primary)_5%,transparent)]" 
-                                  : "border-[var(--border-ghost)]"
+                                  : "border-[var(--border-ghost)]",
+                                hasChanges && "ring-2 ring-amber-400"
                               )}
-                              onBlur={(e) => {
-                                 const newVal = e.target.value;
-                                 const currentVal = override ? override.unit_price.toString() : "";
-                                 if (newVal !== currentVal) {
-                                   void handlePriceChange(selectedPartner.id, product.id, newVal, override?.id);
-                                 }
+                              onChange={(val) => {
+                                handlePriceInputChange(product.id, val, override?.id);
                               }}
-                              disabled={isUpdating}
+                              allowDecimal={false}
                             />
                           </td>
 
                           <td className="px-3 py-2 text-center">
-                            {isUpdating ? (
-                              <div className="flex justify-center">
-                                <span className="h-3.5 w-3.5 rounded-full border-2 border-[var(--primary)] border-t-transparent animate-spin" />
-                              </div>
+                            {hasChanges ? (
+                              <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 font-bold uppercase ring-1 ring-amber-300/30 whitespace-nowrap">Chưa lưu</span>
                             ) : override ? (
                               <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-bold uppercase ring-1 ring-emerald-300/30 whitespace-nowrap">Riêng</span>
                             ) : (

@@ -146,8 +146,22 @@ export async function deletePartnerPrice(id: string) {
 export async function getPriceMatrix() {
   const supabase = createSupabaseAdmin();
   const [pRes, prRes, oRes] = await Promise.all([
-    supabase.from("partners").select("id, code, name").eq("is_active", true).order("name").limit(5000),
-    supabase.from("products").select("id, code, name, unit_price").eq("is_active", true).order("name").limit(5000),
+    // Chỉ lấy khách hàng (customer_clinic, customer_labo), không lấy supplier
+    supabase
+      .from("partners")
+      .select("id, code, name")
+      .in("partner_type", ["customer_clinic", "customer_labo"])
+      .eq("is_active", true)
+      .order("name")
+      .limit(5000),
+    // Chỉ lấy sản phẩm (sales, both), không lấy nguyên vật liệu (inventory)
+    supabase
+      .from("products")
+      .select("id, code, name, unit_price")
+      .in("product_usage", ["sales", "both"])
+      .eq("is_active", true)
+      .order("name")
+      .limit(5000),
     supabase.from("partner_product_prices").select("id, partner_id, product_id, unit_price").limit(10000),
   ]);
 
@@ -159,5 +173,61 @@ export async function getPriceMatrix() {
     partners: pRes.data || [],
     products: prRes.data || [],
     overrides: oRes.data || [],
+  };
+}
+
+export async function getPriceQuotePayload(partnerId: string) {
+  const supabase = createSupabaseAdmin();
+  
+  // Lấy thông tin khách hàng
+  const { data: partner, error: pErr } = await supabase
+    .from("partners")
+    .select("code, name")
+    .eq("id", partnerId)
+    .single();
+  if (pErr || !partner) throw new Error("Không tìm thấy khách hàng");
+
+  // Lấy danh sách sản phẩm
+  const { data: products, error: prErr } = await supabase
+    .from("products")
+    .select("id, code, name, unit, unit_price")
+    .in("product_usage", ["sales", "both"])
+    .eq("is_active", true)
+    .order("name")
+    .limit(5000);
+  if (prErr) throw new Error(prErr.message);
+
+  // Lấy giá riêng của khách hàng
+  const { data: overrides, error: oErr } = await supabase
+    .from("partner_product_prices")
+    .select("product_id, unit_price")
+    .eq("partner_id", partnerId);
+  if (oErr) throw new Error(oErr.message);
+
+  const overrideMap = new Map<string, number>();
+  for (const o of overrides ?? []) {
+    overrideMap.set(o.product_id as string, Number(o.unit_price));
+  }
+
+  return {
+    partner_code: partner.code as string,
+    partner_name: partner.name as string,
+    generated_at: new Date().toLocaleString("vi-VN"),
+    products: (products ?? []).map((p) => {
+      const basePrice = Number(p.unit_price);
+      const partnerPrice = overrideMap.get(p.id as string) ?? null;
+      const discountPercent = partnerPrice !== null 
+        ? Math.round((1 - partnerPrice / basePrice) * 100)
+        : 0;
+      
+      return {
+        product_code: p.code as string,
+        product_name: p.name as string,
+        unit: (p.unit as string) || "",
+        base_price: basePrice,
+        partner_price: partnerPrice,
+        discount_percent: discountPercent,
+      };
+    }),
   };
 }

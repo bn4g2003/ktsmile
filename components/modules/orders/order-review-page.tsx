@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { encodeMultiFilter } from "@/lib/grid/multi-filter";
 import { formatCoordReviewStatus } from "@/lib/format/labels";
+import { formatDate } from "@/lib/format/date";
 
 function dayKey(isoDate: string): string {
   return isoDate.slice(0, 10);
@@ -214,7 +215,7 @@ export function OrderReviewPage() {
                       <td className="px-2 py-2">
                         <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggle(r.id)} />
                       </td>
-                      <td className="px-2 py-2 tabular-nums">{r.received_at}</td>
+                      <td className="px-2 py-2 tabular-nums">{formatDate(r.received_at)}</td>
                       <td className="px-2 py-2">
                         <Link href={"/orders/" + r.id} className="font-medium text-[var(--primary)] underline-offset-2 hover:underline">
                           {r.order_number}

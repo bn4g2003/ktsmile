@@ -8,6 +8,7 @@ import {
   type PartnerPriceRow,
 } from "@/lib/actions/partner-prices";
 import type { ProductRow } from "@/lib/actions/products";
+import { formatDate } from "@/lib/format/date";
 import { ProductSuppliersPanel } from "@/components/modules/master/product-suppliers-panel";
 
 function formatProductUsageLabel(u: string) {
@@ -110,8 +111,8 @@ export function ProductRowDetailPanel({ row }: { row: ProductRow }) {
             { label: "Đơn giá niêm yết", value: row.unit_price.toLocaleString("vi-VN") },
             { label: "Bảo hành (năm)", value: row.warranty_years ?? "—" },
             { label: "Hoạt động", value: row.is_active ? "Có" : "Không" },
-            { label: "Tạo lúc", value: row.created_at },
-            { label: "Cập nhật", value: row.updated_at },
+            { label: "Tạo lúc", value: formatDate(row.created_at) },
+            { label: "Cập nhật", value: formatDate(row.updated_at) },
           ]}
         />
       ) : null}

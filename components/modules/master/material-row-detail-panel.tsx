@@ -5,6 +5,7 @@ import { DetailPreview } from "@/components/ui/detail-preview";
 import { DetailTabStrip } from "@/components/ui/detail-tab-strip";
 import { MaterialSuppliersPanel } from "@/components/modules/master/material-suppliers-panel";
 import type { MaterialRow } from "@/lib/actions/materials";
+import { formatDate } from "@/lib/format/date";
 
 export function MaterialRowDetailPanel({ row }: { row: MaterialRow }) {
   const [tab, setTab] = React.useState<"info" | "suppliers">("info");
@@ -36,8 +37,8 @@ export function MaterialRowDetailPanel({ row }: { row: MaterialRow }) {
               span: "full",
             },
             { label: "Hoạt động", value: row.is_active ? "Có" : "Không" },
-            { label: "Tạo lúc", value: row.created_at },
-            { label: "Cập nhật", value: row.updated_at },
+            { label: "Tạo lúc", value: formatDate(row.created_at) },
+            { label: "Cập nhật", value: formatDate(row.updated_at) },
           ]}
         />
       ) : null}

@@ -47,6 +47,7 @@ import { LabOrderPrintButton } from "@/components/shared/reports/lab-order-print
 import { DeliveryNotePrintButton } from "@/components/shared/reports/delivery-note-print-button";
 import { importLabOrdersFromExcel } from "@/lib/actions/lab-orders-import";
 import { parseToothPositionsToSet, detectArchConnection } from "@/lib/dental/fdi-teeth";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import {
   createLabOrder,
   deleteLabOrder,
@@ -58,6 +59,7 @@ import {
   updateLabOrderStatus,
   type LabOrderRow,
 } from "@/lib/actions/lab-orders";
+import { formatDate } from "@/lib/format/date";
 
 const DENTAL_SHADES = [
   "A1", "A2", "A3", "A3.5", "A4",
@@ -166,6 +168,7 @@ export function OrdersPage() {
   const [partnerId, setPartnerId] = React.useState("");
   const [clinicName, setClinicName] = React.useState("");
   const [patientName, setPatientName] = React.useState("");
+  const [contactPhone, setContactPhone] = React.useState("");
   const [status, setStatus] = React.useState<LabOrderRow["status"]>("delivered");
   const [notes, setNotes] = React.useState("");
   const [orderCategory, setOrderCategory] = React.useState<
@@ -242,6 +245,7 @@ export function OrdersPage() {
     setPartnerId(partners[0]?.id ?? "");
     setClinicName("");
     setPatientName("");
+    setContactPhone("");
     setStatus("delivered");
     setNotes("");
     resetProductionFields();
@@ -266,6 +270,7 @@ export function OrdersPage() {
     setPartnerId(row.partner_id);
     setClinicName(row.clinic_name ?? "");
     setPatientName(row.patient_name);
+    setContactPhone(row.contact_phone ?? "");
     setStatus(row.status);
     setNotes(row.notes ?? "");
     resetProductionFields();
@@ -379,6 +384,7 @@ export function OrdersPage() {
           partner_id: partnerId,
           patient_name: patientName.trim(),
           clinic_name: clinicName.trim() || null,
+          contact_phone: contactPhone.trim() || null,
           notes: notes.trim() || null,
           status,
           ...buildProductionHeader(),
@@ -441,6 +447,7 @@ export function OrdersPage() {
             partner_id: partnerId,
             patient_name: patientName.trim(),
             clinic_name: clinicName.trim() || null,
+            contact_phone: contactPhone.trim() || null,
             status,
             notes: notes.trim() || null,
             ...ph,
@@ -557,10 +564,11 @@ export function OrdersPage() {
         header: "Ngày nhận",
         size: 160,
         meta: { filterKey: "received_from", filterType: "text" },
+        cell: ({ row }) => formatDate(row.original.received_at),
       },
       {
         id: "received_to",
-        header: "Đến",
+        header: "Thời gian hẹn",
         meta: { filterKey: "received_to", filterType: "text" },
         cell: ({ row }) => {
           const explicitDue = (row.original as unknown as { due_delivery_at?: string | null }).due_delivery_at;
@@ -762,6 +770,16 @@ export function OrdersPage() {
                 onChange={(e) => setPatientName(e.target.value)}
                 placeholder="Họ tên bệnh nhân"
                 required
+              />
+            </div>
+            <div className="grid gap-2 sm:col-span-2">
+              <Label htmlFor="lo-phone">Số điện thoại</Label>
+              <Input
+                id="lo-phone"
+                type="tel"
+                value={contactPhone}
+                onChange={(e) => setContactPhone(e.target.value)}
+                placeholder="Số điện thoại liên hệ"
               />
             </div>
             <div className="grid gap-2 sm:col-span-2">
@@ -1110,16 +1128,14 @@ export function OrdersPage() {
                       </div>
                       <div className="grid gap-2">
                         <Label>Đơn giá</Label>
-                        <Input
-                          type="number"
-                          min={0}
-                          step={0.01}
+                        <CurrencyInput
                           value={line.price}
-                          onChange={(e) =>
+                          onChange={(val) =>
                             setDraftLines((prev) =>
-                              prev.map((l) => (l.key === line.key ? { ...l, price: e.target.value } : l)),
+                              prev.map((l) => (l.key === line.key ? { ...l, price: val } : l)),
                             )
                           }
+                          allowDecimal={false}
                         />
                       </div>
                       <div className="grid gap-2">
@@ -1139,18 +1155,16 @@ export function OrdersPage() {
                       </div>
                       <div className="grid gap-2">
                         <Label>Giảm VNĐ (dòng)</Label>
-                        <Input
-                          type="number"
-                          min={0}
-                          step={0.01}
+                        <CurrencyInput
                           value={line.disc_vnd}
-                          onChange={(e) =>
+                          onChange={(val) =>
                             setDraftLines((prev) =>
                               prev.map((l) =>
-                                l.key === line.key ? { ...l, disc_vnd: e.target.value } : l,
+                                l.key === line.key ? { ...l, disc_vnd: val } : l,
                               ),
                             )
                           }
+                          allowDecimal={false}
                         />
                       </div>
                     </div>

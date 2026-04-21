@@ -8,6 +8,7 @@ import { listSupplierPurchasableProducts, type SupplierPurchasableProduct } from
 import { getSupplierPayableSnapshot, type SupplierPayableSnapshot } from "@/lib/actions/payables";
 import { listInboundDocumentsBySupplier, type StockDocumentRow } from "@/lib/actions/stock";
 import type { SupplierRow } from "@/lib/actions/suppliers";
+import { formatDate } from "@/lib/format/date";
 
 function SupplierInboundOrdersBlock({ supplierId }: { supplierId: string }) {
   const [rows, setRows] = React.useState<StockDocumentRow[] | null>(null);
@@ -199,8 +200,8 @@ export function SupplierRowDetailPanel({ row }: { row: SupplierRow }) {
             { label: "Hoạt động", value: row.is_active ? "Có" : "Không" },
             { label: "Địa chỉ", value: row.address, span: "full" },
             { label: "Ghi chú", value: row.notes, span: "full" },
-            { label: "Tạo lúc", value: row.created_at },
-            { label: "Cập nhật", value: row.updated_at },
+            { label: "Tạo lúc", value: formatDate(row.created_at) },
+            { label: "Cập nhật", value: formatDate(row.updated_at) },
           ]}
         />
       ) : null}

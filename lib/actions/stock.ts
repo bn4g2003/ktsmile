@@ -26,6 +26,8 @@ export type StockDocumentRow = {
   line_count: number;
   total_quantity: number;
   total_amount: number;
+  product_names?: string | null;
+  product_prices?: string | null;
 };
 
 export type StockDocumentHeader = {
@@ -78,7 +80,7 @@ export async function listStockDocuments(
 
   const build = (usePostingFilter: boolean) => {
     let q = supabase.from("stock_documents").select(
-      "*, suppliers:supplier_id(code,name), stock_lines(id,quantity,line_amount)",
+      "*, suppliers:supplier_id(code,name), stock_lines(id,quantity,line_amount,unit_price,products:product_id(name))",
       { count: "exact" },
     );
 
@@ -115,13 +117,26 @@ export async function listStockDocuments(
 
   const rows: StockDocumentRow[] = (data ?? []).map((r: Record<string, unknown>) => {
     const suppliers = r["suppliers"] as { code?: string; name?: string } | null;
-    const sl = r["stock_lines"] as { id?: string; quantity?: number; line_amount?: number }[] | null;
+    const sl = r["stock_lines"] as { id?: string; quantity?: number; line_amount?: number; unit_price?: number; products?: { name?: string } }[] | null;
     const cnt = Array.isArray(sl) ? sl.length : 0;
     let totalQty = 0;
     let totalAmount = 0;
+    const productNames: string[] = [];
+    const productPrices: string[] = [];
     for (const ln of sl ?? []) {
       totalQty += Number(ln.quantity ?? 0);
       totalAmount += Number(ln.line_amount ?? 0);
+      const pName = ln.products?.name;
+      if (pName && !productNames.includes(pName)) {
+        productNames.push(pName);
+      }
+      const pPrice = ln.unit_price;
+      if (pPrice != null) {
+        const priceStr = Number(pPrice).toLocaleString("vi-VN");
+        if (!productPrices.includes(priceStr)) {
+          productPrices.push(priceStr);
+        }
+      }
     }
     return {
       id: r["id"] as string,
@@ -139,6 +154,8 @@ export async function listStockDocuments(
       line_count: cnt,
       total_quantity: totalQty,
       total_amount: totalAmount,
+      product_names: productNames.length > 0 ? productNames.join(", ") : null,
+      product_prices: productPrices.length > 0 ? productPrices.join(", ") : null,
     };
   });
 
@@ -152,7 +169,7 @@ export async function listInboundDocumentsBySupplier(
   const supabase = createSupabaseAdmin();
   const { data, error } = await supabase
     .from("stock_documents")
-    .select("*, suppliers:supplier_id(code,name), stock_lines(id,quantity,line_amount)")
+    .select("*, suppliers:supplier_id(code,name), stock_lines(id,quantity,line_amount,unit_price,products:product_id(name))")
     .eq("supplier_id", supplierId)
     .eq("movement_type", "inbound")
     .order("document_date", { ascending: false })
@@ -162,13 +179,26 @@ export async function listInboundDocumentsBySupplier(
 
   return (data ?? []).map((r: Record<string, unknown>) => {
     const suppliers = r["suppliers"] as { code?: string; name?: string } | null;
-    const sl = r["stock_lines"] as { id?: string; quantity?: number; line_amount?: number }[] | null;
+    const sl = r["stock_lines"] as { id?: string; quantity?: number; line_amount?: number; unit_price?: number; products?: { name?: string } }[] | null;
     const cnt = Array.isArray(sl) ? sl.length : 0;
     let totalQty = 0;
     let totalAmount = 0;
+    const productNames: string[] = [];
+    const productPrices: string[] = [];
     for (const ln of sl ?? []) {
       totalQty += Number(ln.quantity ?? 0);
       totalAmount += Number(ln.line_amount ?? 0);
+      const pName = ln.products?.name;
+      if (pName && !productNames.includes(pName)) {
+        productNames.push(pName);
+      }
+      const pPrice = ln.unit_price;
+      if (pPrice != null) {
+        const priceStr = Number(pPrice).toLocaleString("vi-VN");
+        if (!productPrices.includes(priceStr)) {
+          productPrices.push(priceStr);
+        }
+      }
     }
     return {
       id: r["id"] as string,
@@ -186,6 +216,8 @@ export async function listInboundDocumentsBySupplier(
       line_count: cnt,
       total_quantity: totalQty,
       total_amount: totalAmount,
+      product_names: productNames.length > 0 ? productNames.join(", ") : null,
+      product_prices: productPrices.length > 0 ? productPrices.join(", ") : null,
     };
   });
 }
@@ -323,8 +355,22 @@ export async function createInboundMaterialPurchase(
 
   let document_number = row.document_number?.trim() ?? "";
   if (!document_number) {
-    const suffix = crypto.randomUUID().replace(/-/g, "").slice(0, 8).toUpperCase();
-    document_number = "PN-NVL-" + row.document_date.replace(/-/g, "") + "-" + suffix;
+    // Sử dụng function tự động tạo mã phiếu
+    const { data: genResult, error: genError } = await supabase.rpc(
+      "generate_stock_document_number",
+      {
+        p_movement_type: "inbound",
+        p_document_date: row.document_date,
+        p_supplier_id: row.supplier_id,
+      }
+    );
+    if (genError) {
+      // Fallback nếu function chưa có (migration chưa chạy)
+      const suffix = crypto.randomUUID().replace(/-/g, "").slice(0, 8).toUpperCase();
+      document_number = "PN-NVL-" + row.document_date.replace(/-/g, "") + "-" + suffix;
+    } else {
+      document_number = genResult as string;
+    }
   }
 
   const insertDoc = {
@@ -378,29 +424,63 @@ export async function createInboundMaterialPurchase(
 }
 
 const outboundRequestSchema = z.object({
-  product_id: z.string().uuid(),
-  quantity: z.coerce.number().positive(),
+  document_date: z.string().min(1),
   reason: z.string().max(500).optional().nullable(),
+  notes: z.string().max(2000).optional().nullable(),
+  lines: z
+    .array(
+      z.object({
+        product_id: z.string().uuid(),
+        quantity: z.coerce.number().positive(),
+      }),
+    )
+    .min(1),
+}).superRefine((data, ctx) => {
+  const ids = data.lines.map((l) => l.product_id);
+  if (new Set(ids).size !== ids.length) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["lines"],
+      message: "Mỗi vật tư chỉ một dòng — gộp số lượng hoặc xóa dòng trùng.",
+    });
+  }
 });
 
-/** Tạo phiếu xuất ở trạng thái nháp + một dòng — chưa trừ tồn cho đến khi ghi nhận. */
-export async function createOutboundStockRequest(input: z.infer<typeof outboundRequestSchema>) {
+/** Tạo phiếu xuất ở trạng thái nháp + nhiều dòng — chưa trừ tồn cho đến khi ghi nhận. */
+export async function createOutboundStockRequest(
+  input: z.infer<typeof outboundRequestSchema>,
+): Promise<{ documentId: string; document_number: string }> {
   const row = outboundRequestSchema.parse(input);
   const supabase = createSupabaseAdmin();
-  const document_date = new Date().toISOString().slice(0, 10);
-  const suffix = crypto.randomUUID().replace(/-/g, "").slice(0, 8).toUpperCase();
-  const document_number = "YCXK-" + document_date.replace(/-/g, "") + "-" + suffix;
+  
+  // Sử dụng function tự động tạo mã phiếu
+  let document_number: string;
+  const { data: genResult, error: genError } = await supabase.rpc(
+    "generate_stock_document_number",
+    {
+      p_movement_type: "outbound",
+      p_document_date: row.document_date,
+      p_supplier_id: null,
+    }
+  );
+  if (genError) {
+    // Fallback nếu function chưa có (migration chưa chạy)
+    const suffix = crypto.randomUUID().replace(/-/g, "").slice(0, 8).toUpperCase();
+    document_number = "YCXK-" + row.document_date.replace(/-/g, "") + "-" + suffix;
+  } else {
+    document_number = genResult as string;
+  }
 
   const { data: doc, error } = await supabase
     .from("stock_documents")
     .insert({
       document_number,
-      document_date,
+      document_date: row.document_date,
       movement_type: "outbound",
       posting_status: "draft",
       supplier_id: null,
       reason: row.reason?.trim() || "Yêu cầu xuất kho",
-      notes: null,
+      notes: row.notes?.trim() || null,
     })
     .select("id")
     .single();
@@ -415,25 +495,40 @@ export async function createOutboundStockRequest(input: z.infer<typeof outboundR
   }
   if (!doc) throw new Error("Không tạo được phiếu.");
 
-  const { data: prod, error: pe } = await supabase
-    .from("products")
-    .select("unit_price")
-    .eq("id", row.product_id)
-    .single();
-  if (pe || !prod) throw new Error(pe?.message ?? "Không tìm thấy sản phẩm.");
-  const unit_price = Number(prod["unit_price"] ?? 0);
+  const docId = doc.id as string;
 
-  const { error: le } = await supabase.from("stock_lines").insert({
-    document_id: doc.id as string,
-    product_id: row.product_id,
-    quantity: row.quantity,
-    unit_price,
-  });
-  if (le) throw new Error(le.message);
+  try {
+    const uniqueIds = [...new Set(row.lines.map((l) => l.product_id))];
+    const { data: products, error: pe } = await supabase
+      .from("products")
+      .select("id, unit_price")
+      .in("id", uniqueIds);
+    if (pe) throw new Error(pe.message);
+
+    const priceMap = new Map<string, number>();
+    for (const p of products ?? []) {
+      priceMap.set(p.id as string, Number(p.unit_price ?? 0));
+    }
+
+    for (const line of row.lines) {
+      const unit_price = priceMap.get(line.product_id) ?? 0;
+      const { error: le } = await supabase.from("stock_lines").insert({
+        document_id: docId,
+        product_id: line.product_id,
+        quantity: line.quantity,
+        unit_price,
+      });
+      if (le) throw new Error(le.message);
+    }
+  } catch (e) {
+    await supabase.from("stock_lines").delete().eq("document_id", docId);
+    await supabase.from("stock_documents").delete().eq("id", docId);
+    throw e;
+  }
 
   revalidatePath("/inventory/documents");
   revalidatePath("/inventory/stock");
-  return doc.id as string;
+  return { documentId: docId, document_number };
 }
 
 export async function getStockDocumentById(id: string): Promise<StockDocumentHeader | null> {

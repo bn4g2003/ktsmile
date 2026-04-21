@@ -23,6 +23,7 @@ export type LabOrderRow = {
   partner_id: string;
   patient_name: string;
   clinic_name: string | null;
+  contact_phone: string | null;
   status: "draft" | "in_progress" | "completed" | "delivered" | "cancelled";
   notes: string | null;
   created_at: string;
@@ -47,33 +48,33 @@ export type LabOrderRow = {
 
 /* Gợi ý FK theo tên constraint (tránh PGRST201 khi PostgREST không chọn đúng quan hệ). */
 const LAB_ORDERS_LIST_SELECT_FULL =
-  "id, order_number, received_at, partner_id, patient_name, clinic_name, status, notes, created_at, updated_at, order_category, patient_year_of_birth, coord_review_status, doctor_prescription_id, billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, payment_notice_doc_number, payment_notice_issued_at, partners!lab_orders_partner_id_fkey(code,name), doctor_prescriptions!lab_orders_doctor_prescription_id_fkey(slip_code), lab_order_lines!lab_order_lines_order_id_fkey(line_amount,tooth_positions,tooth_count)";
+  "id, order_number, received_at, partner_id, patient_name, clinic_name, contact_phone, status, notes, created_at, updated_at, order_category, patient_year_of_birth, coord_review_status, doctor_prescription_id, billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, payment_notice_doc_number, payment_notice_issued_at, partners!lab_orders_partner_id_fkey(code,name), doctor_prescriptions!lab_orders_doctor_prescription_id_fkey(slip_code), lab_order_lines!lab_order_lines_order_id_fkey(line_amount,tooth_positions,tooth_count)";
 
 /** Trước migration 20260420 (order_category, sender_name, …). */
 const LAB_ORDERS_LIST_SELECT_NO_PROD_UI =
-  "id, order_number, received_at, partner_id, patient_name, clinic_name, status, notes, created_at, updated_at, coord_review_status, doctor_prescription_id, billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, payment_notice_doc_number, payment_notice_issued_at, partners!lab_orders_partner_id_fkey(code,name), doctor_prescriptions!lab_orders_doctor_prescription_id_fkey(slip_code), lab_order_lines!lab_order_lines_order_id_fkey(line_amount,tooth_positions,tooth_count)";
+  "id, order_number, received_at, partner_id, patient_name, clinic_name, contact_phone, status, notes, created_at, updated_at, coord_review_status, doctor_prescription_id, billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, payment_notice_doc_number, payment_notice_issued_at, partners!lab_orders_partner_id_fkey(code,name), doctor_prescriptions!lab_orders_doctor_prescription_id_fkey(slip_code), lab_order_lines!lab_order_lines_order_id_fkey(line_amount,tooth_positions,tooth_count)";
 
 /** Trước migration 20260419 (phiếu BS, đối chiếu, GBTT trên đơn). */
 const LAB_ORDERS_LIST_SELECT_LEGACY_CORE =
-  "id, order_number, received_at, partner_id, patient_name, clinic_name, status, notes, created_at, updated_at, partners!lab_orders_partner_id_fkey(code,name), lab_order_lines!lab_order_lines_order_id_fkey(line_amount,tooth_positions,tooth_count)";
+  "id, order_number, received_at, partner_id, patient_name, clinic_name, contact_phone, status, notes, created_at, updated_at, partners!lab_orders_partner_id_fkey(code,name), lab_order_lines!lab_order_lines_order_id_fkey(line_amount,tooth_positions,tooth_count)";
 
 /**
  * Chỉ cột lab_orders (không embed) — khi PostgREST lỗi quan hệ/lồng lab_order_lines hoặc partners.
  * Cộng dòng = 0 cho đến khi schema/API ổn định.
  */
 const LAB_ORDERS_LIST_SELECT_SCALARS_FULL =
-  "id, order_number, received_at, partner_id, patient_name, clinic_name, status, notes, created_at, updated_at, order_category, patient_year_of_birth, coord_review_status, doctor_prescription_id, billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, payment_notice_doc_number, payment_notice_issued_at";
+  "id, order_number, received_at, partner_id, patient_name, clinic_name, contact_phone, status, notes, created_at, updated_at, order_category, patient_year_of_birth, coord_review_status, doctor_prescription_id, billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, payment_notice_doc_number, payment_notice_issued_at";
 
 /** Scalar tối thiểu (trước migration billing / đối chiếu). */
 const LAB_ORDERS_LIST_SELECT_SCALARS_LEGACY =
-  "id, order_number, received_at, partner_id, patient_name, clinic_name, status, notes, created_at, updated_at";
+  "id, order_number, received_at, partner_id, patient_name, clinic_name, contact_phone, status, notes, created_at, updated_at";
 
 /** Khi embed phiếu BS vẫn lỗi — bỏ doctor_prescriptions, giữ tổng dòng. */
 const LAB_ORDERS_LIST_SELECT_NO_RX_EMBED =
-  "id, order_number, received_at, partner_id, patient_name, clinic_name, status, notes, created_at, updated_at, order_category, patient_year_of_birth, coord_review_status, doctor_prescription_id, billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, payment_notice_doc_number, payment_notice_issued_at, partners!lab_orders_partner_id_fkey(code,name), lab_order_lines!lab_order_lines_order_id_fkey(line_amount,tooth_positions,tooth_count)";
+  "id, order_number, received_at, partner_id, patient_name, clinic_name, contact_phone, status, notes, created_at, updated_at, order_category, patient_year_of_birth, coord_review_status, doctor_prescription_id, billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, payment_notice_doc_number, payment_notice_issued_at, partners!lab_orders_partner_id_fkey(code,name), lab_order_lines!lab_order_lines_order_id_fkey(line_amount,tooth_positions,tooth_count)";
 
 const LAB_ORDERS_LIST_SELECT_NO_PROD_UI_NO_RX =
-  "id, order_number, received_at, partner_id, patient_name, clinic_name, status, notes, created_at, updated_at, coord_review_status, doctor_prescription_id, billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, payment_notice_doc_number, payment_notice_issued_at, partners!lab_orders_partner_id_fkey(code,name), lab_order_lines!lab_order_lines_order_id_fkey(line_amount,tooth_positions,tooth_count)";
+  "id, order_number, received_at, partner_id, patient_name, clinic_name, contact_phone, status, notes, created_at, updated_at, coord_review_status, doctor_prescription_id, billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, payment_notice_doc_number, payment_notice_issued_at, partners!lab_orders_partner_id_fkey(code,name), lab_order_lines!lab_order_lines_order_id_fkey(line_amount,tooth_positions,tooth_count)";
 
 function mapLabOrderListRow(r: Record<string, unknown>): LabOrderRow {
   const partners = r["partners"] as { code?: string; name?: string } | null;
@@ -110,6 +111,7 @@ function mapLabOrderListRow(r: Record<string, unknown>): LabOrderRow {
     partner_id: r["partner_id"] as string,
     patient_name: r["patient_name"] as string,
     clinic_name: (r["clinic_name"] as string | null) ?? null,
+    contact_phone: (r["contact_phone"] as string | null) ?? null,
     status: r["status"] as LabOrderRow["status"],
     notes: (r["notes"] as string | null) ?? null,
     created_at: r["created_at"] as string,
@@ -275,6 +277,7 @@ const labOrderCreateHeaderSchema = z
     partner_id: z.string().uuid(),
     patient_name: z.string().min(1).max(500),
     clinic_name: z.string().max(500).optional().nullable(),
+    contact_phone: z.string().max(50).optional().nullable(),
     status: z
       .enum(["draft", "in_progress", "completed", "delivered", "cancelled"])
       .optional(),
@@ -303,6 +306,7 @@ const labOrderUpdateSchema = z
     partner_id: z.string().uuid(),
     patient_name: z.string().min(1).max(500),
     clinic_name: z.string().max(500).optional().nullable(),
+    contact_phone: z.string().max(50).optional().nullable(),
     status: z
       .enum(["draft", "in_progress", "completed", "delivered", "cancelled"])
       .optional(),
@@ -402,6 +406,7 @@ export async function createLabOrder(
         partner_id: h.partner_id,
         patient_name: h.patient_name.trim(),
         clinic_name: h.clinic_name?.trim() ? h.clinic_name.trim() : null,
+        contact_phone: h.contact_phone?.trim() ? h.contact_phone.trim() : null,
         status: h.status ?? "delivered",
         notes: h.notes?.trim() ? h.notes.trim() : null,
         coord_review_status: "pending",
@@ -472,6 +477,7 @@ export async function updateLabOrder(id: string, input: z.infer<typeof labOrderU
     partner_id,
     patient_name,
     clinic_name,
+    contact_phone,
     status,
     notes,
   } = row;
@@ -483,6 +489,7 @@ export async function updateLabOrder(id: string, input: z.infer<typeof labOrderU
       partner_id,
       patient_name,
       clinic_name,
+      contact_phone,
       status,
       notes,
       ...productionColumnsFromHeader(prod),

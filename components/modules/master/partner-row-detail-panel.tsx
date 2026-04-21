@@ -5,6 +5,7 @@ import * as React from "react";
 import { DetailPreview } from "@/components/ui/detail-preview";
 import { DetailTabStrip } from "@/components/ui/detail-tab-strip";
 import { formatOrderStatus, formatPartnerType, orderStatusBadgeClassName } from "@/lib/format/labels";
+import { formatDate } from "@/lib/format/date";
 import { getPartnerDebtSnapshot, type PartnerDebtSnapshot } from "@/lib/actions/debt";
 import { listLabOrdersByPartner, type LabOrderRow } from "@/lib/actions/lab-orders";
 import type { PartnerRow } from "@/lib/actions/partners";
@@ -168,8 +169,8 @@ export function PartnerRowDetailPanel({ row }: { row: PartnerRow }) {
     { label: "Hoạt động", value: row.is_active ? "Có" : "Không" },
     { label: "Địa chỉ", value: row.address, span: "full" as const },
     { label: "Ghi chú", value: row.notes, span: "full" as const },
-    { label: "Tạo lúc", value: row.created_at },
-    { label: "Cập nhật", value: row.updated_at },
+    { label: "Tạo lúc", value: formatDate(row.created_at) },
+    { label: "Cập nhật", value: formatDate(row.updated_at) },
   ];
 
   return (

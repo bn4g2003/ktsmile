@@ -26,6 +26,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { listCustomerPartnerPicker } from "@/lib/actions/partners";
 import { listSupplierPicker } from "@/lib/actions/suppliers";
 import { formatCashDirection } from "@/lib/format/labels";
+import { formatDate } from "@/lib/format/date";
 import { CashFlowChartsSection } from "@/components/modules/accounting/cash-flow-charts-section";
 import { CashReceiptPrintButton } from "@/components/shared/reports/cash-receipt-print-button";
 import {
@@ -231,8 +232,8 @@ export function CashPage() {
           { label: "Reference type", value: row.reference_type },
           { label: "Reference id", value: row.reference_id },
           { label: "ID", value: row.id, span: "full" },
-          { label: "Tạo lúc", value: row.created_at },
-          { label: "Cập nhật", value: row.updated_at },
+          { label: "Tạo lúc", value: formatDate(row.created_at) },
+          { label: "Cập nhật", value: formatDate(row.updated_at) },
         ]}
       />
     );

@@ -10,6 +10,7 @@ import {
   formatOrderStatus,
   orderStatusBadgeClassName,
 } from "@/lib/format/labels";
+import { formatDate } from "@/lib/format/date";
 import { listLabOrderLines, type LabOrderLineRow, type LabOrderRow } from "@/lib/actions/lab-orders";
 
 function OrderLinesBlock({ orderId }: { orderId: string }) {
@@ -104,7 +105,7 @@ export function LabOrderRowDetailPanel({ row }: { row: LabOrderRow }) {
         <DetailPreview
           fields={[
             { label: "Số đơn", value: row.order_number },
-            { label: "Ngày nhận", value: row.received_at },
+            { label: "Ngày nhận", value: formatDate(row.received_at) },
             { label: "Mã KH", value: row.partner_code },
             { label: "Khách", value: row.partner_name },
             { label: "Nha khoa", value: row.clinic_name ?? "—" },
@@ -137,8 +138,8 @@ export function LabOrderRowDetailPanel({ row }: { row: LabOrderRow }) {
               span: "full",
             },
             { label: "ID", value: row.id, span: "full" },
-            { label: "Tạo lúc", value: row.created_at },
-            { label: "Cập nhật", value: row.updated_at },
+            { label: "Tạo lúc", value: formatDate(row.created_at) },
+            { label: "Cập nhật", value: formatDate(row.updated_at) },
           ]}
         />
       ) : null}

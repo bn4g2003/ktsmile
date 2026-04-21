@@ -120,7 +120,7 @@ export async function recordReceivableReceiptFromDebtPage(
     payer_name: row.payer_name?.trim() || null,
     description: row.description?.trim() || null,
     reference_type: "debt_page",
-    reference_id: null,
+    reference_id: "",
   });
   return { id, doc_number };
 }
@@ -151,7 +151,7 @@ export async function recordPayablePaymentFromDebtPage(
     payer_name: null,
     description: row.description?.trim() || null,
     reference_type: "debt_page",
-    reference_id: null,
+    reference_id: "",
   });
   return { id, doc_number };
 }

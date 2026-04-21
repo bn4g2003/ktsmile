@@ -64,6 +64,7 @@ import {
   labOrderLineWorkTypeOptions,
   orderStatusBadgeClassName,
 } from "@/lib/format/labels";
+import { formatDate } from "@/lib/format/date";
 
 export function OrderDetailPage() {
   const params = useParams();
@@ -332,7 +333,7 @@ export function OrderDetailPage() {
           { label: "Thành tiền", value: row.line_amount },
           { label: "Ghi chú", value: row.notes, span: "full" },
           { label: "ID dòng", value: row.id, span: "full" },
-          { label: "Tạo lúc", value: row.created_at },
+          { label: "Tạo lúc", value: formatDate(row.created_at) },
         ]}
       />
     );

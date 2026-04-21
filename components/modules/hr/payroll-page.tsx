@@ -13,6 +13,7 @@ import {
   upsertPayrollRun,
   type PayrollPreviewRow,
 } from "@/lib/actions/payroll";
+import { formatDate } from "@/lib/format/date";
 
 function money(n: number) {
   return n.toLocaleString("vi-VN");
@@ -269,7 +270,7 @@ export function PayrollPage() {
                   <td className="px-3 py-2 tabular-nums">{h.standard_work_days}</td>
                   <td className="px-3 py-2 tabular-nums">{money(h.overtime_rate_per_hour)}</td>
                   <td className="px-3 py-2 text-right font-semibold tabular-nums">{money(h.total_net_salary)}</td>
-                  <td className="px-3 py-2 text-[var(--on-surface-muted)]">{h.created_at}</td>
+                  <td className="px-3 py-2 text-[var(--on-surface-muted)]">{formatDate(h.created_at)}</td>
                 </tr>
               ))}
               {history.length === 0 ? (

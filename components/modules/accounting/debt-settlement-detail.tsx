@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { DetailPreview } from "@/components/ui/detail-preview";
 import { Input } from "@/components/ui/input";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
@@ -100,7 +101,7 @@ export function DebtSettlementDetail(props: Props) {
     setFormErr(null);
     setPending(true);
     try {
-      const amt = Number(amount.replace(/,/g, ""));
+      const amt = Number(amount);
       if (!Number.isFinite(amt) || amt <= 0) {
         setFormErr("Nhập số tiền hợp lệ.");
         return;
@@ -161,15 +162,13 @@ export function DebtSettlementDetail(props: Props) {
           </div>
           <div className="grid gap-1.5">
             <Label htmlFor="ds-amt">Số tiền</Label>
-            <Input
+            <CurrencyInput
               id="ds-amt"
-              type="number"
-              min={0.01}
-              step={0.01}
               value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              placeholder="VD: 1500000"
+              onChange={(val) => setAmount(val)}
+              placeholder="VD: 1.500.000"
               required
+              allowDecimal={false}
             />
           </div>
           <div className="grid gap-1.5">

@@ -5,6 +5,7 @@ import { DetailPreview } from "@/components/ui/detail-preview";
 import { DetailTabStrip } from "@/components/ui/detail-tab-strip";
 import { permissionPresetLabel } from "@/lib/auth/permission-presets";
 import type { EmployeeRow } from "@/lib/actions/employees";
+import { formatDate } from "@/lib/format/date";
 
 function fmtMoney(n: number) {
   return n.toLocaleString("vi-VN", { maximumFractionDigits: 0 });
@@ -101,8 +102,8 @@ export function EmployeeRowDetailPanel({ row }: { row: EmployeeRow }) {
                 span: "full",
               },
               { label: "Ghi chú", value: row.notes ?? "—", span: "full" },
-              { label: "Tạo lúc", value: row.created_at },
-              { label: "Cập nhật lần cuối", value: row.updated_at },
+              { label: "Tạo lúc", value: formatDate(row.created_at) },
+              { label: "Cập nhật lần cuối", value: formatDate(row.updated_at) },
             ]}
           />
           <p className="text-xs leading-relaxed text-[var(--on-surface-muted)]">
