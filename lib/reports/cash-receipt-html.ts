@@ -1,4 +1,4 @@
-import { formatVnd } from "@/lib/format/currency";
+import { formatVnd, amountInWordsVietnamese } from "@/lib/format/currency";
 import { formatCashDirection } from "@/lib/format/labels";
 import { formatDateTime } from "@/lib/format/date";
 import { escapeHtml } from "@/lib/reports/escape-html";
@@ -25,35 +25,73 @@ export function cashReceiptPrintTitle(p: CashReceiptPrintPayload): string {
 
 export function buildCashReceiptBodyHtml(p: CashReceiptPrintPayload): string {
   const gen = formatDateTime(new Date());
-  const partnerLine =
-    p.partner_code || p.partner_name
-      ? `${escapeHtml(p.partner_code ?? "")}${p.partner_code && p.partner_name ? " — " : ""}${escapeHtml(p.partner_name ?? "")}`
-      : "—";
-  const supplierLine =
-    p.supplier_code || p.supplier_name
-      ? `${escapeHtml(p.supplier_code ?? "")}${p.supplier_code && p.supplier_name ? " — " : ""}${escapeHtml(p.supplier_name ?? "")}`
-      : "—";
-  const h1 = p.direction === "payment" ? "Phiếu chi" : "Phiếu thu";
-  const counterpartyLabel = p.direction === "payment" ? "Đối tượng (NCC)" : "Đối tượng (KH)";
-  const counterpartyValue = p.direction === "payment" ? supplierLine : partnerLine;
-  const payerRow =
-    p.direction === "payment"
-      ? ""
-      : `<tr><th>Người nộp</th><td>${escapeHtml(p.payer_name ?? "—")}</td></tr>`;
+  const isPayment = p.direction === "payment";
+  const h1 = isPayment ? "Phiếu chi" : "Phiếu thu";
+  const counterpartyLabel = isPayment ? "Nhà cung cấp" : "Khách hàng";
+  const counterpartyValue = isPayment 
+    ? (p.supplier_name || p.supplier_code || "—")
+    : (p.partner_name || p.partner_code || "—");
+
   return `
-    <h1>${h1}</h1>
-    <p class="muted" style="text-align:center;">Số chứng từ: <strong>${escapeHtml(p.doc_number)}</strong> · Ngày: ${escapeHtml(p.transaction_date)}</p>
-    <p class="muted" style="text-align:center;font-size:11px;">In lúc: ${escapeHtml(gen)}</p>
-    <table class="kv">
-      <tbody>
-        <tr><th>Loại</th><td>${escapeHtml(formatCashDirection(p.direction))}</td></tr>
-        <tr><th>Nghiệp vụ</th><td>${escapeHtml(p.business_category)}</td></tr>
-        <tr><th>Số tiền</th><td><strong>${escapeHtml(formatVnd(p.amount))}</strong></td></tr>
-        <tr><th>Kênh thanh toán</th><td>${escapeHtml(p.payment_channel)}</td></tr>
-        ${payerRow}
-        <tr><th>${counterpartyLabel}</th><td>${counterpartyValue}</td></tr>
-        <tr><th>Diễn giải</th><td>${escapeHtml(p.description ?? "—")}</td></tr>
-      </tbody>
-    </table>
+    <div style="margin-top: -10px;">
+      <h1 style="margin-bottom: 5px;">${h1}</h1>
+      <p style="text-align:center; font-size: 13px; margin: 0 0 20px 0;">
+        Số: <strong>${escapeHtml(p.doc_number)}</strong> 
+        <span style="margin: 0 10px; color: #cbd5e1;">|</span> 
+        Ngày: <strong>${p.transaction_date.split('-').reverse().join('/')}</strong>
+      </p>
+
+      <table class="kv" style="margin-bottom: 25px;">
+        <tbody>
+          <tr>
+            <th style="width: 120px;">Người ${isPayment ? 'nhận' : 'nộp'} tiền:</th>
+            <td style="font-size: 14px; font-weight: 700; border-bottom: 1px dotted #cbd5e1;">${escapeHtml(p.payer_name || counterpartyValue)}</td>
+          </tr>
+          <tr>
+            <th>${counterpartyLabel}:</th>
+            <td style="border-bottom: 1px dotted #cbd5e1;">${escapeHtml(counterpartyValue)}</td>
+          </tr>
+          <tr>
+            <th>Nội dung:</th>
+            <td style="border-bottom: 1px dotted #cbd5e1;">${escapeHtml(p.description || p.business_category)}</td>
+          </tr>
+          <tr>
+            <th>Số tiền:</th>
+            <td style="font-size: 15px; font-weight: 800; border-bottom: 1px dotted #cbd5e1;">${formatVnd(p.amount)} VNĐ</td>
+          </tr>
+          <tr>
+            <th>Bằng chữ:</th>
+            <td style="font-style: italic; border-bottom: 1px dotted #cbd5e1;">${amountInWordsVietnamese(p.amount)}</td>
+          </tr>
+          <tr>
+            <th>Kênh / Chứng từ:</th>
+            <td style="border-bottom: 1px dotted #cbd5e1;">${escapeHtml(p.payment_channel)}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; text-align: center; margin-top: 40px; min-height: 120px;">
+        <div>
+          <div style="font-weight: 700;">Giám đốc</div>
+          <div style="font-size: 10px; font-style: italic; color: #64748b;">(Ký, đóng dấu)</div>
+        </div>
+        <div>
+          <div style="font-weight: 700;">Kế toán</div>
+          <div style="font-size: 10px; font-style: italic; color: #64748b;">(Ký, họ tên)</div>
+        </div>
+        <div>
+          <div style="font-weight: 700;">Thủ quỹ</div>
+          <div style="font-size: 10px; font-style: italic; color: #64748b;">(Ký, họ tên)</div>
+        </div>
+        <div>
+          <div style="font-weight: 700;">Người ${isPayment ? 'nhận' : 'nộp'}</div>
+          <div style="font-size: 10px; font-style: italic; color: #64748b;">(Ký, họ tên)</div>
+        </div>
+      </div>
+
+      <div style="margin-top: 50px; text-align: right; font-size: 10px; color: #94a3b8;">
+        In lúc: ${escapeHtml(gen)} — Hệ thống quản lý KTSmile Lab
+      </div>
+    </div>
   `;
 }
