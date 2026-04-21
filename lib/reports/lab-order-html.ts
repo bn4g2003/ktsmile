@@ -1,5 +1,6 @@
 import { formatVnd } from "@/lib/format/currency";
 import { formatArchConnection, formatLabOrderCategory, formatLabOrderLineWorkType, formatOrderStatus, formatPatientGender } from "@/lib/format/labels";
+import { formatDate, formatDateTime } from "@/lib/format/date";
 import { escapeHtml } from "@/lib/reports/escape-html";
 
 export type LabOrderPrintLine = {
@@ -46,7 +47,7 @@ function fmtQty(n: number) {
 }
 
 export function buildLabOrderBodyHtml(p: LabOrderPrintPayload): string {
-  const gen = new Date().toLocaleString("vi-VN");
+  const gen = formatDateTime(new Date());
   const partnerLine =
     p.partner_code || p.partner_name
       ? `${escapeHtml(p.partner_code ?? "")}${p.partner_code && p.partner_name ? " — " : ""}${escapeHtml(p.partner_name ?? "")}`
@@ -91,8 +92,8 @@ export function buildLabOrderBodyHtml(p: LabOrderPrintPayload): string {
         <tr><th>Bệnh nhân</th><td>${escapeHtml(p.patient_name)}</td></tr>
         ${cat ? `<tr><th>Loại hàng</th><td>${escapeHtml(cat)}</td></tr>` : ""}
         ${yearG ? `<tr><th>Năm sinh / giới</th><td>${escapeHtml(yearG)}</td></tr>` : ""}
-        ${p.due_completion_at ? `<tr><th>Hẹn hoàn thành</th><td>${escapeHtml(new Date(p.due_completion_at).toLocaleString("vi-VN"))}</td></tr>` : ""}
-        ${p.due_delivery_at ? `<tr><th>Hẹn giao</th><td>${escapeHtml(new Date(p.due_delivery_at).toLocaleString("vi-VN"))}</td></tr>` : ""}
+        ${p.due_completion_at ? `<tr><th>Hẹn hoàn thành</th><td>${escapeHtml(formatDateTime(p.due_completion_at))}</td></tr>` : ""}
+        ${p.due_delivery_at ? `<tr><th>Hẹn giao</th><td>${escapeHtml(formatDateTime(p.due_delivery_at))}</td></tr>` : ""}
         ${p.clinical_indication ? `<tr><th>Chỉ định</th><td>${escapeHtml(p.clinical_indication)}</td></tr>` : ""}
         ${p.margin_summary ? `<tr><th>Viền</th><td>${escapeHtml(p.margin_summary)}</td></tr>` : ""}
         ${p.accessories_summary ? `<tr><th>Phụ kiện</th><td>${escapeHtml(p.accessories_summary)}</td></tr>` : ""}

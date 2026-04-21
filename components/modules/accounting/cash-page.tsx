@@ -34,6 +34,8 @@ import {
   deleteCashTransaction,
   listCashTransactions,
   updateCashTransaction,
+  upsertCashAccountOpeningBalance,
+  listCashAccountOpeningBalances,
   type CashRow,
 } from "@/lib/actions/cash";
 
@@ -68,6 +70,15 @@ export function CashPage() {
   const [refType, setRefType] = React.useState("");
   const [refId, setRefId] = React.useState("");
   const [showCharts, setShowCharts] = React.useState(true);
+  const [openOpening, setOpenOpening] = React.useState(false);
+  const [openingYear, setOpeningYear] = React.useState(String(new Date().getFullYear()));
+  const [openingMonth, setOpeningMonth] = React.useState(String(new Date().getMonth() + 1));
+  const [openingBalances, setOpeningBalances] = React.useState<{ channel: string; amount: string }[]>([
+    { channel: "cash", amount: "0" },
+    { channel: "mbbank", amount: "0" },
+    { channel: "acb", amount: "0" },
+  ]);
+  const [savingOpening, setSavingOpening] = React.useState(false);
 
   React.useEffect(() => {
     void listCustomerPartnerPicker().then(setPartners).catch(() => {});
@@ -152,6 +163,60 @@ export function CashPage() {
       bumpGrid();
     } catch (e2) {
       alert(e2 instanceof Error ? e2.message : "Lỗi");
+    }
+  };
+
+  const openOpeningDialog = async () => {
+    const y = Number(openingYear);
+    const m = Number(openingMonth);
+    try {
+      const bals = await listCashAccountOpeningBalances(y, m);
+      if (bals.length > 0) {
+        setOpeningBalances(
+          bals.map((b) => ({
+            channel: b.payment_channel,
+            amount: String(b.opening_balance),
+          })),
+        );
+      } else {
+        setOpeningBalances([
+          { channel: "cash", amount: "0" },
+          { channel: "mbbank", amount: "0" },
+          { channel: "acb", amount: "0" },
+        ]);
+      }
+    } catch {
+      setOpeningBalances([
+        { channel: "cash", amount: "0" },
+        { channel: "mbbank", amount: "0" },
+        { channel: "acb", amount: "0" },
+      ]);
+    }
+    setOpenOpening(true);
+  };
+
+  const saveOpeningBalances = async () => {
+    setSavingOpening(true);
+    try {
+      const y = Number(openingYear);
+      const m = Number(openingMonth);
+      for (const b of openingBalances) {
+        if (b.channel.trim()) {
+          await upsertCashAccountOpeningBalance({
+            payment_channel: b.channel.trim(),
+            year: y,
+            month: m,
+            opening_balance: Number(b.amount) || 0,
+            notes: null,
+          });
+        }
+      }
+      setOpenOpening(false);
+      bumpGrid();
+    } catch (e2) {
+      alert(e2 instanceof Error ? e2.message : "Lỗi");
+    } finally {
+      setSavingOpening(false);
     }
   };
 
@@ -262,9 +327,14 @@ export function CashPage() {
         renderRowDetail={renderCashDetail}
         rowDetailTitle={(r) => "Chứng từ " + r.doc_number}
         toolbarExtra={
-          <Button variant="primary" type="button" size="sm" onClick={openCreate}>
-            Thêm chứng từ
-          </Button>
+          <>
+            <Button variant="secondary" type="button" size="sm" onClick={openOpeningDialog} className="mr-2">
+              Số dư đầu kỳ
+            </Button>
+            <Button variant="primary" type="button" size="sm" onClick={openCreate}>
+              Thêm chứng từ
+            </Button>
+          </>
         }
         getRowId={(r) => r.id}
       />
@@ -376,6 +446,88 @@ export function CashPage() {
               </Button>
             </div>
           </form>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={openOpening} onOpenChange={setOpenOpening}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Số dư đầu kỳ</DialogTitle>
+            <DialogDescription>Nhập số dư đầu kỳ cho các tài khoản quỹ</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="flex gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="op-year">Năm</Label>
+                <Input
+                  id="op-year"
+                  type="number"
+                  min={1900}
+                  max={2100}
+                  value={openingYear}
+                  onChange={(e) => setOpeningYear(e.target.value)}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="op-month">Tháng</Label>
+                <Input
+                  id="op-month"
+                  type="number"
+                  min={1}
+                  max={12}
+                  value={openingMonth}
+                  onChange={(e) => setOpeningMonth(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              {openingBalances.map((b, i) => (
+                <div key={i} className="flex gap-2">
+                  <div className="grid gap-2 flex-1">
+                    <Label htmlFor={`op-chan-${i}`}>Tài khoản</Label>
+                    <Input
+                      id={`op-chan-${i}`}
+                      value={b.channel}
+                      onChange={(e) => {
+                        const nb = [...openingBalances];
+                        nb[i]!.channel = e.target.value;
+                        setOpeningBalances(nb);
+                      }}
+                      placeholder="cash, mbbank, acb, ..."
+                    />
+                  </div>
+                  <div className="grid gap-2 flex-1">
+                    <Label htmlFor={`op-amt-${i}`}>Số dư</Label>
+                    <Input
+                      id={`op-amt-${i}`}
+                      type="number"
+                      value={b.amount}
+                      onChange={(e) => {
+                        const nb = [...openingBalances];
+                        nb[i]!.amount = e.target.value;
+                        setOpeningBalances(nb);
+                      }}
+                    />
+                  </div>
+                </div>
+              ))}
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setOpeningBalances([...openingBalances, { channel: "", amount: "0" }])}
+              >
+                + Thêm tài khoản
+              </Button>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="ghost" onClick={() => setOpenOpening(false)}>
+                Hủy
+              </Button>
+              <Button variant="primary" onClick={saveOpeningBalances} disabled={savingOpening}>
+                {savingOpening ? "Đang lưu…" : "Lưu"}
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </>

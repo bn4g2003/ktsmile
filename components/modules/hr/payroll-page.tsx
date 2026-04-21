@@ -7,6 +7,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   calculatePayrollPreview,
   getPayrollRunLines,
   listPayrollRuns,
@@ -14,6 +20,7 @@ import {
   type PayrollPreviewRow,
 } from "@/lib/actions/payroll";
 import { formatDate } from "@/lib/format/date";
+import { PayrollExcelButton } from "@/components/shared/reports/payroll-excel-button";
 
 function money(n: number) {
   return n.toLocaleString("vi-VN");
@@ -42,6 +49,8 @@ export function PayrollPage() {
   const [loading, setLoading] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
   const [err, setErr] = React.useState<string | null>(null);
+  const [selectedEmployee, setSelectedEmployee] = React.useState<typeof rowsWithAdjust[0] | null>(null);
+  const [detailOpen, setDetailOpen] = React.useState(false);
 
   const reloadHistory = React.useCallback(async () => {
     try {
@@ -202,7 +211,11 @@ export function PayrollPage() {
             </thead>
             <tbody>
               {rowsWithAdjust.map((r) => (
-                <tr key={r.employee_id} className="border-b border-[var(--border-ghost)] last:border-b-0">
+                <tr 
+                  key={r.employee_id} 
+                  className="cursor-pointer border-b border-[var(--border-ghost)] last:border-b-0 hover:bg-[var(--surface-muted)]"
+                  onClick={() => { setSelectedEmployee(r); setDetailOpen(true); }}
+                >
                   <td className="px-3 py-2">{r.employee_code}</td>
                   <td className="px-3 py-2">{r.employee_name}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{money(r.base_salary)}</td>
@@ -271,6 +284,112 @@ export function PayrollPage() {
                   <td className="px-3 py-2 tabular-nums">{money(h.overtime_rate_per_hour)}</td>
                   <td className="px-3 py-2 text-right font-semibold tabular-nums">{money(h.total_net_salary)}</td>
                   <td className="px-3 py-2 text-[var(--on-surface-muted)]">{formatDate(h.created_at)}</td>
+                  <td className="px-3 py-2">
+                    <PayrollExcelButton year={h.year} month={h.month} label="Excel" size="sm" variant="ghost" />
+                    <Button 
+                      variant="ghost" 
+                      size="sm"
+                      className="ml-1"
+                      onClick={async () => {
+                        try {
+                          const { getPayrollExcelPayload } = await import("@/lib/actions/payroll-excel");
+                          const payload = await getPayrollExcelPayload(h.year, h.month);
+                          if (payload.rows.length === 0) {
+                            window.alert("Không có dữ liệu.");
+                            return;
+                          }
+                          // Print all employees
+                          let allHtml = `
+                            <!DOCTYPE html>
+                            <html>
+                            <head>
+                              <meta charset="utf-8">
+                              <title>In tất cả phiếu lương - ${h.month}/${h.year}</title>
+                              <style>
+                                body { font-family: Arial, sans-serif; margin: 20px; }
+                                .page-break { page-break-after: always; }
+                                .header { text-align: center; margin-bottom: 20px; }
+                                .header h2 { margin: 0; font-size: 18px; }
+                                .header p { margin: 5px 0 0; font-size: 14px; }
+                                .info { margin-bottom: 15px; }
+                                .info table { width: 100%; }
+                                .info td { padding: 3px; }
+                                .section-title { font-weight: bold; margin: 10px 0 5px; border-bottom: 1px solid #000; padding-bottom: 3px; font-size: 12px; }
+                                .salary-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+                                .salary-table th, .salary-table td { padding: 4px; border: 1px solid #000; text-align: left; }
+                                .salary-table th { background: #f0f0f0; }
+                                .text-right { text-align: right; }
+                                .total-row { font-weight: bold; background: #f0f0f0; }
+                              </style>
+                            </head>
+                            <body>
+                          `;
+                          for (const e of payload.rows) {
+                            allHtml += `
+                              <div class="page-break">
+                                <div class="header">
+                                  <h2>CÔNG TY TNHH KTSMILE</h2>
+                                  <p><strong>PHIẾU LƯƠNG</strong></p>
+                                  <p>Tháng ${h.month} năm ${h.year}</p>
+                                </div>
+                                <div class="info">
+                                  <table>
+                                    <tr>
+                                      <td><strong>MÃ NV:</strong> ${e.employee_code}</td>
+                                      <td><strong>HỌ VÀ TÊN:</strong> ${e.employee_name}</td>
+                                    </tr>
+                                    <tr>
+                                      <td><strong>CHỨC VỤ:</strong> ${e.position || '—'}</td>
+                                      <td><strong>BỘ PHẬN:</strong> ${e.department || '—'}</td>
+                                    </tr>
+                                  </table>
+                                </div>
+                                <div class="section-title">CHI TIẾT LƯƠNG:</div>
+                                <table class="salary-table">
+                                  <tr><td style="width:50px">01</td><td>Lương cơ bản</td><td class="text-right">${money(e.base_salary)}</td></tr>
+                                  <tr><td>02</td><td>Số ngày công</td><td class="text-right">${e.worked_days}</td></tr>
+                                  <tr><td>02A</td><td>Lương tính theo ngày công</td><td class="text-right">${money(e.gross_salary)}</td></tr>
+                                </table>
+                                <div class="section-title">PHỤ CẤP</div>
+                                <table class="salary-table">
+                                  <tr><td style="width:50px">03</td><td>Phụ cấp ăn trưa</td><td class="text-right">${money(e.allowance > 0 ? e.allowance : 0)}</td></tr>
+                                  <tr><td>04</td><td>Phụ cấp xăng xe</td><td class="text-right">—</td></tr>
+                                  <tr><td>05</td><td>Phụ cấp điện thoại</td><td class="text-right">—</td></tr>
+                                  <tr><td>06</td><td>Thưởng lễ</td><td class="text-right">—</td></tr>
+                                  <tr><td>07</td><td>Thưởng theo doanh số</td><td class="text-right">—</td></tr>
+                                  <tr class="total-row"><td>B</td><td>Tổng thu nhập</td><td class="text-right">${money(e.gross_salary + e.allowance)}</td></tr>
+                                </table>
+                                <div class="section-title">CÁC KHOẢN KHẤU TRỪ</div>
+                                <table class="salary-table">
+                                  <tr><td style="width:50px">01</td><td>Bảo hiểm</td><td class="text-right">—</td></tr>
+                                  <tr><td>02</td><td>Thuế TNCN</td><td class="text-right">—</td></tr>
+                                  <tr><td>03</td><td>Khác</td><td class="text-right">${money(e.deduction)}</td></tr>
+                                  <tr class="total-row"><td>C</td><td>Tổng khấu trừ</td><td class="text-right">${money(e.deduction)}</td></tr>
+                                </table>
+                                <table class="salary-table" style="margin-top:10px">
+                                  <tr class="total-row">
+                                    <td colspan="2" style="text-align:center">THỰC LĨNH (A + B - C)</td>
+                                    <td class="text-right" style="font-size:14px">${money(e.net_salary)}</td>
+                                  </tr>
+                                </table>
+                              </div>
+                            `;
+                          }
+                          allHtml += "</body></html>";
+                          const w = window.open("", "_blank");
+                          if (w) {
+                            w.document.write(allHtml);
+                            w.document.close();
+                            w.print();
+                          }
+                        } catch (err) {
+                          window.alert(err instanceof Error ? err.message : "Lỗi");
+                        }
+                      }}
+                    >
+                      In tất cả
+                    </Button>
+                  </td>
                 </tr>
               ))}
               {history.length === 0 ? (
@@ -284,6 +403,194 @@ export function PayrollPage() {
           </table>
         </div>
       </Card>
+      <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Chi tiết lương nhân viên</DialogTitle>
+          </DialogHeader>
+          {selectedEmployee ? (
+            <div className="space-y-3 py-2">
+              <div className="flex items-center justify-between">
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div><span className="text-[var(--on-surface-muted)]">Mã NV:</span> {selectedEmployee.employee_code}</div>
+                  <div><span className="text-[var(--on-surface-muted)]">Họ tên:</span> {selectedEmployee.employee_name}</div>
+                </div>
+                <Button 
+                  variant="secondary" 
+                  size="sm"
+                  onClick={() => {
+                    const e = selectedEmployee;
+                    const printContent = `
+                      <!DOCTYPE html>
+                      <html>
+                      <head>
+                        <meta charset="utf-8">
+                        <title>Phiếu lương - ${e.employee_code}</title>
+                        <style>
+                          body { font-family: Arial, sans-serif; margin: 40px; }
+                          .header { text-align: center; margin-bottom: 30px; }
+                          .header h2 { margin: 0; font-size: 18px; }
+                          .header p { margin: 5px 0 0; font-size: 14px; }
+                          .info { margin-bottom: 20px; }
+                          .info table { width: 100%; }
+                          .info td { padding: 5px; }
+                          .section-title { font-weight: bold; margin: 15px 0 10px; border-bottom: 1px solid #000; padding-bottom: 5px; }
+                          .salary-table { width: 100%; border-collapse: collapse; }
+                          .salary-table th, .salary-table td { padding: 8px; border: 1px solid #000; text-align: left; }
+                          .salary-table th { background: #f0f0f0; }
+                          .text-right { text-align: right; }
+                          .total-row { font-weight: bold; background: #f0f0f0; }
+                          .footer { margin-top: 30px; text-align: right; font-size: 12px; }
+                        </style>
+                      </head>
+                      <body>
+                        <div class="header">
+                          <h2>CÔNG TY TNHH KTSMILE</h2>
+                          <p><strong>PHIẾU LƯƠNG</strong></p>
+                          <p>Tháng ${month} năm ${year}</p>
+                        </div>
+                        <div class="info">
+                          <table>
+                            <tr>
+                              <td><strong>MÃ NV:</strong> ${e.employee_code}</td>
+                              <td><strong>HỌ VÀ TÊN:</strong> ${e.employee_name}</td>
+                            </tr>
+                            <tr>
+                              <td><strong>CHỨC VỤ:</strong> ${e.position || '—'}</td>
+                              <td><strong>BỘ PHẬN:</strong> ${e.department || '—'}</td>
+                            </tr>
+                          </table>
+                        </div>
+                        <div class="section-title">CHI TIẾT LƯƠNG:</div>
+                        <table class="salary-table">
+                          <thead>
+                            <tr>
+                              <th style="width:50px">STT</th>
+                              <th>HẠN MỤC</th>
+                              <th style="width:120px" class="text-right">SỐ TIỀN</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <tr>
+                              <td>01</td>
+                              <td>Lương cơ bản</td>
+                              <td class="text-right">${money(e.base_salary)}</td>
+                            </tr>
+                            <tr>
+                              <td>02</td>
+                              <td>Số ngày công</td>
+                              <td class="text-right">${e.worked_days}</td>
+                            </tr>
+                            <tr>
+                              <td>02A</td>
+                              <td>Lương tính theo ngày công</td>
+                              <td class="text-right">${money(e.gross_salary)}</td>
+                            </tr>
+                          </tbody>
+                        </table>
+                        <div class="section-title">PHỤ CẤP</div>
+                        <table class="salary-table">
+                          <tbody>
+                            <tr>
+                              <td style="width:50px">03</td>
+                              <td>Phụ cấp ăn trưa</td>
+                              <td style="width:120px" class="text-right">${money(e.allowance > 0 ? e.allowance : 0)}</td>
+                            </tr>
+                            <tr>
+                              <td>04</td>
+                              <td>Phụ cấp xăng xe</td>
+                              <td class="text-right">—</td>
+                            </tr>
+                            <tr>
+                              <td>05</td>
+                              <td>Phụ cấp điện thoại</td>
+                              <td class="text-right">—</td>
+                            </tr>
+                            <tr>
+                              <td>06</td>
+                              <td>Thưởng lễ</td>
+                              <td class="text-right">—</td>
+                            </tr>
+                            <tr>
+                              <td>07</td>
+                              <td>Thưởng theo doanh số</td>
+                              <td class="text-right">—</td>
+                            </tr>
+                            <tr class="total-row">
+                              <td>B</td>
+                              <td>Tổng thu nhập</td>
+                              <td class="text-right">${money(e.gross_salary + e.allowance)}</td>
+                            </tr>
+                          </tbody>
+                        </table>
+                        <div class="section-title">CÁC KHOẢN KHẤU TRỪ VÀO LƯƠNG</div>
+                        <table class="salary-table">
+                          <tbody>
+                            <tr>
+                              <td style="width:50px">01</td>
+                              <td>Bảo hiểm</td>
+                              <td style="width:120px" class="text-right">—</td>
+                            </tr>
+                            <tr>
+                              <td>02</td>
+                              <td>Thuế TNCN</td>
+                              <td class="text-right">—</td>
+                            </tr>
+                            <tr>
+                              <td>03</td>
+                              <td>Khác</td>
+                              <td class="text-right">${money(e.deduction)}</td>
+                            </tr>
+                            <tr class="total-row">
+                              <td>C</td>
+                              <td>Tổng khấu trừ</td>
+                              <td class="text-right">${money(e.deduction)}</td>
+                            </tr>
+                          </tbody>
+                        </table>
+                        <table class="salary-table" style="margin-top:15px">
+                          <tr class="total-row">
+                            <td colspan="2" style="text-align:center; font-size:16px">THỰC LĨNH (A + B - C)</td>
+                            <td class="text-right" style="font-size:18px">${money(e.net_salary)}</td>
+                          </tr>
+                        </table>
+                        <div class="footer">
+                          <p>Ngày ${new Date().getDate()} tháng ${new Date().getMonth() + 1} năm ${new Date().getFullYear()}</p>
+                          <p style="margin-top:40px">Người lập phiếu</p>
+                        </div>
+                      </body>
+                      </html>
+                    `;
+                    const w = window.open("", "_blank");
+                    if (w) {
+                      w.document.write(printContent);
+                      w.document.close();
+                      w.print();
+                    }
+                  }}
+                >
+                  In phiếu lương
+                </Button>
+              </div>
+              <div className="border-t pt-3">
+                <table className="w-full text-sm">
+                  <tbody>
+                    <tr className="border-b"><td className="py-1 text-[var(--on-surface-muted)]">Lương cơ bản</td><td className="py-1 text-right">{money(selectedEmployee.base_salary)}</td></tr>
+                    <tr className="border-b"><td className="py-1 text-[var(--on-surface-muted)]">Ngày công</td><td className="py-1 text-right">{selectedEmployee.worked_days}</td></tr>
+                    <tr className="border-b"><td className="py-1 text-[var(--on-surface-muted)]">Nghỉ có lương</td><td className="py-1 text-right">{selectedEmployee.paid_leave_days}</td></tr>
+                    <tr className="border-b"><td className="py-1 text-[var(--on-surface-muted)]">Nghỉ không lương</td><td className="py-1 text-right">{selectedEmployee.unpaid_leave_days}</td></tr>
+                    <tr className="border-b"><td className="py-1 text-[var(--on-surface-muted)]">Giờ OT</td><td className="py-1 text-right">{selectedEmployee.overtime_hours}</td></tr>
+                    <tr className="border-b"><td className="py-1 text-[var(--on-surface-muted)]">Lương gộp</td><td className="py-1 text-right">{money(selectedEmployee.gross_salary)}</td></tr>
+                    <tr className="border-b"><td className="py-1 text-[var(--on-surface-muted)]">Phụ cấp</td><td className="py-1 text-right">{money(selectedEmployee.allowance)}</td></tr>
+                    <tr className="border-b"><td className="py-1 text-[var(--on-surface-muted)]">Khấu trừ</td><td className="py-1 text-right">{money(selectedEmployee.deduction)}</td></tr>
+                    <tr className="font-semibold"><td className="py-2">Thực lĩnh</td><td className="py-2 text-right text-lg">{money(selectedEmployee.net_salary)}</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

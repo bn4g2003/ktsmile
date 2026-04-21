@@ -1,5 +1,6 @@
 import { formatVnd } from "@/lib/format/currency";
 import { formatCashDirection } from "@/lib/format/labels";
+import { formatDateTime } from "@/lib/format/date";
 import { escapeHtml } from "@/lib/reports/escape-html";
 
 export type CashReceiptPrintPayload = {
@@ -23,7 +24,7 @@ export function cashReceiptPrintTitle(p: CashReceiptPrintPayload): string {
 }
 
 export function buildCashReceiptBodyHtml(p: CashReceiptPrintPayload): string {
-  const gen = new Date().toLocaleString("vi-VN");
+  const gen = formatDateTime(new Date());
   const partnerLine =
     p.partner_code || p.partner_name
       ? `${escapeHtml(p.partner_code ?? "")}${p.partner_code && p.partner_name ? " — " : ""}${escapeHtml(p.partner_name ?? "")}`

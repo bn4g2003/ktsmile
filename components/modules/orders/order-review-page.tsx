@@ -16,7 +16,7 @@ import { formatCoordReviewStatus } from "@/lib/format/labels";
 import { formatDate } from "@/lib/format/date";
 
 function dayKey(isoDate: string): string {
-  return isoDate.slice(0, 10);
+  return formatDate(isoDate);
 }
 
 export function OrderReviewPage() {

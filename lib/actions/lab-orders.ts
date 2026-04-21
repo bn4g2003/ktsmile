@@ -209,7 +209,8 @@ export async function listLabOrders(args: ListArgs): Promise<ListResult<LabOrder
     else if (st.length > 1) q = q.in("status", st);
     if (filters.order_number?.trim())
       q = q.ilike("order_number", "%" + filters.order_number.trim() + "%");
-    if (partnerIdsByFilter) q = q.in("partner_id", partnerIdsByFilter);
+    if (filters.partner_id?.trim()) q = q.eq("partner_id", filters.partner_id.trim());
+    else if (partnerIdsByFilter) q = q.in("partner_id", partnerIdsByFilter);
     if (filters.received_from?.trim()) q = q.gte("received_at", filters.received_from.trim());
     if (filters.received_to?.trim()) q = q.lte("received_at", filters.received_to.trim());
     // Lọc theo tên bệnh nhân, nha khoa (cột trực tiếp trên lab_orders)

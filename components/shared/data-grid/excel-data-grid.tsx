@@ -195,6 +195,11 @@ type ExcelDataGridProps<T> = {
   /** Nội dung modal chỉ đọc khi bấm "Xem" (mở rộng sau này). */
   renderRowDetail?: (row: T) => React.ReactNode;
   rowDetailTitle?: (row: T) => string;
+  // External filter state
+  filters?: Record<string, string>;
+  onFiltersChange?: (filters: Record<string, string>) => void;
+  globalSearch?: string;
+  onGlobalSearchChange?: (search: string) => void;
 };
 
 export function ExcelDataGrid<T>({
@@ -211,6 +216,10 @@ export function ExcelDataGrid<T>({
   disableListCache = false,
   renderRowDetail,
   rowDetailTitle,
+  filters: propsFilters,
+  onFiltersChange,
+  globalSearch: propsGlobalSearch,
+  onGlobalSearchChange,
 }: ExcelDataGridProps<T>) {
   const [data, setData] = React.useState<T[]>([]);
   const [viewRow, setViewRow] = React.useState<T | null>(null);
@@ -218,9 +227,27 @@ export function ExcelDataGrid<T>({
   const [listSummary, setListSummary] = React.useState<ListSummaryLine[]>([]);
   const [page, setPage] = React.useState(1);
   const [pageSize, setPageSize] = React.useState(initialPageSize);
-  const [globalSearch, setGlobalSearch] = React.useState("");
+
+  const [internalGlobalSearch, setInternalGlobalSearch] = React.useState("");
+  const globalSearch = propsGlobalSearch ?? internalGlobalSearch;
+  const setGlobalSearch = (v: string) => {
+    if (onGlobalSearchChange) onGlobalSearchChange(v);
+    else setInternalGlobalSearch(v);
+  };
+
   const [debouncedSearch, setDebouncedSearch] = React.useState("");
-  const [filters, setFilters] = React.useState<Record<string, string>>({});
+
+  const [internalFilters, setInternalFilters] = React.useState<Record<string, string>>({});
+  const filters = propsFilters ?? internalFilters;
+  const setFilters = (v: React.SetStateAction<Record<string, string>>) => {
+    if (onFiltersChange) {
+      const next = typeof v === "function" ? v(filters) : v;
+      onFiltersChange(next);
+    } else {
+      setInternalFilters(v);
+    }
+  };
+
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const storageKey = "dg:" + moduleId + ":vis";

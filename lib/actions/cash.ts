@@ -462,3 +462,79 @@ export async function getCashReceiptPrintPayload(id: string): Promise<CashReceip
   }
   throw new Error(lastMsg || "Không tìm thấy chứng từ.");
 }
+export type CashAccountOpeningBalance = {
+  id: string;
+  payment_channel: string;
+  year: number;
+  month: number;
+  opening_balance: number;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+const openingBalanceSchema = z.object({
+  payment_channel: z.string().min(1).max(100),
+  year: z.coerce.number().int().min(1900).max(2100),
+  month: z.coerce.number().int().min(1).max(12),
+  opening_balance: z.coerce.number(),
+  notes: z.string().max(1000).optional().nullable(),
+});
+
+export async function upsertCashAccountOpeningBalance(input: z.infer<typeof openingBalanceSchema>) {
+  const supabase = createSupabaseAdmin();
+  const row = openingBalanceSchema.parse(input);
+  const { error } = await supabase.from("cash_account_opening_balances").upsert(
+    {
+      payment_channel: row.payment_channel,
+      year: row.year,
+      month: row.month,
+      opening_balance: row.opening_balance,
+      notes: row.notes?.trim() ?? null,
+    },
+    { onConflict: "payment_channel,year,month" },
+  );
+  if (error) throw new Error(error.message);
+  revalidatePath("/accounting/cash");
+}
+
+export async function getCashAccountOpeningBalance(
+  paymentChannel: string,
+  year: number,
+  month: number,
+): Promise<number> {
+  const supabase = createSupabaseAdmin();
+  const { data, error } = await supabase
+    .from("cash_account_opening_balances")
+    .select("opening_balance")
+    .eq("payment_channel", paymentChannel)
+    .eq("year", year)
+    .eq("month", month)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return Number(data?.opening_balance ?? 0);
+}
+
+export async function listCashAccountOpeningBalances(
+  year: number,
+  month: number,
+): Promise<CashAccountOpeningBalance[]> {
+  const supabase = createSupabaseAdmin();
+  const { data, error } = await supabase
+    .from("cash_account_opening_balances")
+    .select("*")
+    .eq("year", year)
+    .eq("month", month)
+    .order("payment_channel");
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((r) => ({
+    id: r.id as string,
+    payment_channel: r.payment_channel as string,
+    year: r.year as number,
+    month: r.month as number,
+    opening_balance: Number(r.opening_balance),
+    notes: r.notes as string | null,
+    created_at: r.created_at as string,
+    updated_at: r.updated_at as string,
+  }));
+}

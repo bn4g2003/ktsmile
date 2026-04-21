@@ -9,6 +9,8 @@ export type PayrollPreviewRow = {
   employee_id: string;
   employee_code: string;
   employee_name: string;
+  position: string | null;
+  department: string | null;
   base_salary: number;
   worked_days: number;
   paid_leave_days: number;
@@ -56,7 +58,7 @@ export async function calculatePayrollPreview(year: number, month: number, stand
   const [{ data: employees, error: empErr }, { data: attendance, error: attErr }] = await Promise.all([
     supabase
       .from("employees")
-      .select("id, code, full_name, base_salary")
+      .select("id, code, full_name, position, department, base_salary")
       .eq("is_active", true)
       .order("code", { ascending: true })
       .limit(1000),
@@ -88,6 +90,8 @@ export async function calculatePayrollPreview(year: number, month: number, stand
       employee_id: id,
       employee_code: e["code"] as string,
       employee_name: e["full_name"] as string,
+      position: e["position"] as string | null,
+      department: e["department"] as string | null,
       base_salary: base,
       worked_days: Number(a.worked.toFixed(2)),
       paid_leave_days: Number(a.paidLeave.toFixed(2)),
@@ -273,4 +277,75 @@ export async function getPayrollRunLines(year: number, month: number): Promise<P
     deduction: Number(r["deduction"] ?? 0),
     note: (r["note"] as string | null) ?? null,
   }));
+}
+export type PayrollRunDetailRow = {
+  employee_id: string;
+  employee_code: string;
+  employee_name: string;
+  position: string | null;
+  department: string | null;
+  base_salary: number;
+  worked_days: number;
+  paid_leave_days: number;
+  unpaid_leave_days: number;
+  overtime_hours: number;
+  allowance: number;
+  deduction: number;
+  gross_salary: number;
+  net_salary: number;
+  note: string | null;
+};
+
+export async function getPayrollRunDetail(year: number, month: number): Promise<PayrollRunDetailRow[]> {
+  const supabase = createSupabaseAdmin();
+  const { data: run, error: runErr } = await supabase
+    .from("payroll_runs")
+    .select("id")
+    .eq("year", year)
+    .eq("month", month)
+    .maybeSingle();
+  if (runErr) throw new Error(runErr.message);
+  if (!run) return [];
+  
+  const { data, error } = await supabase
+    .from("payroll_lines")
+    .select(`
+      employee_id,
+      base_salary,
+      worked_days,
+      paid_leave_days,
+      unpaid_leave_days,
+      overtime_hours,
+      allowance,
+      deduction,
+      gross_salary,
+      net_salary,
+      note,
+      employees!payroll_lines_employee_id_fkey(code, full_name, position, department)
+    `)
+    .eq("run_id", run.id as string)
+    .order("employees.code", { ascending: true })
+    .limit(2000);
+  if (error) throw new Error(error.message);
+  
+  return (data ?? []).map((r) => {
+    const emp = r.employees as { code: string; full_name: string; position: string | null; department: string | null } | null;
+    return {
+      employee_id: r.employee_id as string,
+      employee_code: emp?.code ?? "",
+      employee_name: emp?.full_name ?? "",
+      position: emp?.position ?? null,
+      department: emp?.department ?? null,
+      base_salary: Number(r.base_salary ?? 0),
+      worked_days: Number(r.worked_days ?? 0),
+      paid_leave_days: Number(r.paid_leave_days ?? 0),
+      unpaid_leave_days: Number(r.unpaid_leave_days ?? 0),
+      overtime_hours: Number(r.overtime_hours ?? 0),
+      allowance: Number(r.allowance ?? 0),
+      deduction: Number(r.deduction ?? 0),
+      gross_salary: Number(r.gross_salary ?? 0),
+      net_salary: Number(r.net_salary ?? 0),
+      note: (r.note as string | null) ?? null,
+    };
+  });
 }
