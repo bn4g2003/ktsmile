@@ -717,7 +717,15 @@ export function OrderDetailPage() {
               <Select
                 id="ln-work"
                 value={workType}
-                onChange={(e) => setWorkType(e.target.value as "new_work" | "warranty")}
+                onChange={(e) => {
+                  const newWorkType = e.target.value as "new_work" | "warranty";
+                  setWorkType(newWorkType);
+                  if (newWorkType === "warranty") {
+                    setPrice("0");
+                    setDisc("0");
+                    setDiscVnd("0");
+                  }
+                }}
               >
                 {labOrderLineWorkTypeOptions.map((o) => (
                   <option key={o.value} value={o.value}>

@@ -1084,15 +1084,22 @@ export function OrdersPage() {
                         <Label>Loại (làm mới / bảo hành)</Label>
                         <Select
                           value={line.work_type}
-                          onChange={(e) =>
+                          onChange={(e) => {
+                            const newWorkType = e.target.value as DraftLine["work_type"];
                             setDraftLines((prev) =>
                               prev.map((l) =>
                                 l.key === line.key
-                                  ? { ...l, work_type: e.target.value as DraftLine["work_type"] }
+                                  ? { 
+                                      ...l, 
+                                      work_type: newWorkType,
+                                      price: newWorkType === "warranty" ? "0" : l.price,
+                                      disc: newWorkType === "warranty" ? "0" : l.disc,
+                                      disc_vnd: newWorkType === "warranty" ? "0" : l.disc_vnd,
+                                    }
                                   : l,
                               ),
-                            )
-                          }
+                            );
+                          }}
                         >
                           {labOrderLineWorkTypeOptions.map((o) => (
                             <option key={o.value} value={o.value}>
