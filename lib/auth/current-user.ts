@@ -10,6 +10,10 @@ export type CurrentUser = {
   full_name: string;
   email: string | null;
   permissions: string | null;
+  /** Có khi employees.app_role_id trỏ tới app_roles và truy vấn path thành công; ưu tiên cho sidebar. */
+  nav_allowed_paths: string[] | null;
+  /** Tên vai trò từ app_roles (hiển thị thay cho preset permissions khi có). */
+  app_role_label: string | null;
 };
 
 export async function getCurrentUser(): Promise<CurrentUser | null> {
@@ -19,16 +23,35 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
   const supabase = createSupabaseAdmin();
   const { data, error } = await supabase
     .from("employees")
-    .select("id, code, full_name, email, permissions, is_active")
+    .select("id, code, full_name, email, permissions, is_active, app_role_id")
     .eq("id", employeeId)
     .maybeSingle();
   if (error) return null;
   if (!data || !Boolean(data["is_active"])) return null;
+
+  let nav_allowed_paths: string[] | null = null;
+  let app_role_label: string | null = null;
+  const appRoleId = (data["app_role_id"] as string | null) ?? null;
+  if (appRoleId) {
+    const [pathsRes, roleRes] = await Promise.all([
+      supabase.from("app_role_nav_paths").select("path").eq("role_id", appRoleId),
+      supabase.from("app_roles").select("name").eq("id", appRoleId).maybeSingle(),
+    ]);
+    if (!pathsRes.error && pathsRes.data) {
+      nav_allowed_paths = pathsRes.data.map((r) => r.path as string);
+    }
+    if (!roleRes.error && roleRes.data) {
+      app_role_label = roleRes.data.name as string;
+    }
+  }
+
   return {
     employee_id: data["id"] as string,
     code: data["code"] as string,
     full_name: data["full_name"] as string,
     email: (data["email"] as string | null) ?? null,
     permissions: (data["permissions"] as string | null) ?? null,
+    nav_allowed_paths,
+    app_role_label,
   };
 }

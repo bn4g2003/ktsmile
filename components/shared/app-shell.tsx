@@ -32,54 +32,47 @@ import {
   permissionPresetLabel,
   resolvePermissionPreset,
 } from "@/lib/auth/permission-presets";
+import { SHELL_NAV_GROUPS_META } from "@/lib/nav/shell-nav-catalog";
 
 type NavIcon = React.ComponentType<{ className?: string }>;
 type NavItem = { href: string; label: string; Icon: NavIcon };
 
-const groups: { title: string; Icon: NavIcon; items: NavItem[] }[] = [
-  {
-    title: "TỔNG QUAN",
-    Icon: NavIconDashboard,
-    items: [{ href: "/", label: "Dashboard", Icon: NavIconDashboard }],
-  },
-  {
-    title: "KINH DOANH",
-    Icon: NavIconOrders,
-    items: [
-      { href: "/orders", label: "Đơn hàng", Icon: NavIconOrders },
-      { href: "/orders/review", label: "Kiểm tra đơn", Icon: NavIconReview },
-      { href: "/master/partners", label: "Khách & NCC", Icon: NavIconPartners },
-      { href: "/master/prices", label: "Giá theo KH", Icon: NavIconPriceTag },
-    ],
-  },
-  {
-    title: "KHO HÀNG",
-    Icon: NavIconStock,
-    items: [
-      { href: "/master/products", label: "Sản phẩm & NVL", Icon: NavIconCatalog },
-      { href: "/inventory/stock", label: "Tồn kho", Icon: NavIconStock },
-      { href: "/inventory/documents", label: "Phiếu nhập xuất", Icon: NavIconWarehouseDoc },
-    ],
-  },
-  {
-    title: "TÀI CHÍNH",
-    Icon: NavIconChart,
-    items: [
-      { href: "/accounting/cash", label: "Sổ quỹ", Icon: NavIconCash },
-      { href: "/accounting/debt", label: "Công nợ khách hàng", Icon: NavIconDebt },
-      { href: "/accounting/summary", label: "Báo cáo tổng hợp", Icon: NavIconChart },
-    ],
-  },
-  {
-    title: "NHÂN SỰ",
-    Icon: NavIconTeam,
-    items: [
-      { href: "/master/employees", label: "Hồ sơ nhân sự", Icon: NavIconTeam },
-      { href: "/hr/attendance", label: "Chấm công", Icon: NavIconTeam },
-      { href: "/hr/payroll", label: "Tính lương", Icon: NavIconPayroll },
-    ],
-  },
-];
+const HREF_ICONS: Record<string, NavIcon> = {
+  "/": NavIconDashboard,
+  "/orders": NavIconOrders,
+  "/orders/review": NavIconReview,
+  "/master/partners": NavIconPartners,
+  "/master/prices": NavIconPriceTag,
+  "/master/products": NavIconCatalog,
+  "/inventory/stock": NavIconStock,
+  "/inventory/documents": NavIconWarehouseDoc,
+  "/accounting/revenue": NavIconChart,
+  "/accounting/sales": NavIconChart,
+  "/accounting/cash": NavIconCash,
+  "/accounting/debt": NavIconDebt,
+  "/accounting/summary": NavIconChart,
+  "/master/employees": NavIconTeam,
+  "/hr/attendance": NavIconTeam,
+  "/hr/payroll": NavIconPayroll,
+};
+
+const GROUP_ICONS: Record<string, NavIcon> = {
+  "TỔNG QUAN": NavIconDashboard,
+  "KINH DOANH": NavIconOrders,
+  "KHO HÀNG": NavIconStock,
+  "TÀI CHÍNH": NavIconChart,
+  "NHÂN SỰ": NavIconTeam,
+};
+
+const groups: { title: string; Icon: NavIcon; items: NavItem[] }[] = SHELL_NAV_GROUPS_META.map((g) => ({
+  title: g.title,
+  Icon: GROUP_ICONS[g.title] ?? NavIconDashboard,
+  items: g.items.map((it) => ({
+    href: it.href,
+    label: it.label,
+    Icon: HREF_ICONS[it.href] ?? NavIconDashboard,
+  })),
+}));
 
 export function AppShell({
   children,
@@ -93,6 +86,9 @@ export function AppShell({
   const [sidebarCollapsed, setSidebarCollapsed] = React.useState(false);
   const [expandedGroup, setExpandedGroup] = React.useState<string | null>(null);
   const navPermission = resolvePermissionPreset(currentUser.permissions);
+  const allowedPathList =
+    currentUser.nav_allowed_paths ??
+    (NAV_PERMISSION_RULES[navPermission] ?? []);
 
   // Initialize sidebar state from localStorage
   React.useEffect(() => {
@@ -134,15 +130,14 @@ export function AppShell({
   }, [navOpen]);
 
   const visibleGroups = React.useMemo(() => {
-    const allowed = NAV_PERMISSION_RULES[navPermission] ?? [];
-    const allowAll = allowed.includes("*");
+    const allowAll = allowedPathList.includes("*");
     return groups
       .map((g) => ({
         ...g,
-        items: g.items.filter((it) => allowAll || allowed.includes(it.href)),
+        items: g.items.filter((it) => allowAll || allowedPathList.includes(it.href)),
       }))
       .filter((g) => g.items.length > 0);
-  }, [navPermission]);
+  }, [allowedPathList]);
 
   return (
     <div className="min-h-screen">
@@ -261,7 +256,7 @@ export function AppShell({
                     {currentUser.email ?? currentUser.code}
                   </p>
                   <p className="truncate text-[11px] text-[var(--on-surface-faint)]">
-                    {permissionPresetLabel(currentUser.permissions)}
+                    {currentUser.app_role_label ?? permissionPresetLabel(currentUser.permissions)}
                   </p>
                 </div>
               )}

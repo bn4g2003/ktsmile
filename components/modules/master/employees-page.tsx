@@ -17,11 +17,14 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { EmployeeRowDetailPanel } from "@/components/modules/master/employee-row-detail-panel";
+import { EmployeesRolesPanel } from "@/components/modules/master/employees-roles-panel";
+import { DetailTabStrip } from "@/components/ui/detail-tab-strip";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { importEmployeesFromExcel } from "@/lib/actions/employees-import";
-import { PERMISSION_PRESETS, permissionPresetLabel } from "@/lib/auth/permission-presets";
+import { listAppRolesPicker } from "@/lib/actions/app-roles";
+import { permissionPresetLabel } from "@/lib/auth/permission-presets";
 import { formatDate } from "@/lib/format/date";
 import {
   createEmployee,
@@ -33,19 +36,35 @@ import {
 
 export function EmployeesPage() {
   const router = useRouter();
+  const [pageTab, setPageTab] = React.useState<"employees" | "roles">("employees");
   const [gridReload, setGridReload] = React.useState(0);
+  const [rolePickerRev, setRolePickerRev] = React.useState(0);
   const bumpGrid = React.useCallback(() => {
     setGridReload((n) => n + 1);
+    setRolePickerRev((n) => n + 1);
     router.refresh();
   }, [router]);
+  const [roleOptions, setRoleOptions] = React.useState<{ id: string; code: string; name: string }[]>([]);
+  React.useEffect(() => {
+    let cancelled = false;
+    void listAppRolesPicker()
+      .then((r) => {
+        if (!cancelled) setRoleOptions(r);
+      })
+      .catch(() => {
+        if (!cancelled) setRoleOptions([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [rolePickerRev, pageTab]);
   const [open, setOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<EmployeeRow | null>(null);
   const [pending, setPending] = React.useState(false);
   const [err, setErr] = React.useState<string | null>(null);
   const [code, setCode] = React.useState("");
   const [fullName, setFullName] = React.useState("");
-  const [role, setRole] = React.useState("");
-  const [permissions, setPermissions] = React.useState("");
+  const [appRoleId, setAppRoleId] = React.useState("");
   const [salary, setSalary] = React.useState("0");
   const [phone, setPhone] = React.useState("");
   const [email, setEmail] = React.useState("");
@@ -61,8 +80,7 @@ export function EmployeesPage() {
     setEditing(null);
     setCode("");
     setFullName("");
-    setRole("");
-    setPermissions("");
+    setAppRoleId("");
     setSalary("0");
     setPhone("");
     setEmail("");
@@ -83,8 +101,7 @@ export function EmployeesPage() {
     setEditing(row);
     setCode(row.code);
     setFullName(row.full_name);
-    setRole(row.role);
-    setPermissions(row.permissions ?? "");
+    setAppRoleId(row.app_role_id ?? "");
     setSalary(String(row.base_salary));
     setPhone(row.phone ?? "");
     setEmail(row.email ?? "");
@@ -105,8 +122,7 @@ export function EmployeesPage() {
       const payload = {
         code: code.trim(),
         full_name: fullName.trim(),
-        role: role.trim(),
-        permissions: permissions.trim() || null,
+        app_role_id: appRoleId.trim(),
         base_salary: Number(salary),
         phone: phone.trim() || null,
         email: email.trim() || null,
@@ -176,11 +192,16 @@ export function EmployeesPage() {
         header: "Tên",
         meta: { filterKey: "full_name", filterType: "text" },
       },
-      { accessorKey: "role", header: "Vai trò" },
+      {
+        id: "app_role",
+        header: "Vai trò đăng nhập",
+        cell: ({ row }) => row.original.app_role_name ?? "—",
+      },
+      { accessorKey: "role", header: "Chức danh (đồng bộ)" },
       {
         accessorKey: "permissions",
-        header: "Quyền hạn",
-        cell: ({ getValue }) => permissionPresetLabel((getValue() as string | null) ?? null),
+        header: "Mã quyền",
+        cell: ({ row }) => row.original.app_role_code ?? permissionPresetLabel(row.original.permissions),
       },
       { accessorKey: "base_salary", header: "Lương CB", cell: ({ getValue }) => Number(getValue()).toLocaleString("vi-VN") },
       { accessorKey: "phone", header: "SĐT" },
@@ -236,39 +257,53 @@ export function EmployeesPage() {
 
   return (
     <>
-      <ExcelDataGrid<EmployeeRow>
-        moduleId="employees"
-        title="Nhân sự"
-        columns={columns}
-        list={listEmployees}
-        reloadSignal={gridReload}
-        renderRowDetail={(row) => <EmployeeRowDetailPanel row={row} />}
-        rowDetailTitle={(r) => "NV " + r.code}
-        toolbarExtra={
-          <div className="flex flex-wrap items-center gap-2">
-            <input
-              ref={fileImportRef}
-              type="file"
-              accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
-              className="hidden"
-              onChange={(ev) => void onExcelSelected(ev)}
-            />
-            <Button
-              variant="secondary"
-              type="button"
-              size="sm"
-              disabled={importBusy}
-              onClick={onPickExcel}
-            >
-              {importBusy ? "Đang nhập…" : "Nhập Excel (bảng lương)"}
-            </Button>
-            <Button variant="primary" type="button" size="sm" onClick={openCreate}>
-              Thêm NV
-            </Button>
-          </div>
-        }
-        getRowId={(r) => r.id}
-      />
+      <div className="mb-4">
+        <DetailTabStrip
+          items={[
+            { id: "employees", label: "Nhân viên" },
+            { id: "roles", label: "Vai trò & phân quyền" },
+          ]}
+          value={pageTab}
+          onChange={(id) => setPageTab(id as "employees" | "roles")}
+        />
+      </div>
+      {pageTab === "roles" ? (
+        <EmployeesRolesPanel onRolesChanged={bumpGrid} />
+      ) : (
+        <ExcelDataGrid<EmployeeRow>
+          moduleId="employees"
+          title="Nhân sự"
+          columns={columns}
+          list={listEmployees}
+          reloadSignal={gridReload}
+          renderRowDetail={(row) => <EmployeeRowDetailPanel row={row} />}
+          rowDetailTitle={(r) => "NV " + r.code}
+          toolbarExtra={
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                ref={fileImportRef}
+                type="file"
+                accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+                className="hidden"
+                onChange={(ev) => void onExcelSelected(ev)}
+              />
+              <Button
+                variant="secondary"
+                type="button"
+                size="sm"
+                disabled={importBusy}
+                onClick={onPickExcel}
+              >
+                {importBusy ? "Đang nhập…" : "Nhập Excel (bảng lương)"}
+              </Button>
+              <Button variant="primary" type="button" size="sm" onClick={openCreate}>
+                Thêm NV
+              </Button>
+            </div>
+          }
+          getRowId={(r) => r.id}
+        />
+      )}
       <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) reset(); }}>
         <DialogContent size="xl" className="max-h-[90vh]">
           <DialogHeader>
@@ -286,19 +321,23 @@ export function EmployeesPage() {
               <Input id="e-name" value={fullName} onChange={(e) => setFullName(e.target.value)} required />
             </div>
             <div className="grid gap-2 sm:col-span-2">
-              <Label htmlFor="e-role">Vai trò</Label>
-              <Input id="e-role" value={role} onChange={(e) => setRole(e.target.value)} required />
-            </div>
-            <div className="grid gap-2 sm:col-span-2">
-              <Label htmlFor="e-perm">Quyền hạn</Label>
-              <Select id="e-perm" value={permissions} onChange={(e) => setPermissions(e.target.value)}>
-                <option value="">-- Chọn quyền --</option>
-                {PERMISSION_PRESETS.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.label}
+              <Label htmlFor="e-app-role">Vai trò đăng nhập & phân quyền menu</Label>
+              <Select
+                id="e-app-role"
+                value={appRoleId}
+                onChange={(e) => setAppRoleId(e.target.value)}
+                required
+              >
+                <option value="">-- Chọn vai trò --</option>
+                {roleOptions.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name} ({r.code})
                   </option>
                 ))}
               </Select>
+              <p className="text-[11px] text-[var(--on-surface-muted)]">
+                Chức danh lưu trong hồ sơ sẽ đồng bộ theo tên vai trò. Quản lý vai trò và quyền menu ở tab &quot;Vai trò &amp; phân quyền&quot;.
+              </p>
             </div>
             <div className="grid gap-2 sm:col-span-2">
               <Label htmlFor="e-sal">Lương cơ bản</Label>

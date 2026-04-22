@@ -41,8 +41,17 @@ export function EmployeeRowDetailPanel({ row }: { row: EmployeeRow }) {
               fields: [
                 { label: "MÃ NV:", value: row.code },
                 { label: "HỌ TÊN:", value: row.full_name },
-                { label: "VAI TRÒ:", value: row.role },
-                { label: "QUYỀN HẠN:", value: permissionPresetLabel(row.permissions), span: "full" },
+                { label: "VAI TRÒ (CHỨC DANH DB):", value: row.role },
+                {
+                  label: "VAI TRÒ ĐĂNG NHẬP:",
+                  value: row.app_role_name ?? "—",
+                  span: "full",
+                },
+                {
+                  label: "QUYỀN (PRESET CŨ / MÃ):",
+                  value: row.app_role_code ?? permissionPresetLabel(row.permissions),
+                  span: "full",
+                },
               ]
             },
             {
