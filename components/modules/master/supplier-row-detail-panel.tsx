@@ -191,17 +191,37 @@ export function SupplierRowDetailPanel({ row }: { row: SupplierRow }) {
       />
       {tab === "info" ? (
         <DetailPreview
-          fields={[
-            { label: "Mã NCC", value: row.code },
-            { label: "Tên", value: row.name },
-            { label: "Đại diện", value: row.representative_name },
-            { label: "SĐT", value: row.phone },
-            { label: "MST", value: row.tax_id },
-            { label: "Hoạt động", value: row.is_active ? "Có" : "Không" },
-            { label: "Địa chỉ", value: row.address, span: "full" },
-            { label: "Ghi chú", value: row.notes, span: "full" },
-            { label: "Tạo lúc", value: formatDate(row.created_at) },
-            { label: "Cập nhật", value: formatDate(row.updated_at) },
+          groups={[
+            {
+              title: "Thông tin nhà cung cấp",
+              fields: [
+                { label: "MÃ NCC:", value: row.code },
+                { label: "TÊN NCC:", value: row.name },
+                { label: "TRẠNG THÁI:", value: row.is_active ? "Đang hoạt động" : "Ngừng hoạt động" },
+              ]
+            },
+            {
+              title: "Liên hệ & Pháp lý",
+              fields: [
+                { label: "NGƯỜI ĐẠI DIỆN:", value: row.representative_name || "—" },
+                { label: "SỐ ĐIỆN THOẠI:", value: row.phone || "—" },
+                { label: "MÃ SỐ THUẾ (MST):", value: row.tax_id || "—" },
+              ]
+            },
+            {
+              title: "Địa chỉ & Ghi chú",
+              fields: [
+                { label: "ĐỊA CHỈ:", value: row.address || "—", span: "full" },
+                { label: "GHI CHÚ:", value: row.notes || "—", span: "full" },
+              ]
+            },
+            {
+              title: "Hệ thống",
+              fields: [
+                { label: "TẠO LÚC:", value: formatDate(row.created_at) },
+                { label: "CẬP NHẬT:", value: formatDate(row.updated_at) },
+              ]
+            }
           ]}
         />
       ) : null}

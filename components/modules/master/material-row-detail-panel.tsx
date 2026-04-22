@@ -26,19 +26,30 @@ export function MaterialRowDetailPanel({ row }: { row: MaterialRow }) {
       />
       {tab === "info" ? (
         <DetailPreview
-          fields={[
-            { label: "Mã NVL", value: row.code },
-            { label: "Tên NVL", value: row.name },
-            { label: "ĐVT", value: row.unit },
-            { label: "Tồn kho", value: row.quantity_on_hand },
+          groups={[
             {
-              label: "NCC chính",
-              value: row.primary_supplier_code ? row.primary_supplier_code + " — " + (row.primary_supplier_name ?? "") : "—",
-              span: "full",
+              title: "Thông tin cơ bản",
+              fields: [
+                { label: "MÃ NVL:", value: row.code },
+                { label: "TÊN NVL:", value: row.name },
+                { label: "ĐVT:", value: row.unit },
+                { label: "HOẠT ĐỘNG:", value: row.is_active ? "Có" : "Không" },
+              ]
             },
-            { label: "Hoạt động", value: row.is_active ? "Có" : "Không" },
-            { label: "Tạo lúc", value: formatDate(row.created_at) },
-            { label: "Cập nhật", value: formatDate(row.updated_at) },
+            {
+              title: "Kho & NCC cung ứng",
+              fields: [
+                { label: "TỒN KHO:", value: <span className="font-bold text-[var(--primary)]">{row.quantity_on_hand} {row.unit}</span> },
+                { label: "NCC CHÍNH:", value: row.primary_supplier_code ? row.primary_supplier_code + " — " + (row.primary_supplier_name ?? "") : "—", span: "full" },
+              ]
+            },
+            {
+              title: "Hệ thống",
+              fields: [
+                { label: "TẠO LÚC:", value: formatDate(row.created_at) },
+                { label: "CẬP NHẬT:", value: formatDate(row.updated_at) },
+              ]
+            }
           ]}
         />
       ) : null}

@@ -195,36 +195,43 @@ export function DebtReportRowDetailPanel(props: Props) {
         {tab === "info" ? (
           <div className="space-y-4">
             <DetailPreview
-              fields={[
-                { label: "Kỳ báo cáo", value: "Tháng " + props.month + " / " + props.year },
-                { label: "Mã khách hàng", value: row.partner_code },
-                { label: "Tên khách hàng", value: row.partner_name },
+              groups={[
                 {
-                  label: "Nợ đầu kỳ",
-                  value: row.opening.toLocaleString("vi-VN") + " đ",
-                  span: "full",
+                  title: "Thông tin đối tác & Kỳ báo cáo",
+                  fields: [
+                    { label: "KỲ BÁO CÁO:", value: "THÁNG " + props.month + " / " + props.year },
+                    { label: "MÃ KHÁCH HÀNG:", value: row.partner_code },
+                    { label: "TÊN KHÁCH HÀNG:", value: row.partner_name },
+                  ]
                 },
                 {
-                  label: "Phát sinh bán (tháng)",
-                  value: row.orders_month.toLocaleString("vi-VN") + " đ",
-                  span: "full",
+                  title: "Biến động công nợ (tháng)",
+                  fields: [
+                    {
+                      label: "NỢ ĐẦU KỲ:",
+                      value: <span className="font-bold">{row.opening.toLocaleString("vi-VN")} đ</span>,
+                    },
+                    {
+                      label: "PHÁT SINH BÁN:",
+                      value: <span className="font-bold text-[var(--primary)]">+{row.orders_month.toLocaleString("vi-VN")} đ</span>,
+                    },
+                    {
+                      label: "ĐÃ THU TRONG THÁNG:",
+                      value: <span className="font-bold text-[#059669]">−{row.receipts_month.toLocaleString("vi-VN")} đ</span>,
+                    },
+                    {
+                      label: "NỢ CUỐI KỲ:",
+                      value: <span className="text-[15px] font-bold text-[var(--primary)]">{row.closing.toLocaleString("vi-VN")} đ</span>,
+                    },
+                  ]
                 },
                 {
-                  label: "Đã thu trong tháng",
-                  value: row.receipts_month.toLocaleString("vi-VN") + " đ",
-                  span: "full",
-                },
-                {
-                  label: "Nợ cuối kỳ",
-                  value: row.closing.toLocaleString("vi-VN") + " đ",
-                  span: "full",
-                },
-                { label: "Diễn giải công thức", value: closingExplain, span: "full" },
-                {
-                  label: "Mã nội bộ (partner_id)",
-                  value: row.partner_id,
-                  span: "full",
-                },
+                  title: "Giải trình & Hệ thống",
+                  fields: [
+                    { label: "DIỄN GIẢI:", value: closingExplain, span: "full" },
+                    { label: "ID NỘI BỘ (PARTNER_ID):", value: <span className="text-[10px] font-mono opacity-50">{row.partner_id}</span>, span: "full" },
+                  ]
+                }
               ]}
             />
             <div className="flex flex-wrap items-center gap-2">
@@ -269,36 +276,43 @@ export function DebtReportRowDetailPanel(props: Props) {
       {tab === "info" ? (
         <div className="space-y-4">
           <DetailPreview
-            fields={[
-              { label: "Kỳ báo cáo", value: "Tháng " + props.month + " / " + props.year },
-              { label: "Mã NCC", value: row.supplier_code },
-              { label: "Tên NCC", value: row.supplier_name },
+            groups={[
               {
-                label: "Nợ đầu kỳ",
-                value: row.opening.toLocaleString("vi-VN") + " đ",
-                span: "full",
+                title: "Thông tin NCC & Kỳ báo cáo",
+                fields: [
+                  { label: "KỲ BÁO CÁO:", value: "THÁNG " + props.month + " / " + props.year },
+                  { label: "MÃ NCC:", value: row.supplier_code },
+                  { label: "TÊN NCC:", value: row.supplier_name },
+                ]
               },
               {
-                label: "PS nhập (tháng)",
-                value: row.inbound_month.toLocaleString("vi-VN") + " đ",
-                span: "full",
+                title: "Biến động công nợ (tháng)",
+                fields: [
+                  {
+                    label: "NỢ ĐẦU KỲ:",
+                    value: <span className="font-bold">{row.opening.toLocaleString("vi-VN")} đ</span>,
+                  },
+                  {
+                    label: "PHÁT SINH NHẬP:",
+                    value: <span className="font-bold text-[var(--primary)]">+{row.inbound_month.toLocaleString("vi-VN")} đ</span>,
+                  },
+                  {
+                    label: "ĐÃ TRẢ TRONG THÁNG:",
+                    value: <span className="font-bold text-[#b91c1c]">−{row.payments_month.toLocaleString("vi-VN")} đ</span>,
+                  },
+                  {
+                    label: "NỢ CUỐI KỲ:",
+                    value: <span className="text-[15px] font-bold text-[var(--primary)]">{row.closing.toLocaleString("vi-VN")} đ</span>,
+                  },
+                ]
               },
               {
-                label: "Đã trả trong tháng",
-                value: row.payments_month.toLocaleString("vi-VN") + " đ",
-                span: "full",
-              },
-              {
-                label: "Nợ cuối kỳ",
-                value: row.closing.toLocaleString("vi-VN") + " đ",
-                span: "full",
-              },
-              { label: "Diễn giải công thức", value: closingExplain, span: "full" },
-              {
-                label: "Mã nội bộ (supplier_id)",
-                value: row.supplier_id,
-                span: "full",
-              },
+                title: "Giải trình & Hệ thống",
+                fields: [
+                  { label: "DIỄN GIẢI:", value: closingExplain, span: "full" },
+                  { label: "ID NỘI BỘ (SUPPLIER_ID):", value: <span className="text-[10px] font-mono opacity-50">{row.supplier_id}</span>, span: "full" },
+                ]
+              }
             ]}
           />
           <div className="flex flex-wrap items-center gap-2">

@@ -4,26 +4,57 @@ import { cn } from "@/lib/utils/cn";
 export type DetailPreviewField = {
   label: string;
   value: React.ReactNode;
-  /** Chiếm cả hàng trên màn hình ≥ sm (textarea, ghi chú dài) */
+  /** Occupies the full row on sm screens and larger */
   span?: "full";
+  /** Optional icon to display next to the label */
+  icon?: React.ReactNode;
 };
 
-export function DetailPreview({ fields }: { fields: DetailPreviewField[] }) {
-  return (
-    <dl className="grid gap-4 sm:grid-cols-2">
-      {fields.map((f, i) => (
+export type DetailPreviewGroup = {
+  title: string;
+  fields: DetailPreviewField[];
+};
+
+export function DetailPreview({ 
+  fields, 
+  groups 
+}: { 
+  fields?: DetailPreviewField[];
+  groups?: DetailPreviewGroup[];
+}) {
+  const renderFields = (items: DetailPreviewField[]) => (
+    <dl className="grid grid-cols-2 gap-x-6 gap-y-2.5 sm:grid-cols-3 lg:grid-cols-4">
+      {items.map((f, i) => (
         <div
           key={i}
-          className={cn("space-y-1", f.span === "full" && "sm:col-span-2")}
+          className={cn("flex flex-col gap-0.5", f.span === "full" && "col-span-full")}
         >
-          <dt className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--on-surface-muted)]">
+          <dt className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-[var(--on-surface-faint)]">
+            {f.icon && <span className="opacity-70">{f.icon}</span>}
             {f.label}
           </dt>
-          <dd className="text-sm leading-relaxed text-[var(--on-surface)] break-words">
+          <dd className="min-h-[1.25rem] text-[15px] font-bold leading-tight text-[var(--on-surface)] break-words">
             {f.value ?? "—"}
           </dd>
         </div>
       ))}
     </dl>
   );
+
+  if (groups) {
+    return (
+      <div className="space-y-5 py-0">
+        {groups.map((g, gi) => (
+          <div key={gi} className="space-y-2.5">
+            <h3 className="text-[12px] font-bold tracking-wide text-[var(--on-surface-muted)] border-b border-[var(--border-ghost)] pb-1">
+              {g.title}
+            </h3>
+            {renderFields(g.fields)}
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  return fields ? renderFields(fields) : null;
 }

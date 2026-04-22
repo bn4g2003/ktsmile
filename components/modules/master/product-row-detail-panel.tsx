@@ -93,27 +93,57 @@ export function ProductRowDetailPanel({ row }: { row: ProductRow }) {
       />
       {tab === "info" ? (
         <DetailPreview
-          fields={[
-            { label: "Mã SP", value: row.code },
-            { label: "Tên", value: row.name },
-            { label: "ĐVT", value: row.unit },
-            { label: "Phạm vi", value: formatProductUsageLabel(row.product_usage) },
-            { label: "Tồn kho (posted)", value: row.quantity_on_hand },
-            {
-              label: "NCC chính",
-              value:
-                row.primary_supplier_code != null
-                  ? row.primary_supplier_code + " — " + (row.primary_supplier_name ?? "")
-                  : "—",
-              span: "full",
-            },
-            { label: "Số NCC đã gắn", value: row.supplier_link_count },
-            { label: "Đơn giá niêm yết", value: row.unit_price.toLocaleString("vi-VN") },
-            { label: "Bảo hành (năm)", value: row.warranty_years ?? "—" },
-            { label: "Hoạt động", value: row.is_active ? "Có" : "Không" },
-            { label: "Tạo lúc", value: formatDate(row.created_at) },
-            { label: "Cập nhật", value: formatDate(row.updated_at) },
-          ]}
+            groups={[
+              {
+                title: "Thông tin cơ bản",
+                fields: [
+                  { label: "MÃ SP:", value: row.code },
+                  { label: "TÊN:", value: row.name },
+                  { label: "ĐVT:", value: row.unit },
+                  { label: "PHẠM VI:", value: formatProductUsageLabel(row.product_usage) },
+                ]
+              },
+              {
+                title: "Kho & NCC chính",
+                fields: [
+                  { 
+                    label: "TỒN KHO (POSTED):", 
+                    value: (
+                      <span className="font-bold text-[var(--primary)]">
+                        {row.quantity_on_hand} {row.unit}
+                      </span>
+                    )
+                  },
+                  { label: "SỐ NCC ĐÃ GẮN:", value: row.supplier_link_count },
+                  { 
+                    label: "NCC CHÍNH:", 
+                    value: row.primary_supplier_code != null 
+                        ? row.primary_supplier_code + " — " + (row.primary_supplier_name ?? "") 
+                        : "—",
+                    span: "full"
+                  },
+                ]
+              },
+              {
+                title: "Tài chính & Bảo hành",
+                fields: [
+                  { 
+                    label: "ĐƠN GIÁ NIÊM YẾT:", 
+                    value: <span className="text-[14px] font-bold text-[var(--primary)]">{row.unit_price.toLocaleString("vi-VN")} VND</span> 
+                  },
+                  { label: "BẢO HÀNH:", value: row.warranty_years ? row.warranty_years + " năm" : "—" },
+                  { label: "HOẠT ĐỘNG:", value: row.is_active ? "Có" : "Không" },
+                ]
+              },
+              {
+                title: "Hệ thống",
+                fields: [
+                  { label: "TẠO LÚC:", value: formatDate(row.created_at) },
+                  { label: "CẬP NHẬT:", value: formatDate(row.updated_at) },
+                  { label: "ID:", value: <span className="text-[10px] font-mono opacity-50">{row.id}</span>, span: "full" },
+                ]
+              }
+            ]}
         />
       ) : null}
       {tab === "suppliers" ? <ProductSuppliersPanel productId={row.id} /> : null}

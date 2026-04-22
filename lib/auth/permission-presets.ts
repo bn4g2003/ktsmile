@@ -11,9 +11,9 @@ export type PermissionPresetId = (typeof PERMISSION_PRESETS)[number]["id"];
 
 export const NAV_PERMISSION_RULES: Record<PermissionPresetId, string[]> = {
   admin: ["*"],
-  manager: ["/", "/master/partners", "/master/products", "/master/employees", "/orders", "/orders/review", "/inventory/documents", "/inventory/stock", "/accounting/revenue", "/accounting/sales", "/accounting/cash", "/accounting/debt", "/hr/attendance", "/hr/payroll"],
-  accountant: ["/", "/master/partners", "/orders", "/accounting/revenue", "/accounting/sales", "/accounting/cash", "/accounting/debt", "/hr/payroll"],
-  sales: ["/", "/master/partners", "/master/prices", "/orders", "/orders/review", "/accounting/revenue", "/accounting/sales", "/accounting/debt"],
+  manager: ["/", "/master/partners", "/master/products", "/master/employees", "/orders", "/orders/review", "/inventory/documents", "/inventory/stock", "/accounting/revenue", "/accounting/sales", "/accounting/cash", "/accounting/debt", "/accounting/summary", "/hr/attendance", "/hr/payroll"],
+  accountant: ["/", "/master/partners", "/orders", "/accounting/revenue", "/accounting/sales", "/accounting/cash", "/accounting/debt", "/accounting/summary", "/hr/payroll"],
+  sales: ["/", "/master/partners", "/master/prices", "/orders", "/orders/review", "/accounting/revenue", "/accounting/sales", "/accounting/debt", "/accounting/summary"],
   inventory: ["/", "/master/products", "/orders", "/inventory/documents", "/inventory/stock", "/hr/attendance"],
   staff: ["/", "/orders", "/hr/attendance"],
 };

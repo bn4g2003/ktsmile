@@ -157,22 +157,6 @@ export function PartnerRowDetailPanel({ row }: { row: PartnerRow }) {
         { id: "finance" as const, label: "Công nợ & PS" },
       ]
     : [{ id: "info" as const, label: "Thông tin" }];
-
-  const infoFields = [
-    { label: "Mã", value: row.code },
-    { label: "Tên", value: row.name },
-    { label: "Phân loại", value: formatPartnerType(row.partner_type) },
-    { label: "Người đại diện", value: row.representative_name },
-    { label: "SĐT", value: row.phone },
-    { label: "Mã số thuế", value: row.tax_id },
-    { label: "Chiết khấu mặc định %", value: row.default_discount_percent ?? "—" },
-    { label: "Hoạt động", value: row.is_active ? "Có" : "Không" },
-    { label: "Địa chỉ", value: row.address, span: "full" as const },
-    { label: "Ghi chú", value: row.notes, span: "full" as const },
-    { label: "Tạo lúc", value: formatDate(row.created_at) },
-    { label: "Cập nhật", value: formatDate(row.updated_at) },
-  ];
-
   return (
     <div className="flex min-h-0 flex-col gap-3">
       <DetailTabStrip
@@ -180,7 +164,44 @@ export function PartnerRowDetailPanel({ row }: { row: PartnerRow }) {
         value={tab}
         onChange={(id) => setTab(id as typeof tab)}
       />
-      {tab === "info" ? <DetailPreview fields={infoFields} /> : null}
+      {tab === "info" ? (
+        <DetailPreview 
+          groups={[
+            {
+              title: "Hồ sơ đối tác",
+              fields: [
+                { label: "MÃ ĐỐI TÁC:", value: row.code },
+                { label: "TÊN ĐỐI TÁC:", value: row.name },
+                { label: "PHÂN LOẠI:", value: formatPartnerType(row.partner_type) },
+              ]
+            },
+            {
+              title: "Liên hệ & Pháp lý",
+              fields: [
+                { label: "NGƯỜI ĐẠI DIỆN:", value: row.representative_name || "—" },
+                { label: "SỐ ĐIỆN THOẠI:", value: row.phone || "—" },
+                { label: "MÃ SỐ THUẾ:", value: row.tax_id || "—" },
+              ]
+            },
+            {
+              title: "Chính sách & Trạng thái",
+              fields: [
+                { label: "CHIẾT KHẤU MẶC ĐỊNH:", value: row.default_discount_percent ? row.default_discount_percent + "%" : "—" },
+                { label: "TRẠNG THÁI:", value: row.is_active ? "Đang hoạt động" : "Ngừng hoạt động" },
+              ]
+            },
+            {
+              title: "Thông tin khác",
+              fields: [
+                { label: "ĐỊA CHỈ:", value: row.address || "—", span: "full" },
+                { label: "GHI CHÚ:", value: row.notes || "—", span: "full" },
+                { label: "TẠO LÚC:", value: formatDate(row.created_at) },
+                { label: "CẬP NHẬT:", value: formatDate(row.updated_at) },
+              ]
+            }
+          ]}
+        />
+      ) : null}
       {tab === "orders" && customer ? <PartnerOrdersBlock partnerId={row.id} /> : null}
       {tab === "finance" && customer ? (
         <PartnerFinanceBlock partnerId={row.id} partnerType={row.partner_type} />

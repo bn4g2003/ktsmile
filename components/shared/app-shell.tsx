@@ -67,6 +67,7 @@ const groups: { title: string; Icon: NavIcon; items: NavItem[] }[] = [
     items: [
       { href: "/accounting/cash", label: "Sổ quỹ", Icon: NavIconCash },
       { href: "/accounting/debt", label: "Công nợ khách hàng", Icon: NavIconDebt },
+      { href: "/accounting/summary", label: "Báo cáo tổng hợp", Icon: NavIconChart },
     ],
   },
   {

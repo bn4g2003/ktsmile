@@ -924,7 +924,7 @@ export function ExcelDataGrid<T>({
         <Dialog open={viewRow != null} onOpenChange={(o) => !o && setViewRow(null)}>
           <DialogContent
             size="2xl"
-            className="flex max-h-[92vh] flex-col gap-0 overflow-hidden p-5 sm:p-6"
+            className="flex max-h-[92vh] flex-col gap-0 overflow-hidden p-4 sm:p-5"
           >
             <DialogHeader className="shrink-0 space-y-1 pb-3">
               <DialogTitle>

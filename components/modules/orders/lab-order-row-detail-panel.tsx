@@ -4,6 +4,7 @@ import Link from "next/link";
 import * as React from "react";
 import { DetailPreview } from "@/components/ui/detail-preview";
 import { DetailTabStrip } from "@/components/ui/detail-tab-strip";
+import { cn } from "@/lib/utils/cn";
 import {
   formatCoordReviewStatus,
   formatLabOrderLineWorkType,
@@ -84,6 +85,11 @@ function OrderLinesBlock({ orderId }: { orderId: string }) {
   );
 }
 
+const IconCalendar = <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>;
+const IconClinic = <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5" /></svg>;
+const IconUser = <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>;
+const IconStatus = <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>;
+
 export function LabOrderRowDetailPanel({ row }: { row: LabOrderRow }) {
   const [tab, setTab] = React.useState<"info" | "lines">("info");
 
@@ -103,43 +109,65 @@ export function LabOrderRowDetailPanel({ row }: { row: LabOrderRow }) {
       />
       {tab === "info" ? (
         <DetailPreview
-          fields={[
-            { label: "Số đơn", value: row.order_number },
-            { label: "Ngày nhận", value: formatDate(row.received_at) },
-            { label: "Mã KH", value: row.partner_code },
-            { label: "Khách", value: row.partner_name },
-            { label: "Nha khoa", value: row.clinic_name ?? "—" },
-            { label: "Bệnh nhân", value: row.patient_name },
+          groups={[
             {
-              label: "Trạng thái",
-              value: (
-                <span className={orderStatusBadgeClassName(row.status)}>{formatOrderStatus(row.status)}</span>
-              ),
-            },
-            { label: "Tổng dòng", value: row.total_amount.toLocaleString("vi-VN") },
-            { label: "Phải thu (GBTT)", value: row.grand_total.toLocaleString("vi-VN") },
-            {
-              label: "Đối chiếu",
-              value: formatCoordReviewStatus(row.coord_review_status),
+              title: "Thông tin Chung",
+              fields: [
+                { label: "SỐ ĐƠN:", value: row.order_number },
+                { label: "NGÀY NHẬN:", value: formatDate(row.received_at), icon: IconCalendar },
+                {
+                  label: "TRẠNG THÁI:",
+                  icon: IconStatus,
+                  value: (
+                    <span className={cn("px-2 py-0.5 rounded-full text-[11px] font-bold uppercase", orderStatusBadgeClassName(row.status))}>
+                      {formatOrderStatus(row.status)}
+                    </span>
+                  ),
+                },
+              ],
             },
             {
-              label: "Phiếu BS",
-              value: row.prescription_slip_code ?? (row.doctor_prescription_id ? row.doctor_prescription_id.slice(0, 8) : "—"),
+              title: "Thông tin Đối tác & Bệnh nhân",
+              fields: [
+                { label: "KHÁCH (LAB):", value: row.partner_name, icon: IconClinic },
+                { label: "NHA KHOA:", value: row.clinic_name ?? "—", icon: IconClinic },
+                { label: "BỆNH NHÂN:", value: row.patient_name, icon: IconUser },
+                { label: "MÃ KH:", value: row.partner_code },
+              ],
             },
-            { label: "Số GBTT", value: row.payment_notice_doc_number ?? "—" },
-            { label: "Ghi chú", value: row.notes, span: "full" },
             {
-              label: "Mở trang đơn",
-              value: (
-                <Link href={"/orders/" + row.id} className="font-semibold text-[var(--primary)] underline-offset-2 hover:underline">
-                  Sửa dòng & in PDF →
-                </Link>
-              ),
-              span: "full",
+              title: "Thông tin Tài chính",
+              fields: [
+                { label: "TỔNG DÒNG:", value: row.total_amount.toLocaleString("vi-VN") + " VND" },
+                { label: "PHẢI THU (GBTT):", value: row.grand_total.toLocaleString("vi-VN") + " VND" },
+                {
+                  label: "ĐỐI CHIẾU:",
+                  value: (
+                    <span className="px-2 py-0.5 rounded shadow-sm bg-[var(--surface-muted)] text-[11px] font-bold">
+                       {formatCoordReviewStatus(row.coord_review_status)}
+                    </span>
+                  )
+                },
+                { label: "SỐ GBTT:", value: row.payment_notice_doc_number ?? "—" },
+                { label: "PHIẾU BS:", value: row.prescription_slip_code ?? "—" },
+              ],
             },
-            { label: "ID", value: row.id, span: "full" },
-            { label: "Tạo lúc", value: formatDate(row.created_at) },
-            { label: "Cập nhật", value: formatDate(row.updated_at) },
+            {
+              title: "Thông tin Bổ sung",
+              fields: [
+                { label: "GHI CHÚ:", value: row.notes || "—", span: "full" },
+                {
+                  label: "THAO TÁC NHANH:",
+                  value: (
+                    <Link href={"/orders/" + row.id} className="inline-flex items-center gap-1.5 font-bold text-[var(--primary)] text-xs hover:underline">
+                      Sửa chi tiết & In PDF →
+                    </Link>
+                  ),
+                  span: "full",
+                },
+                { label: "ID HỆ THỐNG:", value: <span className="text-[10px] font-mono opacity-50">{row.id}</span>, span: "full" },
+              ],
+            },
           ]}
         />
       ) : null}

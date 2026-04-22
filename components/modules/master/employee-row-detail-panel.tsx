@@ -35,37 +35,49 @@ export function EmployeeRowDetailPanel({ row }: { row: EmployeeRow }) {
       />
       {tab === "info" ? (
         <DetailPreview
-          fields={[
-            { label: "Mã NV", value: row.code },
-            { label: "Họ tên", value: row.full_name },
-            { label: "Vai trò", value: row.role },
-            { label: "Quyền hạn", value: permissionPresetLabel(row.permissions), span: "full" },
-            { label: "SĐT", value: row.phone ?? "—" },
-            { label: "Email", value: row.email ?? "—" },
-            { label: "Địa chỉ", value: row.address ?? "—", span: "full" },
-            { label: "Hoạt động", value: row.is_active ? "Có" : "Không" },
+          groups={[
+            {
+              title: "Hồ sơ nhân sự",
+              fields: [
+                { label: "MÃ NV:", value: row.code },
+                { label: "HỌ TÊN:", value: row.full_name },
+                { label: "VAI TRÒ:", value: row.role },
+                { label: "QUYỀN HẠN:", value: permissionPresetLabel(row.permissions), span: "full" },
+              ]
+            },
+            {
+              title: "Liên hệ & Địa chỉ",
+              fields: [
+                { label: "SỐ ĐIỆN THOẠI:", value: row.phone ?? "—" },
+                { label: "EMAIL:", value: row.email ?? "—" },
+                { label: "ĐỊA CHỈ:", value: row.address ?? "—", span: "full" },
+                { label: "TRẠNG THÁI:", value: row.is_active ? "Đang hoạt động" : "Ngừng hoạt động" },
+              ]
+            }
           ]}
         />
       ) : null}
       {tab === "salary" ? (
         <div className="space-y-4">
           <DetailPreview
-            fields={[
+            groups={[
               {
-                label: "Lương cơ bản (tháng)",
-                value: fmtMoney(monthly) + " đ",
-              },
-              {
-                label: "Quy đổi năm (×12)",
-                value: fmtMoney(yearly) + " đ",
-              },
-              {
-                label: "Ước lương/ngày công (÷22 ngày)",
-                value:
-                  monthly > 0
-                    ? fmtMoney(Math.round(perDay22)) + " đ (làm tròn)"
-                    : "—",
-              },
+                title: "Định mức tài chính",
+                fields: [
+                  {
+                    label: "LƯƠNG CƠ BẢN (THÁNG):",
+                    value: <span className="font-bold text-[var(--primary)]">{fmtMoney(monthly)} đ</span>,
+                  },
+                  {
+                    label: "QUY ĐỔI NĂM (×12):",
+                    value: fmtMoney(yearly) + " đ",
+                  },
+                  {
+                    label: "ƯỚC LƯƠNG/NGÀY CÔNG (÷22 NGÀY):",
+                    value: monthly > 0 ? fmtMoney(Math.round(perDay22)) + " đ" : "—",
+                  },
+                ]
+              }
             ]}
           />
           <p className="text-xs leading-relaxed text-[var(--on-surface-muted)]">
@@ -77,33 +89,43 @@ export function EmployeeRowDetailPanel({ row }: { row: EmployeeRow }) {
       {tab === "system" ? (
         <div className="space-y-4">
           <DetailPreview
-            fields={[
+            groups={[
               {
-                label: "Auth user id",
-                value: row.auth_user_id ? (
-                  <code className="break-all rounded bg-[var(--surface-muted)] px-2 py-1 text-xs">
-                    {row.auth_user_id}
-                  </code>
-                ) : (
-                  "— (chưa liên kết)"
-                ),
-                span: "full",
+                title: "Tài khoản & Liên kết Auth",
+                fields: [
+                  {
+                    label: "AUTH USER ID:",
+                    value: row.auth_user_id ? (
+                      <code className="break-all rounded bg-[var(--surface-muted)] px-2 py-1 text-[11px] font-mono">
+                        {row.auth_user_id}
+                      </code>
+                    ) : (
+                      "— (chưa liên kết)"
+                    ),
+                    span: "full",
+                  },
+                  { label: "USERNAME NỘI BỘ:", value: row.username ?? "—" },
+                  {
+                    label: "MẬT KHẨU LƯU DB:",
+                    value: row.password_plain ? (
+                      <code className="break-all rounded bg-[var(--surface-muted)] px-2 py-1 text-[11px] font-mono">
+                        {row.password_plain}
+                      </code>
+                    ) : (
+                      "—"
+                    ),
+                    span: "full",
+                  },
+                ]
               },
-              { label: "Username nội bộ", value: row.username ?? "—" },
               {
-                label: "Mật khẩu lưu DB",
-                value: row.password_plain ? (
-                  <code className="break-all rounded bg-[var(--surface-muted)] px-2 py-1 text-xs">
-                    {row.password_plain}
-                  </code>
-                ) : (
-                  "—"
-                ),
-                span: "full",
-              },
-              { label: "Ghi chú", value: row.notes ?? "—", span: "full" },
-              { label: "Tạo lúc", value: formatDate(row.created_at) },
-              { label: "Cập nhật lần cuối", value: formatDate(row.updated_at) },
+                title: "Nhật ký hệ thống",
+                fields: [
+                  { label: "TẠO LÚC:", value: formatDate(row.created_at) },
+                  { label: "CẬP NHẬT LẦN CUỐI:", value: formatDate(row.updated_at) },
+                  { label: "GHI CHÚ:", value: row.notes ?? "—", span: "full" },
+                ]
+              }
             ]}
           />
           <p className="text-xs leading-relaxed text-[var(--on-surface-muted)]">
