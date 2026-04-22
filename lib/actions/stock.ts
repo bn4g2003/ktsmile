@@ -98,6 +98,8 @@ export async function listStockDocuments(
     }
     if (filters.document_number?.trim())
       q = q.ilike("document_number", "%" + filters.document_number.trim() + "%");
+    if (filters.document_date?.trim())
+      q = q.eq("document_date", filters.document_date.trim());
     if (filters.document_date_from?.trim())
       q = q.gte("document_date", filters.document_date_from.trim());
     if (filters.document_date_to?.trim())
@@ -839,25 +841,33 @@ export async function listProductStock(
       if (dt) periodQ = periodQ.lte("stock_documents.document_date", dt);
 
       const [earlyRes, periodRes] = await Promise.all([earlyQ, periodQ]);
+      if (earlyRes.error) throw new Error(earlyRes.error.message);
+      if (periodRes.error) throw new Error(periodRes.error.message);
       const earlyLines = earlyRes.data ?? [];
       const periodLines = periodRes.data ?? [];
+
+      const docRow = (line: { stock_documents?: unknown }) => {
+        const d = line.stock_documents;
+        if (d == null) return undefined;
+        return (Array.isArray(d) ? d[0] : d) as { movement_type?: string; document_date?: string } | undefined;
+      };
 
       const stats = new Map<string, { opening: number; inQ: number; outQ: number; inA: number; outA: number }>();
       for (const id of pids) stats.set(id, { opening: 0, inQ: 0, outQ: 0, inA: 0, outA: 0 });
 
       for (const l of earlyLines) {
-        const s = stats.get(l.product_id);
+        const s = stats.get(l.product_id as string);
         if (!s) continue;
-        const mov = (l.stock_documents as any)?.movement_type;
+        const mov = docRow(l)?.movement_type;
         const qv = Number(l.quantity || 0);
         if (mov === "inbound") s.opening += qv;
         else if (mov === "outbound") s.opening -= qv;
       }
 
       for (const l of periodLines) {
-        const s = stats.get(l.product_id);
+        const s = stats.get(l.product_id as string);
         if (!s) continue;
-        const mov = (l.stock_documents as any)?.movement_type;
+        const mov = docRow(l)?.movement_type;
         const qv = Number(l.quantity || 0);
         const av = Number(l.line_amount || 0);
         if (mov === "inbound") {

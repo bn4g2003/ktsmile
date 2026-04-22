@@ -24,6 +24,18 @@ import { createOutboundStockRequest, listProductStock, type ProductStockRow } fr
 
 type StockTab = "nvl" | "sp";
 
+/** Kỳ mặc định: cả tháng hiện tại (để lưới có Tồn đầu / Nhập–Xuất kỳ / Trị giá xuất). */
+function monthRangeDefaults(): { date_from: string; date_to: string } {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = d.getMonth();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const date_from = `${y}-${pad(m + 1)}-01`;
+  const lastDay = new Date(y, m + 1, 0).getDate();
+  const date_to = `${y}-${pad(m + 1)}-${pad(lastDay)}`;
+  return { date_from, date_to };
+}
+
 export function StockLevelsPage({ initialTab = "nvl" }: { initialTab?: StockTab }) {
   const router = useRouter();
   const [tab, setTab] = React.useState<StockTab>(initialTab);
@@ -40,7 +52,7 @@ export function StockLevelsPage({ initialTab = "nvl" }: { initialTab?: StockTab 
   const [reqQty, setReqQty] = React.useState("1");
   const [reqReason, setReqReason] = React.useState("");
   const [reqErr, setReqErr] = React.useState<string | null>(null);
-  const [filters, setFilters] = React.useState<Record<string, string>>({});
+  const [filters, setFilters] = React.useState<Record<string, string>>(() => monthRangeDefaults());
   const [reqPending, setReqPending] = React.useState(false);
 
   React.useEffect(() => {
@@ -298,9 +310,14 @@ export function StockLevelsPage({ initialTab = "nvl" }: { initialTab?: StockTab 
                 className="h-7 w-32 border-none bg-transparent p-0 text-xs focus-visible:ring-0"
                 value={filters["date_from"] ?? ""}
                 onChange={(e) => {
-                  const next = { ...filters, date_from: e.target.value };
-                  if (!e.target.value) delete next.date_from;
-                  setFilters(next);
+                  const v = e.target.value;
+                  setFilters((prev) => {
+                    if (!v) {
+                      const { date_from: _, ...rest } = prev;
+                      return rest;
+                    }
+                    return { ...prev, date_from: v };
+                  });
                 }}
               />
               <span className="text-[10px] text-[var(--on-surface-muted)]">—</span>
@@ -309,9 +326,14 @@ export function StockLevelsPage({ initialTab = "nvl" }: { initialTab?: StockTab 
                 className="h-7 w-32 border-none bg-transparent p-0 text-xs focus-visible:ring-0"
                 value={filters["date_to"] ?? ""}
                 onChange={(e) => {
-                  const next = { ...filters, date_to: e.target.value };
-                  if (!e.target.value) delete next.date_to;
-                  setFilters(next);
+                  const v = e.target.value;
+                  setFilters((prev) => {
+                    if (!v) {
+                      const { date_to: _, ...rest } = prev;
+                      return rest;
+                    }
+                    return { ...prev, date_to: v };
+                  });
                 }}
               />
             </div>
@@ -319,10 +341,9 @@ export function StockLevelsPage({ initialTab = "nvl" }: { initialTab?: StockTab 
               variant="secondary"
               size="sm"
               type="button"
-              onClick={() => setFilters({})}
-              disabled={Object.keys(filters).length === 0}
+              onClick={() => setFilters(monthRangeDefaults())}
             >
-              Xóa kỳ
+              Tháng này
             </Button>
             <Button
               variant="secondary"

@@ -99,6 +99,8 @@ export function InventoryDocumentsPage({ initialTab = "inbound" }: { initialTab?
   const [nvlErr, setNvlErr] = React.useState<string | null>(null);
   const [nvlPending, setNvlPending] = React.useState(false);
 
+  const [gridFilters, setGridFilters] = React.useState<Record<string, string>>({});
+
   React.useEffect(() => {
     setTab(initialTab);
   }, [initialTab]);
@@ -354,7 +356,7 @@ export function InventoryDocumentsPage({ initialTab = "inbound" }: { initialTab?
       {
         accessorKey: "document_date",
         header: "Ngày",
-        meta: { filterKey: "document_date", filterType: "date_range" },
+        meta: { filterKey: "document_date", filterType: "date" },
       },
       {
         accessorKey: "movement_type",
@@ -494,22 +496,72 @@ export function InventoryDocumentsPage({ initialTab = "inbound" }: { initialTab?
         list={listStockDocuments}
         prependFilters={{ movement_type: tab }}
         reloadSignal={gridReload}
+        filters={gridFilters}
+        onFiltersChange={setGridFilters}
         renderRowDetail={renderStockDocDetail}
         rowDetailTitle={(r) => "Phiếu " + r.document_number}
         toolbarExtra={
           <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-1.5 rounded-[var(--radius-md)] bg-[var(--surface-muted)] px-2 py-1 shadow-[inset_0_0_0_1px_var(--border-ghost)]">
+              <span className="text-[10px] font-bold uppercase tracking-wide text-[var(--on-surface-muted)]">
+                Kỳ phiếu
+              </span>
+              <Input
+                type="date"
+                aria-label="Từ ngày"
+                className="h-7 w-32 border-none bg-transparent p-0 text-xs focus-visible:ring-0"
+                value={gridFilters.document_date_from ?? ""}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setGridFilters((prev) => {
+                    if (!v) {
+                      const { document_date_from: _, ...rest } = prev;
+                      return rest;
+                    }
+                    return { ...prev, document_date_from: v };
+                  });
+                }}
+              />
+              <span className="text-[10px] text-[var(--on-surface-muted)]">—</span>
+              <Input
+                type="date"
+                aria-label="Đến ngày"
+                className="h-7 w-32 border-none bg-transparent p-0 text-xs focus-visible:ring-0"
+                value={gridFilters.document_date_to ?? ""}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setGridFilters((prev) => {
+                    if (!v) {
+                      const { document_date_to: _, ...rest } = prev;
+                      return rest;
+                    }
+                    return { ...prev, document_date_to: v };
+                  });
+                }}
+              />
+            </div>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              disabled={!gridFilters.document_date_from && !gridFilters.document_date_to}
+              onClick={() =>
+                setGridFilters((prev) => {
+                  const { document_date_from: _f, document_date_to: _t, ...rest } = prev;
+                  return rest;
+                })
+              }
+            >
+              Xóa kỳ
+            </Button>
             {tab === "inbound" ? (
-              <>
-                <Button variant="primary" type="button" onClick={openNvlInboundDialog}>
-                  Nhập NVL từ NCC
-                </Button>
-              </>
+              <Button variant="primary" type="button" onClick={openNvlInboundDialog}>
+                Nhập NVL từ NCC
+              </Button>
             ) : (
-              <>
-                <Button variant="primary" type="button" onClick={openRequestDialog}>
-                  Yêu cầu xuất kho
-                </Button>
-              </>
+              <Button variant="primary" type="button" onClick={openRequestDialog}>
+                Yêu cầu xuất kho
+              </Button>
             )}
           </div>
         }

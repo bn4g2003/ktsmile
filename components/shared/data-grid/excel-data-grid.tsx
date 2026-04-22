@@ -637,6 +637,13 @@ export function ExcelDataGrid<T>({
                             className="h-9 py-1 text-xs"
                           />
                         </div>
+                      ) : ft === "date" ? (
+                        <Input
+                          type="date"
+                          value={filters[fk] ?? ""}
+                          onChange={(e) => setFilter(fk, e.target.value)}
+                          className="h-9 py-1 text-xs"
+                        />
                       ) : (
                         <Input
                           id={"dg-filter-" + String(col.id)}
@@ -801,6 +808,25 @@ export function ExcelDataGrid<T>({
                               className="h-9 px-1 text-[10px]"
                             />
                           </div>
+                        </td>
+                      );
+                    }
+                    if (ft === "date") {
+                      return (
+                        <td
+                          key={col.id}
+                          className={cn(
+                            "min-w-[7.5rem] px-3 py-2 first:pl-4 last:pr-4",
+                            col.id === "actions" &&
+                              "sticky right-0 z-20 w-[68px] max-w-[68px] !min-w-0 !px-2 bg-[var(--surface-muted)] shadow-[-4px_0_8px_rgba(0,0,0,0.05)]",
+                          )}
+                        >
+                          <Input
+                            type="date"
+                            value={filters[fk] ?? ""}
+                            onChange={(e) => setFilter(fk, e.target.value)}
+                            className="h-9 w-full min-w-0 px-1 text-[10px]"
+                          />
                         </td>
                       );
                     }
