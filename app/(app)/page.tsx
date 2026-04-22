@@ -141,17 +141,17 @@ export default async function HomePage() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 sm:space-y-8">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight text-[var(--on-surface)] sm:text-4xl">
+        <h1 className="text-2xl font-bold tracking-tight text-[var(--on-surface)] sm:text-4xl">
           Tổng quan
         </h1>
-        <p className="mt-2 max-w-2xl text-[var(--on-surface-muted)]">
+        <p className="mt-1.5 max-w-2xl text-sm text-[var(--on-surface-muted)] sm:text-base">
           Bảng dữ liệu kiểu Excel: lọc, tìm kiếm, cột, xuất file — giao diện đồng nhất theo design system.
         </p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 sm:gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Doanh thu " value="—" hint="Kết nối báo cáo sau" />
         <StatCard label="Hóa đơn chờ" value="—" />
         <StatCard label="Đơn đang xử lý" value="—" />
@@ -180,7 +180,7 @@ export default async function HomePage() {
               key={l.href}
               href={l.href}
               className={cn(
-                "group block min-h-[9.5rem] rounded-[var(--radius-xl)] p-5 text-white shadow-[var(--shadow-card)] ring-1 ring-black/10 outline-none",
+                "group block min-h-[8rem] sm:min-h-[9.5rem] rounded-[var(--radius-xl)] p-4 sm:p-5 text-white shadow-[var(--shadow-card)] ring-1 ring-black/10 outline-none",
                 "transition [transition-property:transform,filter,background-color] duration-200",
                 "hover:-translate-y-0.5 hover:shadow-[var(--shadow-float)] active:scale-[0.99]",
                 "focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface-canvas)]",
@@ -188,17 +188,17 @@ export default async function HomePage() {
               )}
             >
               <div className="flex h-full min-h-0 flex-col">
-                <div className="flex gap-4">
-                  <Icon className="mt-0.5 h-8 w-8 shrink-0 text-white" />
+                <div className="flex gap-3 sm:gap-4">
+                  <Icon className="mt-0.5 h-7 w-7 sm:h-8 sm:w-8 shrink-0 text-white" />
                   <div className="min-w-0 flex-1">
-                    <h2 className="text-lg font-semibold tracking-tight text-white">{l.title}</h2>
-                    <p className="mt-1 text-sm leading-snug text-white">{l.desc}</p>
+                    <h2 className="text-base sm:text-lg font-semibold tracking-tight text-white">{l.title}</h2>
+                    <p className="mt-0.5 sm:mt-1 text-xs sm:text-sm leading-snug text-white/90">{l.desc}</p>
                   </div>
                 </div>
-                <div className="mt-auto flex items-center justify-between border-t border-white/25 pt-4 text-sm font-bold text-white">
+                <div className="mt-auto flex items-center justify-between border-t border-white/20 pt-3 sm:pt-4 text-xs sm:text-sm font-bold text-white">
                   <span>Mở</span>
                   <svg
-                    className="h-5 w-5 shrink-0 text-white transition group-hover:translate-x-0.5"
+                    className="h-4 w-4 sm:h-5 sm:w-5 shrink-0 text-white transition group-hover:translate-x-0.5"
                     fill="none"
                     viewBox="0 0 24 24"
                     stroke="currentColor"

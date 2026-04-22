@@ -58,8 +58,8 @@ export function DashboardChartsSection({ data }: { data: DashboardChartsData }) 
   };
 
   return (
-    <Card className="p-5 shadow-[var(--shadow-card)]">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+    <Card className="p-3.5 sm:p-5 shadow-[var(--shadow-card)] overflow-hidden">
+      <div className="mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold tracking-tight text-[var(--on-surface)]">
             Biểu đồ nhanh
@@ -71,7 +71,7 @@ export function DashboardChartsSection({ data }: { data: DashboardChartsData }) 
         <PrintReportButton title="Báo cáo tổng quan — KT Smile Lab" buildBodyHtml={printBody} />
       </div>
       <div className="grid gap-6 lg:grid-cols-2">
-        <div className="h-72 w-full min-w-0">
+        <div className="h-64 sm:h-72 w-full min-w-0">
           <p className="mb-2 text-center text-xs font-semibold uppercase tracking-wide text-[var(--on-surface-muted)]">
             Đơn hàng theo trạng thái
           </p>
@@ -86,7 +86,7 @@ export function DashboardChartsSection({ data }: { data: DashboardChartsData }) 
                   nameKey="name"
                   cx="50%"
                   cy="50%"
-                  outerRadius={88}
+                  outerRadius="80%"
                   label={({ name, percent }) =>
                     `${name}: ${((percent ?? 0) * 100).toFixed(0)}%`
                   }
@@ -101,7 +101,7 @@ export function DashboardChartsSection({ data }: { data: DashboardChartsData }) 
             </ResponsiveContainer>
           )}
         </div>
-        <div className="h-72 w-full min-w-0">
+        <div className="h-64 sm:h-72 w-full min-w-0">
           <p className="mb-2 text-center text-xs font-semibold uppercase tracking-wide text-[var(--on-surface-muted)]">
             Tồn kho (top)
           </p>

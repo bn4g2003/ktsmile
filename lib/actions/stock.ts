@@ -740,6 +740,8 @@ export type ProductStockRow = {
   product_name: string;
   unit: string;
   product_usage: string;
+  total_inbound: number;
+  total_outbound: number;
   quantity_on_hand: number;
   primary_supplier_id: string | null;
   primary_supplier_code: string | null;
@@ -779,6 +781,8 @@ export async function listProductStock(
       product_name: (r["material_name"] as string) ?? "",
       unit: r["unit"] as string,
       product_usage: "inventory",
+      total_inbound: Number(r["total_inbound"] ?? 0),
+      total_outbound: Number(r["total_outbound"] ?? 0),
       quantity_on_hand: Number(r["quantity_on_hand"] ?? 0),
       primary_supplier_id: (r["primary_supplier_id"] as string | null) ?? null,
       primary_supplier_code: (r["primary_supplier_code"] as string | null) ?? null,
@@ -814,6 +818,8 @@ export async function listProductStock(
     product_name: r["product_name"] as string,
     unit: r["unit"] as string,
     product_usage: (r["product_usage"] as string) ?? "both",
+    total_inbound: Number(r["total_inbound"] ?? 0),
+    total_outbound: Number(r["total_outbound"] ?? 0),
     quantity_on_hand: Number(r["quantity_on_hand"] ?? 0),
     primary_supplier_id: (r["primary_supplier_id"] as string | null) ?? null,
     primary_supplier_code: (r["primary_supplier_code"] as string | null) ?? null,

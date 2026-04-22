@@ -127,7 +127,9 @@ export function StockLevelsPage({ initialTab = "nvl" }: { initialTab?: StockTab 
           { label: "ĐVT", value: row.unit },
           { label: "Phạm vi", value: usage },
           { label: "NCC chính (mua)", value: ncc, span: "full" },
-          { label: "Tồn", value: row.quantity_on_hand },
+          { label: "Tổng nhập", value: row.total_inbound },
+          { label: "Tổng xuất", value: row.total_outbound },
+          { label: "Tồn trong kỳ", value: row.quantity_on_hand },
           { label: "Product ID", value: row.product_id, span: "full" },
         ]}
       />
@@ -155,7 +157,27 @@ export function StockLevelsPage({ initialTab = "nvl" }: { initialTab?: StockTab 
         header: "NCC chính",
         cell: ({ row }) => row.original.primary_supplier_code ?? "—",
       },
-      { accessorKey: "quantity_on_hand", header: "Tồn" },
+      {
+        accessorKey: "total_inbound",
+        header: "Tổng nhập",
+        cell: ({ getValue }) => (
+          <span className="font-semibold text-emerald-600">{Number(getValue() ?? 0).toLocaleString()}</span>
+        ),
+      },
+      {
+        accessorKey: "total_outbound",
+        header: "Tổng xuất",
+        cell: ({ getValue }) => (
+          <span className="font-semibold text-rose-600">{Number(getValue() ?? 0).toLocaleString()}</span>
+        ),
+      },
+      {
+        accessorKey: "quantity_on_hand",
+        header: "Tồn trong kỳ",
+        cell: ({ getValue }) => (
+          <span className="font-bold text-[var(--primary)]">{Number(getValue() ?? 0).toLocaleString()}</span>
+        ),
+      },
     ],
     [],
   );
