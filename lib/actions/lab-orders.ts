@@ -7,7 +7,7 @@ import { isSupabaseSchemaDriftError } from "@/lib/supabase/schema-drift";
 import type { ListArgs, ListResult } from "@/components/shared/data-grid/excel-data-grid";
 import { decodeMultiFilter } from "@/lib/grid/multi-filter";
 import type { LabOrderPrintLine, LabOrderPrintPayload } from "@/lib/reports/lab-order-html";
-import type { DeliveryNotePayload } from "@/lib/reports/delivery-note-html";
+import type { DeliveryNoteLine, DeliveryNotePayload } from "@/lib/reports/delivery-note-html";
 import {
   type LabOrderStatus,
   isAllowedLabOrderStatusTransition,
@@ -44,19 +44,23 @@ export type LabOrderRow = {
   // Thông tin tổng hợp từ dòng chi tiết
   tooth_positions_summary?: string | null;
   tooth_count_total?: number | null;
+  /** Tóm tắt mã/tên SP các dòng (in danh sách / báo cáo). */
+  products_summary?: string | null;
+  /** Tổng quantity các dòng chi tiết. */
+  line_quantity_total?: number | null;
 };
 
 /* Gợi ý FK theo tên constraint (tránh PGRST201 khi PostgREST không chọn đúng quan hệ). */
 const LAB_ORDERS_LIST_SELECT_FULL =
-  "id, order_number, received_at, partner_id, patient_name, clinic_name, contact_phone, status, notes, created_at, updated_at, order_category, patient_year_of_birth, coord_review_status, doctor_prescription_id, billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, payment_notice_doc_number, payment_notice_issued_at, partners!lab_orders_partner_id_fkey(code,name), doctor_prescriptions!lab_orders_doctor_prescription_id_fkey(slip_code), lab_order_lines!lab_order_lines_order_id_fkey(line_amount,tooth_positions,tooth_count)";
+  "id, order_number, received_at, partner_id, patient_name, clinic_name, contact_phone, status, notes, created_at, updated_at, order_category, patient_year_of_birth, coord_review_status, doctor_prescription_id, billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, payment_notice_doc_number, payment_notice_issued_at, partners!lab_orders_partner_id_fkey(code,name), doctor_prescriptions!lab_orders_doctor_prescription_id_fkey(slip_code), lab_order_lines!lab_order_lines_order_id_fkey(line_amount,tooth_positions,tooth_count,quantity,products!lab_order_lines_product_id_fkey(code,name))";
 
 /** Trước migration 20260420 (order_category, sender_name, …). */
 const LAB_ORDERS_LIST_SELECT_NO_PROD_UI =
-  "id, order_number, received_at, partner_id, patient_name, clinic_name, contact_phone, status, notes, created_at, updated_at, coord_review_status, doctor_prescription_id, billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, payment_notice_doc_number, payment_notice_issued_at, partners!lab_orders_partner_id_fkey(code,name), doctor_prescriptions!lab_orders_doctor_prescription_id_fkey(slip_code), lab_order_lines!lab_order_lines_order_id_fkey(line_amount,tooth_positions,tooth_count)";
+  "id, order_number, received_at, partner_id, patient_name, clinic_name, contact_phone, status, notes, created_at, updated_at, coord_review_status, doctor_prescription_id, billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, payment_notice_doc_number, payment_notice_issued_at, partners!lab_orders_partner_id_fkey(code,name), doctor_prescriptions!lab_orders_doctor_prescription_id_fkey(slip_code), lab_order_lines!lab_order_lines_order_id_fkey(line_amount,tooth_positions,tooth_count,quantity,products!lab_order_lines_product_id_fkey(code,name))";
 
 /** Trước migration 20260419 (phiếu BS, đối chiếu, GBTT trên đơn). */
 const LAB_ORDERS_LIST_SELECT_LEGACY_CORE =
-  "id, order_number, received_at, partner_id, patient_name, clinic_name, contact_phone, status, notes, created_at, updated_at, partners!lab_orders_partner_id_fkey(code,name), lab_order_lines!lab_order_lines_order_id_fkey(line_amount,tooth_positions,tooth_count)";
+  "id, order_number, received_at, partner_id, patient_name, clinic_name, contact_phone, status, notes, created_at, updated_at, partners!lab_orders_partner_id_fkey(code,name), lab_order_lines!lab_order_lines_order_id_fkey(line_amount,tooth_positions,tooth_count,quantity,products!lab_order_lines_product_id_fkey(code,name))";
 
 /**
  * Chỉ cột lab_orders (không embed) — khi PostgREST lỗi quan hệ/lồng lab_order_lines hoặc partners.
@@ -71,22 +75,37 @@ const LAB_ORDERS_LIST_SELECT_SCALARS_LEGACY =
 
 /** Khi embed phiếu BS vẫn lỗi — bỏ doctor_prescriptions, giữ tổng dòng. */
 const LAB_ORDERS_LIST_SELECT_NO_RX_EMBED =
-  "id, order_number, received_at, partner_id, patient_name, clinic_name, contact_phone, status, notes, created_at, updated_at, order_category, patient_year_of_birth, coord_review_status, doctor_prescription_id, billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, payment_notice_doc_number, payment_notice_issued_at, partners!lab_orders_partner_id_fkey(code,name), lab_order_lines!lab_order_lines_order_id_fkey(line_amount,tooth_positions,tooth_count)";
+  "id, order_number, received_at, partner_id, patient_name, clinic_name, contact_phone, status, notes, created_at, updated_at, order_category, patient_year_of_birth, coord_review_status, doctor_prescription_id, billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, payment_notice_doc_number, payment_notice_issued_at, partners!lab_orders_partner_id_fkey(code,name), lab_order_lines!lab_order_lines_order_id_fkey(line_amount,tooth_positions,tooth_count,quantity,products!lab_order_lines_product_id_fkey(code,name))";
 
 const LAB_ORDERS_LIST_SELECT_NO_PROD_UI_NO_RX =
-  "id, order_number, received_at, partner_id, patient_name, clinic_name, contact_phone, status, notes, created_at, updated_at, coord_review_status, doctor_prescription_id, billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, payment_notice_doc_number, payment_notice_issued_at, partners!lab_orders_partner_id_fkey(code,name), lab_order_lines!lab_order_lines_order_id_fkey(line_amount,tooth_positions,tooth_count)";
+  "id, order_number, received_at, partner_id, patient_name, clinic_name, contact_phone, status, notes, created_at, updated_at, coord_review_status, doctor_prescription_id, billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, payment_notice_doc_number, payment_notice_issued_at, partners!lab_orders_partner_id_fkey(code,name), lab_order_lines!lab_order_lines_order_id_fkey(line_amount,tooth_positions,tooth_count,quantity,products!lab_order_lines_product_id_fkey(code,name))";
 
 function mapLabOrderListRow(r: Record<string, unknown>): LabOrderRow {
   const partners = r["partners"] as { code?: string; name?: string } | null;
   const rawRx = r["doctor_prescriptions"] as { slip_code?: string | null } | { slip_code?: string | null }[] | null;
   const rx = Array.isArray(rawRx) ? rawRx[0] : rawRx;
-  const lines = r["lab_order_lines"] as { line_amount?: string | number; tooth_positions?: string; tooth_count?: number | null }[] | null;
+  const lines = r["lab_order_lines"] as {
+    line_amount?: string | number;
+    tooth_positions?: string;
+    tooth_count?: number | null;
+    quantity?: string | number | null;
+    products?: { code?: string; name?: string } | null;
+  }[] | null;
   let total = 0;
   // Tổng hợp vị trí răng và số lượng răng
   const toothPositionsSet = new Set<string>();
   let toothCountTotal = 0;
+  const productLineLabels: string[] = [];
+  let lineQuantityTotal = 0;
   for (const line of lines ?? []) {
     total += finiteNumber(line.line_amount);
+    const q = finiteNumber(line.quantity);
+    if (q > 0) lineQuantityTotal += q;
+    const pr = line.products;
+    const code = pr?.code?.trim();
+    const name = pr?.name?.trim();
+    const label = code && name ? `${code} — ${name}` : code || name || "";
+    if (label) productLineLabels.push(label);
     // Thu thập vị trí răng
     if (line.tooth_positions?.trim()) {
       const positions = line.tooth_positions.split(",").map((p) => p.trim()).filter(Boolean);
@@ -99,6 +118,13 @@ function mapLabOrderListRow(r: Record<string, unknown>): LabOrderRow {
       toothCountTotal += line.tooth_count;
     }
   }
+  const seenProducts = new Set<string>();
+  const productsSummary =
+    productLineLabels.filter((lbl) => {
+      if (seenProducts.has(lbl)) return false;
+      seenProducts.add(lbl);
+      return true;
+    }).join("; ") || null;
   const crs = r["coord_review_status"] as string | undefined;
   const subtotal = Math.round(total * 100) / 100;
   const bPct = finiteNumber(r["billing_order_discount_percent"]);
@@ -141,6 +167,8 @@ function mapLabOrderListRow(r: Record<string, unknown>): LabOrderRow {
       return numA - numB;
     }).join(", ") : null,
     tooth_count_total: toothCountTotal > 0 ? toothCountTotal : null,
+    products_summary: productsSummary,
+    line_quantity_total: lineQuantityTotal > 0 ? lineQuantityTotal : null,
   };
 }
 
@@ -218,6 +246,12 @@ export async function listLabOrders(args: ListArgs): Promise<ListResult<LabOrder
       q = q.ilike("patient_name", "%" + filters.patient_name.trim() + "%");
     if (filters.clinic_name?.trim())
       q = q.ilike("clinic_name", "%" + filters.clinic_name.trim() + "%");
+    if (filters.contact_phone?.trim())
+      q = q.ilike("contact_phone", "%" + filters.contact_phone.trim() + "%");
+    const orderCategory = filters.order_category?.trim();
+    if (orderCategory === "new_work" || orderCategory === "warranty" || orderCategory === "repair") {
+      q = q.eq("order_category", orderCategory);
+    }
     const skipCoordReviewFilter = tier === "legacyCore" || tier === "scalarsLegacy";
     if (!skipCoordReviewFilter) {
       const cr = decodeMultiFilter(filters.coord_review_status);
@@ -841,6 +875,151 @@ export async function getDailyDeliveryNotePayload(
       lines: linesByOrder.get(o["id"] as string) ?? [],
     })),
   };
+}
+
+/** Phiếu giao gộp cả tháng theo một lab (ngày nhận trong khoảng tháng). */
+export async function getMonthlyDeliveryNotePayload(
+  partnerId: string,
+  year: number,
+  month: number,
+): Promise<DeliveryNotePayload> {
+  const supabase = createSupabaseAdmin();
+  if (month < 1 || month > 12) throw new Error("Tháng không hợp lệ.");
+  if (year < 2000 || year > 2100) throw new Error("Năm không hợp lệ.");
+
+  const from = `${year}-${String(month).padStart(2, "0")}-01`;
+  const lastDay = new Date(year, month, 0).getDate();
+  const to = `${year}-${String(month).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+
+  const { data: partner, error: pErr } = await supabase
+    .from("partners")
+    .select("code,name")
+    .eq("id", partnerId)
+    .maybeSingle();
+  if (pErr) throw new Error(pErr.message);
+  if (!partner) throw new Error("Không tìm thấy khách hàng.");
+
+  const { data: orders, error: oErr } = await supabase
+    .from("lab_orders")
+    .select("id,order_number,patient_name,clinic_name,notes,status")
+    .eq("partner_id", partnerId)
+    .gte("received_at", from)
+    .lte("received_at", to)
+    .neq("status", "cancelled")
+    .order("order_number", { ascending: true })
+    .limit(500);
+  if (oErr) throw new Error(oErr.message);
+  const orderIds = (orders ?? []).map((o) => o.id as string);
+  let lines: Record<string, unknown>[] = [];
+  if (orderIds.length > 0) {
+    const { data: lineData, error: lErr } = await supabase
+      .from("lab_order_lines")
+      .select("order_id,tooth_positions,quantity,shade,products:product_id(code,name)")
+      .in("order_id", orderIds)
+      .order("created_at", { ascending: true })
+      .limit(5000);
+    if (lErr) throw new Error(lErr.message);
+    lines = (lineData ?? []) as Record<string, unknown>[];
+  }
+  const linesByOrder = new Map<
+    string,
+    { product_code: string; product_name: string; tooth_positions: string; quantity: number; shade: string | null }[]
+  >();
+  for (const row of lines) {
+    const oid = row["order_id"] as string;
+    const pr = row["products"] as { code?: string; name?: string } | null;
+    const arr = linesByOrder.get(oid) ?? [];
+    arr.push({
+      product_code: pr?.code ?? "",
+      product_name: pr?.name ?? "",
+      tooth_positions: (row["tooth_positions"] as string) ?? "",
+      quantity: Number(row["quantity"] ?? 0),
+      shade: (row["shade"] as string | null) ?? null,
+    });
+    linesByOrder.set(oid, arr);
+  }
+
+  return {
+    partner_code: (partner["code"] as string | null) ?? null,
+    partner_name: (partner["name"] as string | null) ?? null,
+    delivery_date: from,
+    period_subtitle: `Tháng ${month}/${year} (ngày nhận ${from} → ${to})`,
+    generated_at: new Date().toLocaleString("vi-VN"),
+    orders: (orders ?? []).map((o) => ({
+      order_number: o["order_number"] as string,
+      patient_name: o["patient_name"] as string,
+      clinic_name: (o["clinic_name"] as string | null) ?? null,
+      notes: (o["notes"] as string | null) ?? null,
+      lines: linesByOrder.get(o["id"] as string) ?? [],
+    })),
+  };
+}
+
+/** Phiếu giao cho một đơn (theo id đơn). */
+export async function getSingleOrderDeliveryNotePayload(orderId: string): Promise<DeliveryNotePayload> {
+  const supabase = createSupabaseAdmin();
+  const { data: order, error: oErr } = await supabase
+    .from("lab_orders")
+    .select(
+      "id,order_number,patient_name,clinic_name,notes,status,received_at, partners!lab_orders_partner_id_fkey(code,name)",
+    )
+    .eq("id", orderId)
+    .maybeSingle();
+  if (oErr) throw new Error(oErr.message);
+  if (!order) throw new Error("Không tìm thấy đơn.");
+  if ((order["status"] as string) === "cancelled") throw new Error("Đơn đã hủy.");
+
+  const oid = order["id"] as string;
+  const { data: lineData, error: lErr } = await supabase
+    .from("lab_order_lines")
+    .select("order_id,tooth_positions,quantity,shade,products:product_id(code,name)")
+    .eq("order_id", oid)
+    .order("created_at", { ascending: true })
+    .limit(2000);
+  if (lErr) throw new Error(lErr.message);
+  const lineRows = (lineData ?? []) as Record<string, unknown>[];
+  const lines: DeliveryNoteLine[] = [];
+  for (const row of lineRows) {
+    const pr = row["products"] as { code?: string; name?: string } | null;
+    lines.push({
+      product_code: pr?.code ?? "",
+      product_name: pr?.name ?? "",
+      tooth_positions: (row["tooth_positions"] as string) ?? "",
+      quantity: Number(row["quantity"] ?? 0),
+      shade: (row["shade"] as string | null) ?? null,
+    });
+  }
+
+  const partners = order["partners"] as { code?: string; name?: string } | null;
+  const receivedRaw = order["received_at"] as string;
+  const received = receivedRaw.length >= 10 ? receivedRaw.slice(0, 10) : receivedRaw;
+  const orderNumber = order["order_number"] as string;
+
+  return {
+    partner_code: partners?.code ?? null,
+    partner_name: partners?.name ?? null,
+    delivery_date: received,
+    period_subtitle: `Đơn ${orderNumber} · Ngày nhận ${received}`,
+    generated_at: new Date().toLocaleString("vi-VN"),
+    orders: [
+      {
+        order_number: orderNumber,
+        patient_name: order["patient_name"] as string,
+        clinic_name: (order["clinic_name"] as string | null) ?? null,
+        notes: (order["notes"] as string | null) ?? null,
+        lines,
+      },
+    ],
+  };
+}
+
+export async function findLabOrderIdByOrderNumber(orderNumber: string): Promise<string | null> {
+  const t = orderNumber.trim();
+  if (!t) return null;
+  const supabase = createSupabaseAdmin();
+  const { data, error } = await supabase.from("lab_orders").select("id").eq("order_number", t).maybeSingle();
+  if (error) throw new Error(error.message);
+  return (data?.["id"] as string | undefined) ?? null;
 }
 
 /** Đơn hàng gần nhất của một đối tác (xem nhanh trong modal). */

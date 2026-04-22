@@ -32,10 +32,9 @@ export function buildPrintShell(title: string, innerBodyHtml: string): string {
     .total-row td{font-size:12px;padding:8px 6px;}
 
     @media print{
-      body{padding:0;}
+      body{padding:0;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
       @page{margin:10mm;size:A4;}
       .report-header{margin-bottom:15px;}
-      th{background-color:#f1f5f9 !important; -webkit-print-color-adjust:exact;}
     }
   </style></head><body><div class="report-header"><div class="logo-box"><img src="/logobaocao.png" alt="Logo" class="logo"/></div><div class="company-box"><div class="company-name">CÔNG TY TNHH KTSMILE MILLING CENTER</div><div class="company-info">Địa chỉ: 447/10 Đường Tân Sơn, Phường An Hội Tây, TP.Hồ Chí Minh</div><div class="company-info">MST: 0318968071 · SĐT: 0906353568</div><div class="company-info">STK: 886978683 Ngân hàng Thương mại cổ phần Quân Đội</div></div></div>${innerBodyHtml}</body></html>`;
 }

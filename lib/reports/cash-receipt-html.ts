@@ -1,4 +1,4 @@
-import { formatVnd, amountInWordsVietnamese } from "@/lib/format/currency";
+import { formatVnd } from "@/lib/format/currency";
 import { formatCashDirection } from "@/lib/format/labels";
 import { formatDateTime } from "@/lib/format/date";
 import { escapeHtml } from "@/lib/reports/escape-html";
@@ -58,10 +58,6 @@ export function buildCashReceiptBodyHtml(p: CashReceiptPrintPayload): string {
           <tr>
             <th>Số tiền:</th>
             <td style="font-size: 15px; font-weight: 800; border-bottom: 1px dotted #cbd5e1;">${formatVnd(p.amount)} VNĐ</td>
-          </tr>
-          <tr>
-            <th>Bằng chữ:</th>
-            <td style="font-style: italic; border-bottom: 1px dotted #cbd5e1;">${amountInWordsVietnamese(p.amount)}</td>
           </tr>
           <tr>
             <th>Kênh / Chứng từ:</th>

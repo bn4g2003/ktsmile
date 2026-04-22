@@ -16,6 +16,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -31,6 +32,7 @@ import { Select } from "@/components/ui/select";
 import { Combobox } from "@/components/ui/combobox";
 import { LabOrderRowDetailPanel } from "@/components/modules/orders/lab-order-row-detail-panel";
 import { LabOrderStatusQuickDialog } from "@/components/modules/orders/lab-order-status-quick-dialog";
+import { OrdersPrintHub } from "@/components/modules/orders/orders-print-hub";
 import { Textarea } from "@/components/ui/textarea";
 import { listCustomerPartnerPicker } from "@/lib/actions/partners";
 import { listProductPicker } from "@/lib/actions/products";
@@ -57,6 +59,7 @@ import { CurrencyInput } from "@/components/ui/currency-input";
 import {
   createLabOrder,
   deleteLabOrder,
+  getDailyDeliveryNotePayload,
   getLabOrder,
   getPartnerDefaultDiscount,
   getSuggestedLinePrice,
@@ -68,6 +71,7 @@ import {
 import {
   buildLabOrderListReportHtml,
 } from "@/lib/reports/lab-order-list-html";
+import { buildDeliveryNoteExcelAoa } from "@/lib/reports/delivery-note-excel";
 import { buildPrintShell, openBlankPrintTab, writeAndPrintToWindow } from "@/lib/reports/print-html";
 import { formatDate, formatDateTime } from "@/lib/format/date";
 
@@ -290,22 +294,24 @@ function OrderFiltersPopover({
   );
 }
 
-function BatchPrintButton({
+function OrdersPrintExportMenu({
   filters,
   globalSearch,
   partners,
+  onOpenDailyDelivery,
 }: {
   filters: Record<string, string>;
   globalSearch: string;
   partners: { id: string; code: string; name: string }[];
+  onOpenDailyDelivery: () => void;
 }) {
-  const [busy, setBusy] = React.useState(false);
+  const [busy, setBusy] = React.useState<null | "list-pdf" | "list-xlsx">(null);
 
-  const handlePrint = async () => {
-    setBusy(true);
+  const printFilteredListPdf = async () => {
+    setBusy("list-pdf");
     const win = openBlankPrintTab();
     if (!win) {
-      setBusy(false);
+      setBusy(null);
       return;
     }
     try {
@@ -343,38 +349,12 @@ function BatchPrintButton({
       win.close();
       alert(e instanceof Error ? e.message : "Lỗi in danh sách");
     } finally {
-      setBusy(false);
+      setBusy(null);
     }
   };
 
-  return (
-    <Button
-      variant="secondary"
-      size="sm"
-      className="ring-1 ring-[color-mix(in_srgb,var(--primary)_28%,transparent)]"
-      disabled={busy}
-      onClick={() => void handlePrint()}
-    >
-      <svg className="mr-1.5 h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-      </svg>
-      {busy ? "Đang xử lý…" : "In kết quả lọc"}
-    </Button>
-  );
-}
-
-
-function BatchExcelButton({
-  filters,
-  globalSearch,
-}: {
-  filters: Record<string, string>;
-  globalSearch: string;
-}) {
-  const [busy, setBusy] = React.useState(false);
-
-  const handleExport = async () => {
-    setBusy(true);
+  const exportFilteredListExcel = async () => {
+    setBusy("list-xlsx");
     try {
       const XLSX = await import("xlsx");
       const res = await listLabOrders({
@@ -411,23 +391,51 @@ function BatchExcelButton({
     } catch (e) {
       alert(e instanceof Error ? e.message : "Lỗi xuất Excel");
     } finally {
-      setBusy(false);
+      setBusy(null);
     }
   };
 
   return (
-    <Button
-      variant="secondary"
-      size="sm"
-      className="ring-1 ring-[color-mix(in_srgb,var(--primary)_28%,transparent)]"
-      disabled={busy}
-      onClick={() => void handleExport()}
-    >
-      <svg className="mr-1.5 h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-      </svg>
-      {busy ? "Đang xử lý…" : "Xuất Excel kết quả lọc"}
-    </Button>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="secondary"
+          size="sm"
+          type="button"
+          className="ring-1 ring-[color-mix(in_srgb,var(--primary)_28%,transparent)]"
+          disabled={!!busy}
+        >
+          <svg className="mr-1.5 h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden>
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"
+            />
+          </svg>
+          {busy === "list-pdf" ? "Đang in…" : busy === "list-xlsx" ? "Đang xuất…" : "In / xuất"}
+          <svg className="ml-1 h-3.5 w-3.5 shrink-0 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+          </svg>
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="min-w-[15rem]">
+        <DropdownMenuItem disabled={!!busy} onSelect={() => void printFilteredListPdf()}>
+          In danh sách (PDF)
+        </DropdownMenuItem>
+        <DropdownMenuItem disabled={!!busy} onSelect={() => void exportFilteredListExcel()}>
+          Xuất danh sách (Excel)
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          disabled={!!busy}
+          onSelect={() => {
+            onOpenDailyDelivery();
+          }}
+        >
+          Phiếu giao theo ngày (PDF hoặc Excel)…
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -484,9 +492,11 @@ export function OrdersPage() {
   const [deliveryOpen, setDeliveryOpen] = React.useState(false);
   const [deliveryPartnerId, setDeliveryPartnerId] = React.useState("");
   const [deliveryDate, setDeliveryDate] = React.useState(new Date().toISOString().slice(0, 10));
+  const [deliveryExcelBusy, setDeliveryExcelBusy] = React.useState(false);
 
   const [filters, setFilters] = React.useState<Record<string, string>>({});
   const [globalSearch, setGlobalSearch] = React.useState("");
+  const [mainTab, setMainTab] = React.useState<"list" | "prints">("list");
 
   React.useEffect(() => {
     void listCustomerPartnerPicker().then(setPartners).catch(() => {});
@@ -543,6 +553,29 @@ export function OrdersPage() {
     reset();
     setOpen(true);
   };
+  const exportDailyDeliveryExcel = React.useCallback(async () => {
+    if (!deliveryPartnerId?.trim() || !deliveryDate?.trim()) return;
+    setDeliveryExcelBusy(true);
+    try {
+      const payload = await getDailyDeliveryNotePayload(deliveryPartnerId, deliveryDate);
+      if (!payload.orders.length) {
+        alert("Không có đơn hàng của lab này trong ngày đã chọn.");
+        return;
+      }
+      const XLSX = await import("xlsx");
+      const aoa = buildDeliveryNoteExcelAoa(payload);
+      const ws = XLSX.utils.aoa_to_sheet(aoa);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "PhieuGiao");
+      const slug = `${payload.partner_code ?? "giao"}_${payload.delivery_date}`.replace(/[^\w.-]+/g, "_");
+      XLSX.writeFile(wb, `PhieuGiaoNgay_${slug}.xlsx`);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Lỗi xuất Excel phiếu giao");
+    } finally {
+      setDeliveryExcelBusy(false);
+    }
+  }, [deliveryPartnerId, deliveryDate]);
+
   const openDeliveryPrint = React.useCallback(() => {
     setDeliveryPartnerId(partners[0]?.id ?? "");
     setDeliveryDate(new Date().toISOString().slice(0, 10));
@@ -1011,6 +1044,25 @@ export function OrdersPage() {
 
   return (
     <>
+      <div className="flex flex-wrap items-center gap-2 border-b border-[var(--border-ghost)] pb-3">
+        <Button
+          type="button"
+          variant={mainTab === "list" ? "primary" : "secondary"}
+          size="sm"
+          onClick={() => setMainTab("list")}
+        >
+          Danh sách đơn
+        </Button>
+        <Button
+          type="button"
+          variant={mainTab === "prints" ? "primary" : "secondary"}
+          size="sm"
+          onClick={() => setMainTab("prints")}
+        >
+          In phiếu (GBTT &amp; giao hàng)
+        </Button>
+      </div>
+      {mainTab === "list" ? (
       <ExcelDataGrid<LabOrderRow>
         moduleId="lab_orders"
         title="Đơn hàng phục hình"
@@ -1041,18 +1093,13 @@ export function OrdersPage() {
             >
               {importBusy ? "Đang nhập…" : "Nhập Excel"}
             </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              type="button"
-              onClick={openDeliveryPrint}
-              className="ring-1 ring-[color-mix(in_srgb,var(--primary)_28%,transparent)]"
-            >
-              In phiếu giao ngày
-            </Button>
             <OrderFiltersPopover filters={filters} setFilters={setFilters} partners={partners} />
-            <BatchPrintButton filters={filters} globalSearch={globalSearch} partners={partners} />
-            <BatchExcelButton filters={filters} globalSearch={globalSearch} />
+            <OrdersPrintExportMenu
+              filters={filters}
+              globalSearch={globalSearch}
+              partners={partners}
+              onOpenDailyDelivery={openDeliveryPrint}
+            />
             <Button variant="primary" size="sm" type="button" onClick={openCreate}>
               Thêm đơn
             </Button>
@@ -1060,6 +1107,9 @@ export function OrdersPage() {
         }
         getRowId={(r) => r.id}
       />
+      ) : (
+        <OrdersPrintHub partners={partners} />
+      )}
       <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) reset(); }}>
         <DialogContent size="xl" className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -1590,7 +1640,18 @@ export function OrdersPage() {
                 onChange={(e) => setDeliveryDate(e.target.value)}
               />
             </div>
-            <div className="flex justify-end">
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                disabled={
+                  deliveryExcelBusy || !deliveryPartnerId.trim() || !deliveryDate.trim()
+                }
+                onClick={() => void exportDailyDeliveryExcel()}
+              >
+                {deliveryExcelBusy ? "Đang xuất…" : "Xuất Excel giao ngày"}
+              </Button>
               <DeliveryNotePrintButton partnerId={deliveryPartnerId} deliveryDate={deliveryDate} />
             </div>
           </div>

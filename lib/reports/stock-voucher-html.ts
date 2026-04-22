@@ -1,4 +1,4 @@
-import { formatVnd, amountInWordsVietnamese } from "@/lib/format/currency";
+import { formatVnd } from "@/lib/format/currency";
 import { formatMovement } from "@/lib/format/labels";
 import { escapeHtml } from "@/lib/reports/escape-html";
 
@@ -98,10 +98,6 @@ export function buildStockVoucherBodyHtml(p: StockDocumentPrintPayload): string 
           </tr>
         </tfoot>
       </table>
-
-      <p style="font-size: 11px; font-style: italic; margin-bottom: 25px;">
-        Bằng chữ: <strong>${amountInWordsVietnamese(total)}</strong>
-      </p>
 
       <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; text-align: center; margin-top: 30px; min-height: 100px;">
         <div>

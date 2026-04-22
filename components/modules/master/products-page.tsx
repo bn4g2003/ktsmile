@@ -19,6 +19,7 @@ import {
 import { ProductRowDetailPanel } from "@/components/modules/master/product-row-detail-panel";
 import { MaterialRowDetailPanel } from "@/components/modules/master/material-row-detail-panel";
 import { DetailTabStrip } from "@/components/ui/detail-tab-strip";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { importProductsFromExcel } from "@/lib/actions/products-import";
@@ -110,7 +111,7 @@ export function ProductsPage({ initialCatalogTab = "sales" }: { initialCatalogTa
     setCode(row.code);
     setName(row.name);
     setUnit(row.unit);
-    setUnitPrice("0");
+    setUnitPrice(String(row.unit_price ?? 0));
     setWarranty("");
     setIsActive(row.is_active);
     setErr(null);
@@ -121,13 +122,19 @@ export function ProductsPage({ initialCatalogTab = "sales" }: { initialCatalogTa
     e.preventDefault();
     setPending(true);
     setErr(null);
+    const priceNum = Number(unitPrice);
+    if (!Number.isFinite(priceNum) || priceNum < 0) {
+      setErr("Đơn giá không hợp lệ.");
+      setPending(false);
+      return;
+    }
     try {
       if (catalogTab === "sales") {
         const payload = {
           code: code.trim(),
           name: name.trim(),
           unit: unit.trim(),
-          unit_price: Number(unitPrice),
+          unit_price: priceNum,
           warranty_years: warranty.trim() === "" ? null : Number(warranty),
           is_active: isActive,
           product_usage: "sales" as const,
@@ -139,6 +146,7 @@ export function ProductsPage({ initialCatalogTab = "sales" }: { initialCatalogTa
           code: code.trim(),
           name: name.trim(),
           unit: unit.trim(),
+          unit_price: priceNum,
           is_active: isActive,
         };
         if (editingNvl) await updateMaterial(editingNvl.id, payload);
@@ -257,6 +265,11 @@ export function ProductsPage({ initialCatalogTab = "sales" }: { initialCatalogTa
       { accessorKey: "code", header: "Mã NVL", meta: { filterKey: "code", filterType: "text" } },
       { accessorKey: "name", header: "Tên NVL", meta: { filterKey: "name", filterType: "text" } },
       { accessorKey: "unit", header: "ĐVT" },
+      {
+        accessorKey: "unit_price",
+        header: "Đơn giá",
+        cell: ({ getValue }) => Number(getValue() ?? 0).toLocaleString("vi-VN"),
+      },
       { accessorKey: "quantity_on_hand", header: "Tồn kho" },
       {
         id: "primary_supplier_code",
@@ -387,7 +400,7 @@ export function ProductsPage({ initialCatalogTab = "sales" }: { initialCatalogTa
             <DialogDescription>
               {catalogTab === "sales"
                 ? "Danh mục sản phẩm bán/labo. Kho NVL quản lý ở tab Nguyên vật liệu."
-                : "Danh mục NVL tách riêng; gán NCC tại tab Xem → NCC & kho."}
+                : "Danh mục NVL tách riêng; đơn giá lưu trên bản ghi giá tham chiếu. Gán NCC tại tab Xem → NCC & kho."}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={(e) => void submit(e)} className="grid gap-4 sm:grid-cols-2">
@@ -406,15 +419,12 @@ export function ProductsPage({ initialCatalogTab = "sales" }: { initialCatalogTa
             </div>
             <div className="grid gap-2">
               <Label htmlFor="pr-price">Đơn giá</Label>
-              <Input
+              <CurrencyInput
                 id="pr-price"
-                type="number"
-                min={0}
-                step={0.01}
                 value={unitPrice}
-                onChange={(e) => setUnitPrice(e.target.value)}
-                required={catalogTab === "sales"}
-                disabled={catalogTab !== "sales"}
+                onChange={setUnitPrice}
+                required
+                placeholder="VD: 1.000.000"
               />
             </div>
             <div className="grid gap-2 sm:col-span-2">

@@ -17,6 +17,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
@@ -176,12 +177,18 @@ export function InventoryDocumentDetailPage() {
     e.preventDefault();
     setPending(true);
     setErr(null);
+    const priceNum = Number(price);
+    if (!Number.isFinite(priceNum) || priceNum < 0) {
+      setErr("Đơn giá không hợp lệ.");
+      setPending(false);
+      return;
+    }
     try {
       const payload = {
         document_id: id,
         product_id: productId,
         quantity: Number(qty),
-        unit_price: Number(price),
+        unit_price: priceNum,
       };
       if (editing) await updateStockLine(editing.id, payload);
       else await createStockLine(payload);
@@ -386,14 +393,12 @@ export function InventoryDocumentDetailPage() {
             </div>
             <div className="grid gap-2">
               <Label htmlFor="sl-pr">Đơn giá</Label>
-              <Input
+              <CurrencyInput
                 id="sl-pr"
-                type="number"
-                min={0}
-                step={0.01}
                 value={price}
-                onChange={(e) => setPrice(e.target.value)}
+                onChange={setPrice}
                 required
+                placeholder="VD: 1.000.000"
               />
             </div>
             <div className="flex justify-end gap-2 pt-2 sm:col-span-2">

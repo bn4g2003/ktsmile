@@ -33,6 +33,10 @@ export function MaterialRowDetailPanel({ row }: { row: MaterialRow }) {
                 { label: "MÃ NVL:", value: row.code },
                 { label: "TÊN NVL:", value: row.name },
                 { label: "ĐVT:", value: row.unit },
+                {
+                  label: "ĐƠN GIÁ:",
+                  value: row.unit_price.toLocaleString("vi-VN") + " đ",
+                },
                 { label: "HOẠT ĐỘNG:", value: row.is_active ? "Có" : "Không" },
               ]
             },

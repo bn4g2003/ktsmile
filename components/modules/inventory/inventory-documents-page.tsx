@@ -20,6 +20,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
@@ -780,12 +781,9 @@ export function InventoryDocumentsPage({ initialTab = "inbound" }: { initialTab?
                       </div>
                       <div className="grid gap-1 sm:col-span-3">
                         <Label className="text-xs text-[var(--on-surface-muted)]">Đơn giá (để trống = giá DM)</Label>
-                        <Input
-                          type="number"
-                          min={0}
-                          step={0.01}
+                        <CurrencyInput
                           value={line.price}
-                          onChange={(e) => updateNvlLine(line.key, { price: e.target.value })}
+                          onChange={(val) => updateNvlLine(line.key, { price: val })}
                           placeholder="Tự điền"
                         />
                       </div>

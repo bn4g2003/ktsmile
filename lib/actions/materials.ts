@@ -12,6 +12,8 @@ export type MaterialRow = {
   code: string;
   name: string;
   unit: string;
+  /** Đơn giá tham chiếu (lưu trên bản ghi products legacy). */
+  unit_price: number;
   is_active: boolean;
   quantity_on_hand: number;
   primary_supplier_id: string | null;
@@ -62,14 +64,36 @@ export async function listMaterials(args: ListArgs): Promise<ListResult<Material
     }
   }
 
+  const legacyIds = [
+    ...new Set(
+      materials
+        .map((r) => r["legacy_product_id"] as string | null | undefined)
+        .filter((id): id is string => Boolean(id)),
+    ),
+  ];
+  const unitPriceByLegacyId = new Map<string, number>();
+  if (legacyIds.length > 0) {
+    const { data: priceRows, error: priceErr } = await supabase
+      .from("products")
+      .select("id, unit_price")
+      .in("id", legacyIds);
+    if (priceErr) throw new Error(priceErr.message);
+    for (const pr of (priceRows ?? []) as Record<string, unknown>[]) {
+      const pid = pr["id"] as string;
+      unitPriceByLegacyId.set(pid, Number(pr["unit_price"] ?? 0));
+    }
+  }
+
   const rows: MaterialRow[] = materials.map((r: Record<string, unknown>) => {
     const stock = stockByMaterialId.get(r["id"] as string) ?? null;
+    const leg = (r["legacy_product_id"] as string | null) ?? null;
     return {
       id: r["id"] as string,
-      legacy_product_id: (r["legacy_product_id"] as string | null) ?? null,
+      legacy_product_id: leg,
       code: r["code"] as string,
       name: r["name"] as string,
       unit: r["unit"] as string,
+      unit_price: leg ? (unitPriceByLegacyId.get(leg) ?? 0) : 0,
       is_active: Boolean(r["is_active"]),
       quantity_on_hand: Number(stock?.["quantity_on_hand"] ?? 0),
       primary_supplier_id: (stock?.["primary_supplier_id"] as string | null) ?? null,
@@ -87,6 +111,7 @@ const schema = z.object({
   code: z.string().min(1).max(200),
   name: z.string().min(1).max(500),
   unit: z.string().min(1).max(50),
+  unit_price: z.coerce.number().min(0).optional().default(0),
   is_active: z.boolean().optional(),
 });
 
@@ -101,7 +126,7 @@ export async function createMaterial(input: z.infer<typeof schema>) {
       code: row.code,
       name: row.name,
       unit: row.unit,
-      unit_price: 0,
+      unit_price: row.unit_price ?? 0,
       warranty_years: null,
       is_active: row.is_active ?? true,
       product_usage: "inventory",
@@ -134,7 +159,15 @@ export async function updateMaterial(id: string, input: z.infer<typeof schema>) 
   if (ce || !cur) throw new Error(ce?.message ?? "Không tìm thấy NVL.");
 
   const legacyId = (cur["legacy_product_id"] as string | null) ?? null;
-  const { error } = await supabase.from("materials").update(row).eq("id", id);
+  const { error } = await supabase
+    .from("materials")
+    .update({
+      code: row.code,
+      name: row.name,
+      unit: row.unit,
+      is_active: row.is_active ?? true,
+    })
+    .eq("id", id);
   if (error) throw new Error(error.message);
 
   if (legacyId) {
@@ -144,6 +177,7 @@ export async function updateMaterial(id: string, input: z.infer<typeof schema>) 
         code: row.code,
         name: row.name,
         unit: row.unit,
+        unit_price: row.unit_price ?? 0,
         is_active: row.is_active ?? true,
         product_usage: "inventory",
       })
@@ -186,13 +220,27 @@ export async function listMaterialPicker() {
     .order("code", { ascending: true })
     .limit(5000);
   if (error) throw new Error(error.message);
-  return (data ?? [])
-    .filter((r) => !!r["legacy_product_id"])
-    .map((r) => ({
-      id: r["legacy_product_id"] as string,
+  const rows = (data ?? []).filter((r) => !!r["legacy_product_id"]);
+  const legacyIds = [...new Set(rows.map((r) => r["legacy_product_id"] as string))];
+  const unitPriceByLegacyId = new Map<string, number>();
+  if (legacyIds.length > 0) {
+    const { data: priceRows, error: priceErr } = await supabase
+      .from("products")
+      .select("id, unit_price")
+      .in("id", legacyIds);
+    if (priceErr) throw new Error(priceErr.message);
+    for (const pr of (priceRows ?? []) as Record<string, unknown>[]) {
+      unitPriceByLegacyId.set(pr["id"] as string, Number(pr["unit_price"] ?? 0));
+    }
+  }
+  return rows.map((r) => {
+    const lid = r["legacy_product_id"] as string;
+    return {
+      id: lid,
       code: r["code"] as string,
       name: r["name"] as string,
-      unit_price: 0,
+      unit_price: unitPriceByLegacyId.get(lid) ?? 0,
       product_usage: "inventory" as const,
-    }));
+    };
+  });
 }

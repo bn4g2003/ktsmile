@@ -7,6 +7,7 @@ import type {
   PaymentNoticeLine,
   PaymentNoticePrintPayload,
 } from "@/lib/reports/payment-notice-html";
+import { buildPaymentNoticeBodyHtml } from "@/lib/reports/payment-notice-html";
 import { computeOrderGrandTotal, finiteNumber } from "@/lib/billing/order-grand-total";
 
 function round2(n: number): number {
@@ -229,4 +230,186 @@ export async function getPaymentNoticePrintPayload(orderId: string): Promise<Pay
     billing_other_fees: totals.billing_other_fees,
     grand_total: totals.grand_total,
   };
+}
+
+async function listLabOrderIdsReceivedInMonth(
+  year: number,
+  month: number,
+  partnerId: string | null,
+): Promise<string[]> {
+  if (month < 1 || month > 12 || year < 2000 || year > 2100) {
+    throw new Error("Tháng/năm không hợp lệ.");
+  }
+  const supabase = createSupabaseAdmin();
+  const from = `${year}-${String(month).padStart(2, "0")}-01`;
+  const lastDay = new Date(year, month, 0).getDate();
+  const to = `${year}-${String(month).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+
+  let q = supabase
+    .from("lab_orders")
+    .select("id")
+    .gte("received_at", from)
+    .lte("received_at", to)
+    .neq("status", "cancelled")
+    .order("order_number", { ascending: true })
+    .limit(2000);
+  if (partnerId?.trim()) {
+    q = q.eq("partner_id", partnerId.trim());
+  }
+  const { data, error } = await q;
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((r) => r.id as string);
+}
+
+function buildMonthlyGbttExcelAoaFromPayloads(
+  payloads: Awaited<ReturnType<typeof getPaymentNoticePrintPayload>>[],
+): (string | number | null)[][] {
+  const header: (string | number | null)[] = [
+    "Số GBTT",
+    "Ngày GBTT",
+    "Số đơn",
+    "Ngày nhận",
+    "Mã KH",
+    "Tên KH",
+    "Nha khoa",
+    "Bệnh nhân",
+    "Ghi chú đơn",
+    "STT dòng",
+    "Mã SP",
+    "Tên SP",
+    "Răng",
+    "Màu",
+    "SL",
+    "Đơn giá",
+    "%CK dòng",
+    "CK VNĐ dòng",
+    "Thành tiền dòng",
+    "Ghi chú dòng",
+    "Cộng chi tiết",
+    "CK tổng %",
+    "CK tổng VNĐ",
+    "Phí khác",
+    "Tổng phải thu",
+  ];
+  const aoa: (string | number | null)[][] = [header];
+
+  for (const p of payloads) {
+    const gbttAt = p.payment_notice_issued_at
+      ? new Date(p.payment_notice_issued_at).toLocaleString("vi-VN")
+      : "";
+
+    if (!p.lines.length) {
+      aoa.push([
+        p.payment_notice_doc_number,
+        gbttAt,
+        p.order_number,
+        p.received_at,
+        p.partner_code ?? "",
+        p.partner_name ?? "",
+        p.clinic_name ?? "",
+        p.patient_name,
+        p.notes ?? "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        p.subtotal_lines,
+        p.billing_order_discount_percent,
+        p.billing_order_discount_amount,
+        p.billing_other_fees,
+        p.grand_total,
+      ]);
+      continue;
+    }
+
+    for (let i = 0; i < p.lines.length; i++) {
+      const l = p.lines[i]!;
+      const isLast = i === p.lines.length - 1;
+      aoa.push([
+        p.payment_notice_doc_number,
+        gbttAt,
+        p.order_number,
+        p.received_at,
+        p.partner_code ?? "",
+        p.partner_name ?? "",
+        p.clinic_name ?? "",
+        p.patient_name,
+        p.notes ?? "",
+        i + 1,
+        l.product_code,
+        l.product_name,
+        l.tooth_positions,
+        l.shade ?? "",
+        l.quantity,
+        l.unit_price,
+        l.discount_percent,
+        l.discount_amount,
+        l.line_amount,
+        l.notes ?? "",
+        isLast ? p.subtotal_lines : "",
+        isLast ? p.billing_order_discount_percent : "",
+        isLast ? p.billing_order_discount_amount : "",
+        isLast ? p.billing_other_fees : "",
+        isLast ? p.grand_total : "",
+      ]);
+    }
+  }
+
+  return aoa;
+}
+
+/** Xuất Excel: một dòng cho mỗi dòng sản phẩm, cột tổng đơn ở dòng cuối của đơn. */
+export async function buildMonthlyGbttExcelAoa(
+  year: number,
+  month: number,
+  partnerId: string | null,
+): Promise<(string | number | null)[][]> {
+  const ids = await listLabOrderIdsReceivedInMonth(year, month, partnerId);
+  if (!ids.length) {
+    throw new Error("Không có đơn nào trong tháng đã chọn (lọc theo ngày nhận đơn).");
+  }
+  const payloads: Awaited<ReturnType<typeof getPaymentNoticePrintPayload>>[] = [];
+  for (const id of ids) {
+    payloads.push(await getPaymentNoticePrintPayload(id));
+  }
+  return buildMonthlyGbttExcelAoaFromPayloads(payloads);
+}
+
+/** Nối nhiều GBTT (theo ngày nhận trong tháng) để in một lần. `partnerId` rỗng = tất cả lab. */
+export async function buildBatchPaymentNoticePrintDocument(
+  year: number,
+  month: number,
+  partnerId: string | null,
+): Promise<{ title: string; innerHtml: string; count: number }> {
+  const ids = await listLabOrderIdsReceivedInMonth(year, month, partnerId);
+  if (!ids.length) {
+    throw new Error("Không có đơn nào trong tháng đã chọn (lọc theo ngày nhận đơn).");
+  }
+
+  const breakHtml =
+    '<div style="page-break-after:always;break-after:page;height:0;margin:0;padding:0;border:0;font-size:0;line-height:0;">&nbsp;</div>';
+  const parts: string[] = [];
+  for (const id of ids) {
+    const payload = await getPaymentNoticePrintPayload(id);
+    parts.push(`<article class="gbtt-batch-page" style="page-break-inside:avoid;">${buildPaymentNoticeBodyHtml(payload)}</article>`);
+  }
+  return {
+    title: `Giấy báo thanh toán — Tháng ${month}/${year}`,
+    innerHtml: parts.join(breakHtml),
+    count: ids.length,
+  };
+}
+
+/** Một đơn → ma trận Excel GBTT (tiêu đề + dòng chi tiết + dòng tổng nếu cần). */
+export async function buildSingleGbttExcelAoa(orderId: string): Promise<(string | number | null)[][]> {
+  const p = await getPaymentNoticePrintPayload(orderId);
+  return buildMonthlyGbttExcelAoaFromPayloads([p]);
 }

@@ -17,6 +17,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
@@ -229,6 +230,12 @@ export function OrderDetailPage() {
     }
     setPending(true);
     setErr(null);
+    const priceNum = Number(price);
+    if (!Number.isFinite(priceNum) || priceNum < 0) {
+      setErr("Đơn giá không hợp lệ.");
+      setPending(false);
+      return;
+    }
     try {
       const payload = {
         order_id: id,
@@ -237,7 +244,7 @@ export function OrderDetailPage() {
         shade: shade.trim() || null,
         tooth_count: toothCount.trim() === "" ? null : Number.parseInt(toothCount, 10),
         quantity: Number(qty),
-        unit_price: Number(price),
+        unit_price: priceNum,
         discount_percent: Number(disc) || 0,
         discount_amount: Number(discVnd) || 0,
         work_type: workType,
@@ -552,11 +559,11 @@ export function OrderDetailPage() {
               </div>
               <div className="grid gap-1">
                 <Label htmlFor="bill-amt">CK tổng VNĐ</Label>
-                <Input id="bill-amt" value={bAmt} onChange={(e) => setBAmt(e.target.value)} inputMode="decimal" />
+                <CurrencyInput id="bill-amt" value={bAmt} onChange={setBAmt} placeholder="0" />
               </div>
               <div className="grid gap-1">
                 <Label htmlFor="bill-fees">Phí khác (+)</Label>
-                <Input id="bill-fees" value={bFees} onChange={(e) => setBFees(e.target.value)} inputMode="decimal" />
+                <CurrencyInput id="bill-fees" value={bFees} onChange={setBFees} placeholder="0" />
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -749,14 +756,12 @@ export function OrderDetailPage() {
             </div>
             <div className="grid gap-2">
               <Label htmlFor="ln-price">Đơn giá</Label>
-              <Input
+              <CurrencyInput
                 id="ln-price"
-                type="number"
-                min={0}
-                step={0.01}
                 value={price}
-                onChange={(e) => setPrice(e.target.value)}
+                onChange={setPrice}
                 required
+                placeholder="VD: 1.000.000"
               />
             </div>
             <div className="grid gap-2">
@@ -773,14 +778,7 @@ export function OrderDetailPage() {
             </div>
             <div className="grid gap-2">
               <Label htmlFor="ln-disc-vnd">Giảm VNĐ (dòng)</Label>
-              <Input
-                id="ln-disc-vnd"
-                type="number"
-                min={0}
-                step={0.01}
-                value={discVnd}
-                onChange={(e) => setDiscVnd(e.target.value)}
-              />
+              <CurrencyInput id="ln-disc-vnd" value={discVnd} onChange={setDiscVnd} placeholder="0" />
             </div>
             <div className="grid gap-2 sm:col-span-2">
               <Label htmlFor="ln-notes">Ghi chú</Label>

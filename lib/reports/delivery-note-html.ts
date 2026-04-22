@@ -19,7 +19,10 @@ export type DeliveryNoteOrder = {
 export type DeliveryNotePayload = {
   partner_code: string | null;
   partner_name: string | null;
+  /** Ngày đại diện (vd ngày đầu tháng hoặc ngày nhận đơn). */
   delivery_date: string;
+  /** Nếu có: hiển thị thay cho dòng “Ngày giao” (vd tháng hoặc mã đơn). */
+  period_subtitle?: string | null;
   generated_at: string;
   orders: DeliveryNoteOrder[];
 };
@@ -30,6 +33,9 @@ function fmtQty(n: number) {
 
 export function deliveryNotePrintTitle(p: DeliveryNotePayload): string {
   const who = p.partner_code || p.partner_name || "Khách hàng";
+  if (p.period_subtitle?.trim()) {
+    return `Phiếu giao hàng · ${p.period_subtitle.trim()} · ${who}`;
+  }
   return `Phiếu giao hàng ${p.delivery_date} · ${who}`;
 }
 
@@ -55,31 +61,35 @@ export function buildDeliveryNoteBodyHtml(p: DeliveryNotePayload): string {
         <h3 style="background:#f1f5f9;padding:4px 8px;font-size:11px;margin-bottom:6px;border-left:3px solid #2563eb;">
           ${idx + 1}. ĐƠN ${escapeHtml(o.order_number)} — BN: ${escapeHtml(o.patient_name)}
         </h3>
-        ${o.clinic_name ? `<div style="font-size:10px;margin-bottom:4px;color:#64748b;padding-left:11px;">Nha khoa: ${escapeHtml(o.clinic_name)}</div>` : ""}
-        <table>
+        ${o.clinic_name ? `<div style="font-size:10px;margin-bottom:4px;color:#334155;padding-left:11px;">Nha khoa: ${escapeHtml(o.clinic_name)}</div>` : ""}
+        <table class="dn-line-table">
           <thead>
-            <tr style="background:#64748b;color:#fff;">
-              <th style="color:#fff;">MÃ SP</th>
-              <th style="color:#fff;">TÊN SẢN PHẨM</th>
-              <th style="color:#fff;">RĂNG/MÀU</th>
-              <th class="num" style="color:#fff;">SL</th>
+            <tr>
+              <th class="dn-line-th" style="width:70px;">MÃ SP</th>
+              <th class="dn-line-th">TÊN SẢN PHẨM</th>
+              <th class="dn-line-th" style="width:130px;">RĂNG/MÀU</th>
+              <th class="dn-line-th num" style="width:50px;">SL</th>
             </tr>
           </thead>
           <tbody>${lineHtml || `<tr><td colspan="4">Không có dòng.</td></tr>`}</tbody>
         </table>
-        ${o.notes ? `<div style="font-size:10px;margin-top:4px;color:#64748b;padding-left:11px;">Ghi chú: ${escapeHtml(o.notes)}</div>` : ""}
+        ${o.notes ? `<div style="font-size:10px;margin-top:4px;color:#334155;padding-left:11px;">Ghi chú: ${escapeHtml(o.notes)}</div>` : ""}
       </section>`;
     })
     .join("");
 
-  return `
-    <h1 style="color:#2563eb;">PHIẾU GIAO HÀNG TỔNG HỢP</h1>
-    <p class="muted" style="text-align:center;">Ngày giao: <strong>${escapeHtml(p.delivery_date)}</strong></p>
+  const periodLine = p.period_subtitle?.trim()
+    ? escapeHtml(p.period_subtitle.trim())
+    : `Ngày giao: <strong>${escapeHtml(p.delivery_date)}</strong>`;
 
-    <table class="kv" style="margin-bottom:20px;">
+  return `
+    <h1 style="color:#0f172a;">PHIẾU GIAO HÀNG TỔNG HỢP</h1>
+    <p style="text-align:center;font-size:12px;color:#334155;margin-bottom:10px;">${periodLine}</p>
+
+    <table class="kv dn-kv" style="margin-bottom:20px;">
       <tbody>
-        <tr><th>KHÁCH HÀNG</th><td>: ${who}</td></tr>
-        <tr><th>SỐ ĐƠN HÀNG</th><td>: ${p.orders.length} đơn</td></tr>
+        <tr><th>KHÁCH HÀNG</th><td style="color:#0f172a;">: ${who}</td></tr>
+        <tr><th>SỐ ĐƠN HÀNG</th><td style="color:#0f172a;">: ${p.orders.length} đơn</td></tr>
       </tbody>
     </table>
 
@@ -90,18 +100,34 @@ export function buildDeliveryNoteBodyHtml(p: DeliveryNotePayload): string {
     <div style="margin-top:40px;display:grid;grid-template-columns:1fr 1fr;text-align:center;">
       <div>
         <div style="font-weight:700;">NGƯỜI NHẬN HÀNG</div>
-        <div style="font-size:10px;margin-top:40px;color:#94a3b8;">(Ký và ghi rõ họ tên)</div>
+        <div style="font-size:10px;margin-top:40px;color:#475569;">(Ký và ghi rõ họ tên)</div>
       </div>
       <div>
         <div style="font-weight:700;">LAB XÁC NHẬN</div>
-        <div style="font-size:10px;margin-top:40px;color:#94a3b8;">(Ký và ghi rõ họ tên)</div>
+        <div style="font-size:10px;margin-top:40px;color:#475569;">(Ký và ghi rõ họ tên)</div>
       </div>
     </div>
 
     <style>
       .order-block { margin-top: 16px; page-break-inside: avoid; }
-      th { border-color: #94a3b8 !important; }
-      td { height: 20px; }
+      .dn-line-table { border: 1px solid #475569; }
+      .dn-line-table th.dn-line-th,
+      .dn-line-table td {
+        border: 1px solid #64748b !important;
+        color: #0f172a !important;
+        background: #fff !important;
+      }
+      .dn-line-table thead .dn-line-th {
+        background: #e2e8f0 !important;
+        color: #0f172a !important;
+        font-weight: 700;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+      table.dn-kv th { color: #0f172a !important; }
+      table.dn-kv td { color: #0f172a !important; }
+      .order-block h3 { color: #0f172a !important; }
+      .dn-line-table td { height: 20px; font-size: 10.5px; }
     </style>
   `;
 }

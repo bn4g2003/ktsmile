@@ -4,6 +4,12 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createSupabaseAdmin } from "@/lib/supabase/server";
 import { type AttendanceStatus } from "@/lib/actions/attendance";
+import {
+  calculatePayrollLine,
+  type PayrollBaseRow,
+  type PayrollComputedLine,
+  type PayrollRunSettings,
+} from "@/lib/payroll/calc";
 
 export type PayrollPreviewRow = {
   employee_id: string;
@@ -106,20 +112,30 @@ export async function calculatePayrollPreview(year: number, month: number, stand
   });
 }
 
+const rowInputSchema = z.object({
+  employee_id: z.string().uuid(),
+  lunch_allowance: z.coerce.number().min(0).default(0),
+  fuel_allowance: z.coerce.number().min(0).default(0),
+  phone_allowance: z.coerce.number().min(0).default(0),
+  holiday_bonus: z.coerce.number().min(0).default(0),
+  sales_bonus: z.coerce.number().min(0).default(0),
+  social_insurance: z.coerce.number().min(0).default(0),
+  health_insurance: z.coerce.number().min(0).default(0),
+  unemployment_insurance: z.coerce.number().min(0).default(0),
+  dependent_count: z.coerce.number().int().min(0).default(0),
+  advance_payment: z.coerce.number().min(0).default(0),
+  note: z.string().max(1000).optional().nullable(),
+});
+
 const runSchema = z.object({
   year: z.coerce.number().int().min(2000).max(2100),
   month: z.coerce.number().int().min(1).max(12),
   standard_work_days: z.coerce.number().positive(),
   overtime_rate_per_hour: z.coerce.number().min(0),
+  family_deduction_amount: z.coerce.number().min(0).default(11_000_000),
+  dependent_deduction_amount: z.coerce.number().min(0).default(4_400_000),
   note: z.string().max(2000).optional().nullable(),
-  rows: z.array(
-    z.object({
-      employee_id: z.string().uuid(),
-      allowance: z.coerce.number().min(0).default(0),
-      deduction: z.coerce.number().min(0).default(0),
-      note: z.string().max(1000).optional().nullable(),
-    }),
-  ),
+  rows: z.array(rowInputSchema),
 });
 
 export async function upsertPayrollRun(input: z.infer<typeof runSchema>) {
@@ -132,19 +148,44 @@ export async function upsertPayrollRun(input: z.infer<typeof runSchema>) {
     payload.overtime_rate_per_hour,
   );
   const rowAdj = new Map(payload.rows.map((r) => [r.employee_id, r]));
-  const merged = preview.map((p) => {
-    const adj = rowAdj.get(p.employee_id);
-    const allowance = Number(adj?.allowance ?? 0);
-    const deduction = Number(adj?.deduction ?? 0);
-    const net = p.gross_salary + allowance - deduction;
-    return {
-      ...p,
-      allowance,
-      deduction,
-      net_salary: Math.round(net),
-      note: adj?.note?.trim() ? adj.note.trim() : null,
-    };
-  });
+  const runSettings = {
+    standard_work_days: payload.standard_work_days,
+    overtime_rate_per_hour: payload.overtime_rate_per_hour,
+    family_deduction_amount: payload.family_deduction_amount,
+    dependent_deduction_amount: payload.dependent_deduction_amount,
+  } satisfies PayrollRunSettings;
+  const merged = preview.map((p) =>
+    calculatePayrollLine(
+      {
+        employee_id: p.employee_id,
+        employee_code: p.employee_code,
+        employee_name: p.employee_name,
+        position: p.position,
+        department: p.department,
+        base_salary: p.base_salary,
+        worked_days: p.worked_days,
+        paid_leave_days: p.paid_leave_days,
+        unpaid_leave_days: p.unpaid_leave_days,
+        overtime_hours: p.overtime_hours,
+        gross_salary: p.gross_salary,
+        note: p.note,
+      } satisfies PayrollBaseRow,
+      runSettings,
+      rowAdj.get(p.employee_id) ?? {
+        lunch_allowance: 0,
+        fuel_allowance: 0,
+        phone_allowance: 0,
+        holiday_bonus: 0,
+        sales_bonus: 0,
+        social_insurance: 0,
+        health_insurance: 0,
+        unemployment_insurance: 0,
+        dependent_count: 0,
+        advance_payment: 0,
+        note: null,
+      },
+    ),
+  );
 
   const { data: existing, error: exErr } = await supabase
     .from("payroll_runs")
@@ -161,6 +202,8 @@ export async function upsertPayrollRun(input: z.infer<typeof runSchema>) {
       .update({
         standard_work_days: payload.standard_work_days,
         overtime_rate_per_hour: payload.overtime_rate_per_hour,
+        family_deduction_amount: payload.family_deduction_amount,
+        dependent_deduction_amount: payload.dependent_deduction_amount,
         note: payload.note?.trim() ? payload.note.trim() : null,
       })
       .eq("id", runId);
@@ -173,6 +216,8 @@ export async function upsertPayrollRun(input: z.infer<typeof runSchema>) {
         month: payload.month,
         standard_work_days: payload.standard_work_days,
         overtime_rate_per_hour: payload.overtime_rate_per_hour,
+        family_deduction_amount: payload.family_deduction_amount,
+        dependent_deduction_amount: payload.dependent_deduction_amount,
         note: payload.note?.trim() ? payload.note.trim() : null,
       })
       .select("id")
@@ -192,10 +237,26 @@ export async function upsertPayrollRun(input: z.infer<typeof runSchema>) {
       paid_leave_days: m.paid_leave_days,
       unpaid_leave_days: m.unpaid_leave_days,
       overtime_hours: m.overtime_hours,
-      allowance: m.allowance,
-      deduction: m.deduction,
+      lunch_allowance: m.lunch_allowance,
+      fuel_allowance: m.fuel_allowance,
+      phone_allowance: m.phone_allowance,
+      holiday_bonus: m.holiday_bonus,
+      sales_bonus: m.sales_bonus,
+      social_insurance: m.social_insurance,
+      health_insurance: m.health_insurance,
+      unemployment_insurance: m.unemployment_insurance,
+      dependent_count: m.dependent_count,
+      advance_payment: m.advance_payment,
+      allowance: m.total_allowance,
+      deduction: m.total_deduction,
       gross_salary: m.gross_salary,
       net_salary: m.net_salary,
+      total_allowance: m.total_allowance,
+      total_income: m.total_income,
+      total_insurance: m.total_insurance,
+      taxable_income: m.taxable_income,
+      personal_income_tax: m.personal_income_tax,
+      total_deduction: m.total_deduction,
       note: m.note,
     }));
     const { error: insErr } = await supabase.from("payroll_lines").insert(lines);
@@ -211,13 +272,27 @@ export type PayrollHistoryRow = {
   created_at: string;
   standard_work_days: number;
   overtime_rate_per_hour: number;
+  family_deduction_amount: number;
+  dependent_deduction_amount: number;
   total_net_salary: number;
 };
 
 export type PayrollRunLineRow = {
   employee_id: string;
-  allowance: number;
-  deduction: number;
+  lunch_allowance: number;
+  fuel_allowance: number;
+  phone_allowance: number;
+  holiday_bonus: number;
+  sales_bonus: number;
+  social_insurance: number;
+  health_insurance: number;
+  unemployment_insurance: number;
+  dependent_count: number;
+  advance_payment: number;
+  note: string | null;
+};
+
+export type PayrollRunSettingsRow = PayrollRunSettings & {
   note: string | null;
 };
 
@@ -225,7 +300,7 @@ export async function listPayrollRuns(limit = 24): Promise<PayrollHistoryRow[]> 
   const supabase = createSupabaseAdmin();
   const { data: runs, error } = await supabase
     .from("payroll_runs")
-    .select("id, year, month, created_at, standard_work_days, overtime_rate_per_hour")
+    .select("id, year, month, created_at, standard_work_days, overtime_rate_per_hour, family_deduction_amount, dependent_deduction_amount")
     .order("year", { ascending: false })
     .order("month", { ascending: false })
     .limit(limit);
@@ -251,6 +326,8 @@ export async function listPayrollRuns(limit = 24): Promise<PayrollHistoryRow[]> 
     created_at: r["created_at"] as string,
     standard_work_days: Number(r["standard_work_days"] ?? 0),
     overtime_rate_per_hour: Number(r["overtime_rate_per_hour"] ?? 0),
+    family_deduction_amount: Number(r["family_deduction_amount"] ?? 11_000_000),
+    dependent_deduction_amount: Number(r["dependent_deduction_amount"] ?? 4_400_000),
     total_net_salary: Math.round(totals.get(r["id"] as string) ?? 0),
   }));
 }
@@ -267,46 +344,51 @@ export async function getPayrollRunLines(year: number, month: number): Promise<P
   if (!run) return [];
   const { data, error } = await supabase
     .from("payroll_lines")
-    .select("employee_id, allowance, deduction, note")
+    .select(`
+      employee_id,
+      lunch_allowance,
+      fuel_allowance,
+      phone_allowance,
+      holiday_bonus,
+      sales_bonus,
+      social_insurance,
+      health_insurance,
+      unemployment_insurance,
+      dependent_count,
+      advance_payment,
+      note
+    `)
     .eq("run_id", run["id"] as string)
     .limit(2000);
   if (error) throw new Error(error.message);
   return (data ?? []).map((r) => ({
     employee_id: r["employee_id"] as string,
-    allowance: Number(r["allowance"] ?? 0),
-    deduction: Number(r["deduction"] ?? 0),
+    lunch_allowance: Number(r["lunch_allowance"] ?? 0),
+    fuel_allowance: Number(r["fuel_allowance"] ?? 0),
+    phone_allowance: Number(r["phone_allowance"] ?? 0),
+    holiday_bonus: Number(r["holiday_bonus"] ?? 0),
+    sales_bonus: Number(r["sales_bonus"] ?? 0),
+    social_insurance: Number(r["social_insurance"] ?? 0),
+    health_insurance: Number(r["health_insurance"] ?? 0),
+    unemployment_insurance: Number(r["unemployment_insurance"] ?? 0),
+    dependent_count: Number(r["dependent_count"] ?? 0),
+    advance_payment: Number(r["advance_payment"] ?? 0),
     note: (r["note"] as string | null) ?? null,
   }));
 }
-export type PayrollRunDetailRow = {
-  employee_id: string;
-  employee_code: string;
-  employee_name: string;
-  position: string | null;
-  department: string | null;
-  base_salary: number;
-  worked_days: number;
-  paid_leave_days: number;
-  unpaid_leave_days: number;
-  overtime_hours: number;
-  allowance: number;
-  deduction: number;
-  gross_salary: number;
-  net_salary: number;
-  note: string | null;
-};
+export type PayrollRunDetailRow = PayrollComputedLine;
 
 export async function getPayrollRunDetail(year: number, month: number): Promise<PayrollRunDetailRow[]> {
   const supabase = createSupabaseAdmin();
   const { data: run, error: runErr } = await supabase
     .from("payroll_runs")
-    .select("id")
+    .select("id, standard_work_days, overtime_rate_per_hour, family_deduction_amount, dependent_deduction_amount")
     .eq("year", year)
     .eq("month", month)
     .maybeSingle();
   if (runErr) throw new Error(runErr.message);
   if (!run) return [];
-  
+
   const { data, error } = await supabase
     .from("payroll_lines")
     .select(`
@@ -316,37 +398,82 @@ export async function getPayrollRunDetail(year: number, month: number): Promise<
       paid_leave_days,
       unpaid_leave_days,
       overtime_hours,
-      allowance,
-      deduction,
       gross_salary,
-      net_salary,
+      lunch_allowance,
+      fuel_allowance,
+      phone_allowance,
+      holiday_bonus,
+      sales_bonus,
+      social_insurance,
+      health_insurance,
+      unemployment_insurance,
+      dependent_count,
+      advance_payment,
       note,
       employees!payroll_lines_employee_id_fkey(code, full_name, position, department)
     `)
     .eq("run_id", run.id as string)
-    .order("employees.code", { ascending: true })
     .limit(2000);
   if (error) throw new Error(error.message);
-  
-  return (data ?? []).map((r) => {
-    const rawEmp = r.employees;
-    const emp = (Array.isArray(rawEmp) ? rawEmp[0] : rawEmp) as { code: string; full_name: string; position: string | null; department: string | null } | null;
-    return {
-      employee_id: r.employee_id as string,
-      employee_code: emp?.code ?? "",
-      employee_name: emp?.full_name ?? "",
-      position: emp?.position ?? null,
-      department: emp?.department ?? null,
-      base_salary: Number(r.base_salary ?? 0),
-      worked_days: Number(r.worked_days ?? 0),
-      paid_leave_days: Number(r.paid_leave_days ?? 0),
-      unpaid_leave_days: Number(r.unpaid_leave_days ?? 0),
-      overtime_hours: Number(r.overtime_hours ?? 0),
-      allowance: Number(r.allowance ?? 0),
-      deduction: Number(r.deduction ?? 0),
-      gross_salary: Number(r.gross_salary ?? 0),
-      net_salary: Number(r.net_salary ?? 0),
-      note: (r.note as string | null) ?? null,
-    };
-  });
+
+  return (data ?? [])
+    .map((r) => {
+      const rawEmp = r.employees;
+      const emp = (Array.isArray(rawEmp) ? rawEmp[0] : rawEmp) as { code: string; full_name: string; position: string | null; department: string | null } | null;
+      return calculatePayrollLine(
+        {
+          employee_id: r.employee_id as string,
+          employee_code: emp?.code ?? "",
+          employee_name: emp?.full_name ?? "",
+          position: emp?.position ?? null,
+          department: emp?.department ?? null,
+          base_salary: Number(r.base_salary ?? 0),
+          worked_days: Number(r.worked_days ?? 0),
+          paid_leave_days: Number(r.paid_leave_days ?? 0),
+          unpaid_leave_days: Number(r.unpaid_leave_days ?? 0),
+          overtime_hours: Number(r.overtime_hours ?? 0),
+          gross_salary: Number(r.gross_salary ?? 0),
+          note: (r.note as string | null) ?? null,
+        },
+        {
+          standard_work_days: Number(run.standard_work_days ?? 26),
+          overtime_rate_per_hour: Number(run.overtime_rate_per_hour ?? 30000),
+          family_deduction_amount: Number(run.family_deduction_amount ?? 11_000_000),
+          dependent_deduction_amount: Number(run.dependent_deduction_amount ?? 4_400_000),
+        },
+        {
+          lunch_allowance: Number(r.lunch_allowance ?? 0),
+          fuel_allowance: Number(r.fuel_allowance ?? 0),
+          phone_allowance: Number(r.phone_allowance ?? 0),
+          holiday_bonus: Number(r.holiday_bonus ?? 0),
+          sales_bonus: Number(r.sales_bonus ?? 0),
+          social_insurance: Number(r.social_insurance ?? 0),
+          health_insurance: Number(r.health_insurance ?? 0),
+          unemployment_insurance: Number(r.unemployment_insurance ?? 0),
+          dependent_count: Number(r.dependent_count ?? 0),
+          advance_payment: Number(r.advance_payment ?? 0),
+          note: (r.note as string | null) ?? null,
+        },
+      );
+    })
+    .sort((a, b) => a.employee_code.localeCompare(b.employee_code, "vi"));
+}
+
+export async function getPayrollRunSettings(year: number, month: number): Promise<PayrollRunSettingsRow | null> {
+  const supabase = createSupabaseAdmin();
+  const { data, error } = await supabase
+    .from("payroll_runs")
+    .select("standard_work_days, overtime_rate_per_hour, family_deduction_amount, dependent_deduction_amount, note")
+    .eq("year", year)
+    .eq("month", month)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) return null;
+  return {
+    standard_work_days: Number(data.standard_work_days ?? 26),
+    overtime_rate_per_hour: Number(data.overtime_rate_per_hour ?? 30000),
+    family_deduction_amount: Number(data.family_deduction_amount ?? 11_000_000),
+    dependent_deduction_amount: Number(data.dependent_deduction_amount ?? 4_400_000),
+    note: (data.note as string | null) ?? null,
+  };
 }
