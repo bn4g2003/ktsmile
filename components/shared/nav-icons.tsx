@@ -151,10 +151,31 @@ export function NavIconPayroll({ className }: { className?: string }) {
   );
 }
 
+
 export function NavIconChevronDown({ className }: { className?: string }) {
   return (
     <Svg className={className}>
       <path d="m6 9 6 6 6-6" />
+    </Svg>
+  );
+}
+
+export function NavIconSidebarCollapse({ className }: { className?: string }) {
+  return (
+    <Svg className={className}>
+      <path d="m13 15-3-3 3-3" />
+      <path d="M4 21V3" />
+      <path d="M10 12h10" />
+    </Svg>
+  );
+}
+
+export function NavIconSidebarExpand({ className }: { className?: string }) {
+  return (
+    <Svg className={className}>
+      <path d="m11 9 3 3-3 3" />
+      <path d="M20 21V3" />
+      <path d="M4 12h10" />
     </Svg>
   );
 }
