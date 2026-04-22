@@ -746,6 +746,13 @@ export type ProductStockRow = {
   primary_supplier_id: string | null;
   primary_supplier_code: string | null;
   primary_supplier_name: string | null;
+  // Periodic fields
+  opening_quantity?: number;
+  inbound_quantity?: number;
+  outbound_quantity?: number;
+  closing_quantity?: number;
+  inbound_amount?: number;
+  outbound_amount?: number;
 };
 
 export async function listProductStock(
@@ -754,70 +761,53 @@ export async function listProductStock(
   const supabase = createSupabaseAdmin();
   const { page, pageSize, globalSearch, filters } = args;
   const seg = filters.stock_segment?.trim();
+
+  let q: any;
   if (seg === "nvl") {
-    let qNvl = supabase.from("v_material_stock").select("*", { count: "exact" });
+    q = supabase.from("v_material_stock").select("*", { count: "exact" });
     const g = globalSearch.trim();
     if (g) {
       const p = "%" + g + "%";
-      qNvl = qNvl.or("material_code.ilike." + p + ",material_name.ilike." + p);
+      q = q.or("material_code.ilike." + p + ",material_name.ilike." + p);
     }
     if (filters.product_code?.trim()) {
-      qNvl = qNvl.ilike("material_code", "%" + filters.product_code.trim() + "%");
+      q = q.ilike("material_code", "%" + filters.product_code.trim() + "%");
     }
     if (filters.product_name?.trim()) {
-      qNvl = qNvl.ilike("material_name", "%" + filters.product_name.trim() + "%");
+      q = q.ilike("material_name", "%" + filters.product_name.trim() + "%");
     }
     if (filters.unit?.trim()) {
-      qNvl = qNvl.ilike("unit", "%" + filters.unit.trim() + "%");
+      q = q.ilike("unit", "%" + filters.unit.trim() + "%");
     }
-    const from = (page - 1) * pageSize;
-    const to = from + pageSize - 1;
-    qNvl = qNvl.order("material_code", { ascending: true }).range(from, to);
-    const { data, error, count } = await qNvl;
-    if (error) throw new Error(error.message);
-    const rows: ProductStockRow[] = (data ?? []).map((r: Record<string, unknown>) => ({
-      product_id: (r["product_id"] as string) ?? (r["material_id"] as string),
-      product_code: (r["material_code"] as string) ?? "",
-      product_name: (r["material_name"] as string) ?? "",
-      unit: r["unit"] as string,
-      product_usage: "inventory",
-      total_inbound: Number(r["total_inbound"] ?? 0),
-      total_outbound: Number(r["total_outbound"] ?? 0),
-      quantity_on_hand: Number(r["quantity_on_hand"] ?? 0),
-      primary_supplier_id: (r["primary_supplier_id"] as string | null) ?? null,
-      primary_supplier_code: (r["primary_supplier_code"] as string | null) ?? null,
-      primary_supplier_name: (r["primary_supplier_name"] as string | null) ?? null,
-    }));
-    return { rows, total: count ?? 0 };
+    q = q.order("material_code", { ascending: true });
+  } else {
+    q = supabase.from("v_product_stock").select("*", { count: "exact" });
+    q = q.eq("product_usage", "sales");
+    const g = globalSearch.trim();
+    if (g) {
+      const p = "%" + g + "%";
+      q = q.or("product_code.ilike." + p + ",product_name.ilike." + p);
+    }
+    if (filters.product_code?.trim())
+      q = q.ilike("product_code", "%" + filters.product_code.trim() + "%");
+    if (filters.product_name?.trim())
+      q = q.ilike("product_name", "%" + filters.product_name.trim() + "%");
+    if (filters.unit?.trim())
+      q = q.ilike("unit", "%" + filters.unit.trim() + "%");
+    q = q.order("product_code", { ascending: true });
   }
-
-  let q = supabase.from("v_product_stock").select("*", { count: "exact" });
-  q = q.eq("product_usage", "sales");
-
-  const g = globalSearch.trim();
-  if (g) {
-    const p = "%" + g + "%";
-    q = q.or("product_code.ilike." + p + ",product_name.ilike." + p);
-  }
-  if (filters.product_code?.trim())
-    q = q.ilike("product_code", "%" + filters.product_code.trim() + "%");
-  if (filters.product_name?.trim())
-    q = q.ilike("product_name", "%" + filters.product_name.trim() + "%");
-  if (filters.unit?.trim())
-    q = q.ilike("unit", "%" + filters.unit.trim() + "%");
 
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
-  q = q.order("product_code", { ascending: true }).range(from, to);
-
-  const { data, error, count } = await q;
+  const { data, error, count } = await q.range(from, to);
   if (error) throw new Error(error.message);
-  const rows: ProductStockRow[] = (data ?? []).map((r: Record<string, unknown>) => ({
-    product_id: r["product_id"] as string,
-    product_code: r["product_code"] as string,
-    product_name: r["product_name"] as string,
+
+  let rows: ProductStockRow[] = (data ?? []).map((r: Record<string, unknown>) => ({
+    product_id: (r["product_id"] as string) ?? (r["material_id"] as string),
+    product_code: (r["product_code"] as string) ?? (r["material_code"] as string) ?? "",
+    product_name: (r["product_name"] as string) ?? (r["material_name"] as string) ?? "",
     unit: r["unit"] as string,
-    product_usage: (r["product_usage"] as string) ?? "both",
+    product_usage: (r["product_usage"] as string) ?? (seg === "nvl" ? "inventory" : "sales"),
     total_inbound: Number(r["total_inbound"] ?? 0),
     total_outbound: Number(r["total_outbound"] ?? 0),
     quantity_on_hand: Number(r["quantity_on_hand"] ?? 0),
@@ -825,5 +815,75 @@ export async function listProductStock(
     primary_supplier_code: (r["primary_supplier_code"] as string | null) ?? null,
     primary_supplier_name: (r["primary_supplier_name"] as string | null) ?? null,
   }));
+
+  const df = filters.date_from?.trim();
+  const dt = filters.date_to?.trim();
+
+  if (df || dt) {
+    const pids = rows.map((r) => r.product_id);
+    if (pids.length > 0) {
+      let earlyQ = supabase
+        .from("stock_lines")
+        .select("product_id, quantity, stock_documents!inner(movement_type, document_date)")
+        .eq("stock_documents.posting_status", "posted")
+        .in("product_id", pids);
+      if (df) earlyQ = earlyQ.lt("stock_documents.document_date", df);
+      else earlyQ = earlyQ.lt("stock_documents.document_date", "1900-01-01");
+
+      let periodQ = supabase
+        .from("stock_lines")
+        .select("product_id, quantity, line_amount, stock_documents!inner(movement_type, document_date)")
+        .eq("stock_documents.posting_status", "posted")
+        .in("product_id", pids);
+      if (df) periodQ = periodQ.gte("stock_documents.document_date", df);
+      if (dt) periodQ = periodQ.lte("stock_documents.document_date", dt);
+
+      const [earlyRes, periodRes] = await Promise.all([earlyQ, periodQ]);
+      const earlyLines = earlyRes.data ?? [];
+      const periodLines = periodRes.data ?? [];
+
+      const stats = new Map<string, { opening: number; inQ: number; outQ: number; inA: number; outA: number }>();
+      for (const id of pids) stats.set(id, { opening: 0, inQ: 0, outQ: 0, inA: 0, outA: 0 });
+
+      for (const l of earlyLines) {
+        const s = stats.get(l.product_id);
+        if (!s) continue;
+        const mov = (l.stock_documents as any)?.movement_type;
+        const qv = Number(l.quantity || 0);
+        if (mov === "inbound") s.opening += qv;
+        else if (mov === "outbound") s.opening -= qv;
+      }
+
+      for (const l of periodLines) {
+        const s = stats.get(l.product_id);
+        if (!s) continue;
+        const mov = (l.stock_documents as any)?.movement_type;
+        const qv = Number(l.quantity || 0);
+        const av = Number(l.line_amount || 0);
+        if (mov === "inbound") {
+          s.inQ += qv;
+          s.inA += av;
+        } else if (mov === "outbound") {
+          s.outQ += qv;
+          s.outA += av;
+        }
+      }
+
+      rows = rows.map((r) => {
+        const s = stats.get(r.product_id);
+        if (!s) return r;
+        return {
+          ...r,
+          opening_quantity: s.opening,
+          inbound_quantity: s.inQ,
+          outbound_quantity: s.outQ,
+          closing_quantity: s.opening + s.inQ - s.outQ,
+          inbound_amount: s.inA,
+          outbound_amount: s.outA,
+        };
+      });
+    }
+  }
+
   return { rows, total: count ?? 0 };
 }

@@ -28,6 +28,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formatDate } from "@/lib/format/date";
+import { formatCoordReviewStatus, formatLabOrderCategory, formatOrderStatus, formatPatientGender } from "@/lib/format/labels";
 
 export function SalesBillingPage() {
   const router = useRouter();
@@ -107,6 +108,33 @@ export function SalesBillingPage() {
       { accessorKey: "partner_code", header: "Mã KH", meta: { filterKey: "partner_code", filterType: "text" } },
       { accessorKey: "partner_name", header: "Khách", meta: { filterKey: "partner_name", filterType: "text" } },
       { accessorKey: "patient_name", header: "Bệnh nhân", meta: { filterKey: "patient_name", filterType: "text" } },
+      { accessorKey: "clinic_name", header: "Nha khoa", meta: { filterKey: "clinic_name", filterType: "text" } },
+      { accessorKey: "contact_phone", header: "SĐT", meta: { filterKey: "contact_phone", filterType: "text" } },
+      {
+        accessorKey: "status",
+        header: "Trạng thái",
+        cell: ({ getValue }) => formatOrderStatus(String(getValue())),
+      },
+      {
+        accessorKey: "order_category",
+        header: "Loại đơn",
+        cell: ({ getValue }) => formatLabOrderCategory(String(getValue() ?? "new_work")),
+      },
+      {
+        accessorKey: "patient_year_of_birth",
+        header: "Năm sinh",
+        cell: ({ getValue }) => (getValue() ?? "—"),
+      },
+      {
+        accessorKey: "patient_gender",
+        header: "Phái",
+        cell: ({ getValue }) => formatPatientGender(String(getValue() ?? "")),
+      },
+      {
+        accessorKey: "coord_review_status",
+        header: "Đối chiếu",
+        cell: ({ getValue }) => formatCoordReviewStatus(String(getValue() ?? "pending")),
+      },
       {
         accessorKey: "total_amount",
         header: "Cộng dòng",
@@ -121,6 +149,24 @@ export function SalesBillingPage() {
         accessorKey: "payment_notice_doc_number",
         header: "Số GBTT",
         cell: ({ getValue }) => (getValue() ? String(getValue()) : "—"),
+      },
+      {
+        accessorKey: "payment_notice_issued_at",
+        header: "GBTT lúc",
+        cell: ({ getValue }) => (getValue() ? formatDate(String(getValue())) : "—"),
+      },
+      { accessorKey: "notes", header: "Ghi chú", meta: { filterKey: "notes", filterType: "text" } },
+      {
+        accessorKey: "created_at",
+        header: "Tạo lúc",
+        size: 160,
+        cell: ({ getValue }) => formatDate(String(getValue())),
+      },
+      {
+        accessorKey: "updated_at",
+        header: "Cập nhật",
+        size: 160,
+        cell: ({ getValue }) => formatDate(String(getValue())),
       },
       {
         id: "actions",

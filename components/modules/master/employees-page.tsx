@@ -22,6 +22,7 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { importEmployeesFromExcel } from "@/lib/actions/employees-import";
 import { PERMISSION_PRESETS, permissionPresetLabel } from "@/lib/auth/permission-presets";
+import { formatDate } from "@/lib/format/date";
 import {
   createEmployee,
   deleteEmployee,
@@ -182,11 +183,16 @@ export function EmployeesPage() {
         cell: ({ getValue }) => permissionPresetLabel((getValue() as string | null) ?? null),
       },
       { accessorKey: "base_salary", header: "Lương CB", cell: ({ getValue }) => Number(getValue()).toLocaleString("vi-VN") },
+      { accessorKey: "phone", header: "SĐT" },
+      { accessorKey: "email", header: "Email" },
+      { accessorKey: "address", header: "Địa chỉ", meta: { filterKey: "address", filterType: "text" } },
+      { accessorKey: "username", header: "Tài khoản" },
       {
         accessorKey: "auth_user_id",
         header: "Auth user",
         cell: ({ getValue }) => (getValue() as string | null)?.slice(0, 8) ?? "—",
       },
+      { accessorKey: "notes", header: "Ghi chú", meta: { filterKey: "notes", filterType: "text" } },
       {
         accessorKey: "is_active",
         header: "Hoạt động",
@@ -199,6 +205,18 @@ export function EmployeesPage() {
           ],
         },
         cell: ({ getValue }) => ((getValue() as boolean) ? "Có" : "Không"),
+      },
+      {
+        accessorKey: "created_at",
+        header: "Tạo lúc",
+        size: 160,
+        cell: ({ getValue }) => formatDate(String(getValue())),
+      },
+      {
+        accessorKey: "updated_at",
+        header: "Cập nhật",
+        size: 160,
+        cell: ({ getValue }) => formatDate(String(getValue())),
       },
       {
         id: "actions",

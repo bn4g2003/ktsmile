@@ -43,6 +43,7 @@ import {
   labOrderCategoryOptions,
   labOrderLineWorkTypeOptions,
   labOrderStatusOptions,
+  formatPatientGender,
   orderStatusBadgeClassName,
 } from "@/lib/format/labels";
 import type { LabAccessoryKey } from "@/lib/lab/order-accessories";
@@ -908,6 +909,33 @@ export function OrdersPage() {
           </div>
         ),
       },
+      { accessorKey: "contact_phone", header: "SĐT", meta: { filterKey: "contact_phone", filterType: "text" } },
+      {
+        accessorKey: "order_category",
+        header: "Loại đơn",
+        size: 100,
+        meta: {
+          filterKey: "order_category",
+          filterType: "select",
+          filterOptions: [...labOrderCategoryOptions],
+        },
+        cell: ({ getValue }) => {
+          const val = String(getValue());
+          return labOrderCategoryOptions.find((o) => o.value === val)?.label ?? val;
+        },
+      },
+      {
+        accessorKey: "patient_year_of_birth",
+        header: "Năm sinh",
+        size: 90,
+        cell: ({ getValue }) => getValue() ?? "—",
+      },
+      {
+        accessorKey: "patient_gender",
+        header: "Phái",
+        size: 80,
+        cell: ({ getValue }) => formatPatientGender(String(getValue() ?? "")),
+      },
       {
         accessorKey: "total_amount",
         header: "Tổng đơn",
@@ -928,34 +956,32 @@ export function OrdersPage() {
           </div>
         )
       },
-      {
-        accessorKey: "order_category",
-        header: "Loại đơn",
-        size: 100,
-        meta: {
-          filterKey: "order_category",
-          filterType: "select",
-          filterOptions: [...labOrderCategoryOptions],
-        },
-        cell: ({ getValue }) => {
-          const val = String(getValue());
-          return labOrderCategoryOptions.find(o => o.value === val)?.label ?? val;
-        }
-      },
       { accessorKey: "tooth_positions_summary", header: "Răng", size: 140 },
       { accessorKey: "tooth_count_total", header: "SL Răng", size: 90, cell: ({ getValue }) => getValue() ?? "—" },
       { accessorKey: "notes", header: "Ghi chú", size: 200 },
-      { accessorKey: "patient_year_of_birth", header: "Năm sinh", size: 90, cell: ({ getValue }) => getValue() ?? "—" },
       {
-        accessorKey: "patient_gender",
-        header: "Phái",
-        size: 80,
-        cell: ({ getValue }) => {
-          const val = getValue();
-          if (val === "male") return "Nam";
-          if (val === "female") return "Nữ";
-          return "—";
-        }
+        accessorKey: "payment_notice_doc_number",
+        header: "GBTT",
+        size: 120,
+        cell: ({ getValue }) => (getValue() ? String(getValue()) : "—"),
+      },
+      {
+        accessorKey: "payment_notice_issued_at",
+        header: "GBTT lúc",
+        size: 160,
+        cell: ({ getValue }) => (getValue() ? formatDateTime(String(getValue())) : "—"),
+      },
+      {
+        accessorKey: "created_at",
+        header: "Tạo lúc",
+        size: 160,
+        cell: ({ getValue }) => formatDateTime(String(getValue())),
+      },
+      {
+        accessorKey: "updated_at",
+        header: "Cập nhật",
+        size: 160,
+        cell: ({ getValue }) => formatDateTime(String(getValue())),
       },
       {
         id: "actions",

@@ -23,7 +23,7 @@ export function DetailPreview({
   groups?: DetailPreviewGroup[];
 }) {
   const renderFields = (items: DetailPreviewField[]) => (
-    <dl className="grid grid-cols-2 gap-x-6 gap-y-2.5 sm:grid-cols-3 lg:grid-cols-4">
+    <dl className="grid grid-cols-1 gap-x-6 gap-y-2.5 sm:[grid-template-columns:repeat(auto-fit,minmax(12rem,1fr))]">
       {items.map((f, i) => (
         <div
           key={i}

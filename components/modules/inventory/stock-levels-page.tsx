@@ -17,6 +17,7 @@ import { DetailPreview } from "@/components/ui/detail-preview";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
+import { formatDate } from "@/lib/format/date";
 import { listProductPicker } from "@/lib/actions/products";
 import { listMaterialPicker } from "@/lib/actions/materials";
 import { createOutboundStockRequest, listProductStock, type ProductStockRow } from "@/lib/actions/stock";
@@ -39,6 +40,7 @@ export function StockLevelsPage({ initialTab = "nvl" }: { initialTab?: StockTab 
   const [reqQty, setReqQty] = React.useState("1");
   const [reqReason, setReqReason] = React.useState("");
   const [reqErr, setReqErr] = React.useState<string | null>(null);
+  const [filters, setFilters] = React.useState<Record<string, string>>({});
   const [reqPending, setReqPending] = React.useState(false);
 
   React.useEffect(() => {
@@ -145,38 +147,94 @@ export function StockLevelsPage({ initialTab = "nvl" }: { initialTab?: StockTab 
         accessorKey: "product_usage",
         header: "Phạm vi",
         cell: ({ getValue }) => {
-          const u = getValue() as string;
-          if (u === "inventory") return "NVL";
-          if (u === "sales") return "Bán";
-          return "Cả hai";
+          const v = String(getValue() ?? "");
+          if (v === "inventory") return "Kho / NVL";
+          if (v === "sales") return "Bán / labo";
+          return "Kho + bán";
         },
       },
       {
-        id: "ncc",
-        accessorFn: (r) => r.primary_supplier_code ?? "",
-        header: "NCC chính",
-        cell: ({ row }) => row.original.primary_supplier_code ?? "—",
+        accessorKey: "opening_quantity",
+        header: "Tồn đầu",
+        cell: ({ getValue }) => {
+          const v = getValue();
+          return v != null ? (
+            <span className="font-medium text-[var(--on-surface-muted)]">{Number(v).toLocaleString()}</span>
+          ) : (
+            "—"
+          );
+        },
       },
       {
-        accessorKey: "total_inbound",
-        header: "Tổng nhập",
-        cell: ({ getValue }) => (
-          <span className="font-semibold text-emerald-600">{Number(getValue() ?? 0).toLocaleString()}</span>
-        ),
+        accessorKey: "inbound_quantity",
+        header: "Nhập kỳ",
+        cell: ({ getValue }) => {
+          const v = getValue();
+          return v != null ? (
+            <span className="font-semibold text-emerald-600">+{Number(v).toLocaleString()}</span>
+          ) : (
+            "—"
+          );
+        },
       },
       {
-        accessorKey: "total_outbound",
-        header: "Tổng xuất",
-        cell: ({ getValue }) => (
-          <span className="font-semibold text-rose-600">{Number(getValue() ?? 0).toLocaleString()}</span>
-        ),
+        accessorKey: "outbound_quantity",
+        header: "Xuất kỳ",
+        cell: ({ getValue }) => {
+          const v = getValue();
+          return v != null ? (
+            <span className="font-semibold text-rose-600">-{Number(v).toLocaleString()}</span>
+          ) : (
+            "—"
+          );
+        },
+      },
+      {
+        accessorKey: "closing_quantity",
+        header: "Tồn cuối",
+        cell: ({ getValue }) => {
+          const v = getValue();
+          return v != null ? (
+            <span className="font-bold text-[var(--primary)]">{Number(v).toLocaleString()}</span>
+          ) : (
+            "—"
+          );
+        },
+      },
+      {
+        accessorKey: "outbound_amount",
+        header: "Trị giá xuất",
+        cell: ({ getValue }) => {
+          const v = getValue();
+          return v != null ? (
+            <div className="text-right font-medium text-rose-700 tabular-nums">
+              {Number(v).toLocaleString("vi-VN")}
+            </div>
+          ) : (
+            "—"
+          );
+        },
       },
       {
         accessorKey: "quantity_on_hand",
-        header: "Tồn trong kỳ",
+        header: "Tồn hiện tại",
         cell: ({ getValue }) => (
-          <span className="font-bold text-[var(--primary)]">{Number(getValue() ?? 0).toLocaleString()}</span>
+          <span className="font-medium text-[var(--on-surface-muted)]">{Number(getValue() ?? 0).toLocaleString()}</span>
         ),
+      },
+      { accessorKey: "primary_supplier_code", header: "NCC chính", cell: ({ row }) => row.original.primary_supplier_code ? row.original.primary_supplier_code + (row.original.primary_supplier_name ? " — " + row.original.primary_supplier_name : "") : "—" },
+      { accessorKey: "supplier_link_count", header: "Số NCC" },
+      {
+        accessorKey: "created_at",
+        header: "Tạo lúc",
+        size: 160,
+        cell: ({ getValue }) => formatDate(String(getValue())),
+      },
+      {
+        accessorKey: "updated_at",
+        header: "Cập nhật",
+        size: 160,
+        cell: ({ getValue }) => formatDate(String(getValue())),
       },
     ],
     [],
@@ -227,10 +285,54 @@ export function StockLevelsPage({ initialTab = "nvl" }: { initialTab?: StockTab 
         getRowId={(r) => r.product_id}
         renderRowDetail={renderStockDetail}
         rowDetailTitle={(r) => "Tồn " + r.product_code}
+        filters={filters}
+        onFiltersChange={setFilters}
         toolbarExtra={
-          <Button variant="secondary" type="button" onClick={openRequestFromToolbar}>
-            Yêu cầu xuất kho…
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1.5 rounded-[var(--radius-md)] bg-[var(--surface-muted)] px-2 py-1 shadow-[inset_0_0_0_1px_var(--border-ghost)]">
+              <span className="text-[10px] font-bold uppercase text-[var(--on-surface-muted)]">
+                Kỳ báo cáo:
+              </span>
+              <Input
+                type="date"
+                className="h-7 w-32 border-none bg-transparent p-0 text-xs focus-visible:ring-0"
+                value={filters["date_from"] ?? ""}
+                onChange={(e) => {
+                  const next = { ...filters, date_from: e.target.value };
+                  if (!e.target.value) delete next.date_from;
+                  setFilters(next);
+                }}
+              />
+              <span className="text-[10px] text-[var(--on-surface-muted)]">—</span>
+              <Input
+                type="date"
+                className="h-7 w-32 border-none bg-transparent p-0 text-xs focus-visible:ring-0"
+                value={filters["date_to"] ?? ""}
+                onChange={(e) => {
+                  const next = { ...filters, date_to: e.target.value };
+                  if (!e.target.value) delete next.date_to;
+                  setFilters(next);
+                }}
+              />
+            </div>
+            <Button
+              variant="secondary"
+              size="sm"
+              type="button"
+              onClick={() => setFilters({})}
+              disabled={Object.keys(filters).length === 0}
+            >
+              Xóa kỳ
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              type="button"
+              onClick={openRequestFromToolbar}
+            >
+              Yêu cầu xuất kho…
+            </Button>
+          </div>
         }
       />
       <Dialog open={openRequest} onOpenChange={setOpenRequest}>

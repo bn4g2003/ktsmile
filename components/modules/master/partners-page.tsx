@@ -16,7 +16,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { DetailPreview } from "@/components/ui/detail-preview";
 import { DetailTabStrip } from "@/components/ui/detail-tab-strip";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -37,6 +36,7 @@ import {
   updateSupplier,
   type SupplierRow,
 } from "@/lib/actions/suppliers";
+import { formatDate } from "@/lib/format/date";
 
 const partnerTypeOptions = [
   { value: "customer_clinic", label: "Khách — Phòng khám" },
@@ -213,8 +213,10 @@ export function PartnersPage({ initialTab = "customers" }: { initialTab?: Partne
       },
       { accessorKey: "representative_name", header: "Đại diện", meta: { filterType: "none" } },
       { accessorKey: "phone", header: "SĐT" },
+      { accessorKey: "address", header: "Địa chỉ", meta: { filterKey: "address", filterType: "text" } },
       { accessorKey: "tax_id", header: "MST" },
       { accessorKey: "default_discount_percent", header: "CK %" },
+      { accessorKey: "notes", header: "Ghi chú", meta: { filterKey: "notes", filterType: "text" } },
       {
         id: "is_active",
         accessorKey: "is_active",
@@ -228,6 +230,18 @@ export function PartnersPage({ initialTab = "customers" }: { initialTab?: Partne
           ],
         },
         cell: ({ getValue }) => ((getValue() as boolean) ? "Có" : "Không"),
+      },
+      {
+        accessorKey: "created_at",
+        header: "Tạo lúc",
+        size: 160,
+        cell: ({ getValue }) => formatDate(String(getValue())),
+      },
+      {
+        accessorKey: "updated_at",
+        header: "Cập nhật",
+        size: 160,
+        cell: ({ getValue }) => formatDate(String(getValue())),
       },
       {
         id: "actions",
@@ -326,9 +340,11 @@ export function PartnersPage({ initialTab = "customers" }: { initialTab?: Partne
     () => [
       { accessorKey: "code", header: "Mã NCC", meta: { filterKey: "code", filterType: "text" } },
       { accessorKey: "name", header: "Tên", meta: { filterKey: "name", filterType: "text" } },
+      { accessorKey: "representative_name", header: "Đại diện", meta: { filterKey: "representative_name", filterType: "text" } },
       { accessorKey: "phone", header: "SĐT" },
+      { accessorKey: "address", header: "Địa chỉ", meta: { filterKey: "address", filterType: "text" } },
       { accessorKey: "tax_id", header: "MST" },
-      { accessorKey: "address", header: "Địa chỉ", meta: { filterType: "none" } },
+      { accessorKey: "notes", header: "Ghi chú", meta: { filterKey: "notes", filterType: "text" } },
       {
         id: "is_active",
         accessorKey: "is_active",
@@ -342,6 +358,18 @@ export function PartnersPage({ initialTab = "customers" }: { initialTab?: Partne
           ],
         },
         cell: ({ getValue }) => ((getValue() as boolean) ? "Có" : "Không"),
+      },
+      {
+        accessorKey: "created_at",
+        header: "Tạo lúc",
+        size: 160,
+        cell: ({ getValue }) => formatDate(String(getValue())),
+      },
+      {
+        accessorKey: "updated_at",
+        header: "Cập nhật",
+        size: 160,
+        cell: ({ getValue }) => formatDate(String(getValue())),
       },
       {
         id: "actions",

@@ -246,6 +246,21 @@ export function CashPage() {
       { accessorKey: "supplier_code", header: "Mã NCC", meta: { filterKey: "supplier_code", filterType: "text" } },
       { accessorKey: "supplier_name", header: "Nhà cung cấp", meta: { filterKey: "supplier_name", filterType: "text" } },
       { accessorKey: "payer_name", header: "Người nộp", meta: { filterKey: "payer_name", filterType: "text" } },
+      { accessorKey: "description", header: "Diễn giải", meta: { filterKey: "description", filterType: "text" } },
+      { accessorKey: "reference_type", header: "Ref type" },
+      { accessorKey: "reference_id", header: "Ref ID" },
+      {
+        accessorKey: "created_at",
+        header: "Tạo lúc",
+        size: 160,
+        cell: ({ getValue }) => formatDate(String(getValue())),
+      },
+      {
+        accessorKey: "updated_at",
+        header: "Cập nhật",
+        size: 160,
+        cell: ({ getValue }) => formatDate(String(getValue())),
+      },
       {
         id: "actions",
         header: "Thao tác",
