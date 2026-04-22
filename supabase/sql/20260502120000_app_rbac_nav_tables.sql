@@ -72,7 +72,6 @@ cross join lateral (values
   ('manager', '/orders/review'),
   ('manager', '/inventory/documents'),
   ('manager', '/inventory/stock'),
-  ('manager', '/accounting/revenue'),
   ('manager', '/accounting/sales'),
   ('manager', '/accounting/cash'),
   ('manager', '/accounting/debt'),
@@ -90,7 +89,6 @@ cross join lateral (values
   ('accountant', '/'),
   ('accountant', '/master/partners'),
   ('accountant', '/orders'),
-  ('accountant', '/accounting/revenue'),
   ('accountant', '/accounting/sales'),
   ('accountant', '/accounting/cash'),
   ('accountant', '/accounting/debt'),
@@ -109,7 +107,6 @@ cross join lateral (values
   ('sales', '/master/prices'),
   ('sales', '/orders'),
   ('sales', '/orders/review'),
-  ('sales', '/accounting/revenue'),
   ('sales', '/accounting/sales'),
   ('sales', '/accounting/debt'),
   ('sales', '/accounting/summary')

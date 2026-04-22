@@ -46,6 +46,16 @@ export function SalesBillingPage() {
   const [billPending, setBillPending] = React.useState(false);
   const [billErr, setBillErr] = React.useState<string | null>(null);
   const [issuePending, setIssuePending] = React.useState<string | null>(null);
+  const [gridFilters, setGridFilters] = React.useState<Record<string, string>>({});
+
+  const patchGridFilter = React.useCallback((key: string, val: string) => {
+    setGridFilters((prev) => {
+      const next = { ...prev };
+      if (val.trim()) next[key] = val.trim();
+      else delete next[key];
+      return next;
+    });
+  }, []);
 
   const openBilling = (r: LabOrderRow) => {
     setBillRow(r);
@@ -104,7 +114,12 @@ export function SalesBillingPage() {
           </Link>
         ),
       },
-      { accessorKey: "received_at", header: "Ngày nhận", meta: { filterKey: "received", filterType: "date_range" }, cell: ({ row }) => formatDate(row.original.received_at) },
+      {
+        accessorKey: "received_at",
+        header: "Ngày nhận",
+        meta: { filterKey: "received_day", filterType: "date" },
+        cell: ({ row }) => formatDate(row.original.received_at),
+      },
       { accessorKey: "partner_code", header: "Mã KH", meta: { filterKey: "partner_code", filterType: "text" } },
       { accessorKey: "partner_name", header: "Khách", meta: { filterKey: "partner_name", filterType: "text" } },
       { accessorKey: "patient_name", header: "Bệnh nhân", meta: { filterKey: "patient_name", filterType: "text" } },
@@ -207,6 +222,34 @@ export function SalesBillingPage() {
         columns={columns}
         list={listLabOrders}
         reloadSignal={gridReload}
+        filters={gridFilters}
+        onFiltersChange={setGridFilters}
+        toolbarExtra={
+          <div className="flex flex-wrap items-end gap-2 rounded-[var(--radius-md)] border border-[var(--border-ghost)] bg-[var(--surface-muted)] px-2 py-2">
+            <div className="grid gap-1">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--on-surface-muted)]">
+                Từ ngày
+              </span>
+              <Input
+                type="date"
+                value={gridFilters.received_from ?? ""}
+                onChange={(e) => patchGridFilter("received_from", e.target.value)}
+                className="h-9 w-[9.5rem] py-1 text-xs"
+              />
+            </div>
+            <div className="grid gap-1">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--on-surface-muted)]">
+                Đến ngày
+              </span>
+              <Input
+                type="date"
+                value={gridFilters.received_to ?? ""}
+                onChange={(e) => patchGridFilter("received_to", e.target.value)}
+                className="h-9 w-[9.5rem] py-1 text-xs"
+              />
+            </div>
+          </div>
+        }
         getRowId={(r) => r.id}
       />
       <Dialog open={billOpen} onOpenChange={(v) => { setBillOpen(v); if (!v) setBillRow(null); }}>

@@ -29,7 +29,6 @@ export const SHELL_NAV_GROUPS_META: ShellNavGroupMeta[] = [
   {
     title: "TÀI CHÍNH",
     items: [
-      { href: "/accounting/revenue", label: "Doanh số theo KH" },
       { href: "/accounting/sales", label: "Doanh số & GBTT" },
       { href: "/accounting/cash", label: "Sổ quỹ" },
       { href: "/accounting/debt", label: "Công nợ khách hàng" },

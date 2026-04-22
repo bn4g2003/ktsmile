@@ -79,6 +79,16 @@ export function CashPage() {
     { channel: "acb", amount: "0" },
   ]);
   const [savingOpening, setSavingOpening] = React.useState(false);
+  const [gridFilters, setGridFilters] = React.useState<Record<string, string>>({});
+
+  const patchGridFilter = React.useCallback((key: string, val: string) => {
+    setGridFilters((prev) => {
+      const next = { ...prev };
+      if (val.trim()) next[key] = val.trim();
+      else delete next[key];
+      return next;
+    });
+  }, []);
 
   React.useEffect(() => {
     void listCustomerPartnerPicker().then(setPartners).catch(() => {});
@@ -222,7 +232,11 @@ export function CashPage() {
 
   const columns = React.useMemo<ColumnDef<CashRow, unknown>[]>(
     () => [
-      { accessorKey: "transaction_date", header: "Ngày", meta: { filterKey: "transaction_date", filterType: "date_range" } },
+      {
+        accessorKey: "transaction_date",
+        header: "Ngày",
+        meta: { filterKey: "transaction_date_eq", filterType: "date" },
+      },
       { accessorKey: "doc_number", header: "Số CT", meta: { filterKey: "doc_number", filterType: "text" } },
       { accessorKey: "payment_channel", header: "Kênh", meta: { filterKey: "payment_channel", filterType: "text" } },
       {
@@ -333,10 +347,36 @@ export function CashPage() {
         columns={columns}
         list={listCashTransactions}
         reloadSignal={gridReload}
+        filters={gridFilters}
+        onFiltersChange={setGridFilters}
         renderRowDetail={renderCashDetail}
         rowDetailTitle={(r) => "Chứng từ " + r.doc_number}
         toolbarExtra={
           <>
+            <div className="flex flex-wrap items-end gap-2 rounded-[var(--radius-md)] border border-[var(--border-ghost)] bg-[var(--surface-muted)] px-2 py-2">
+              <div className="grid gap-1">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--on-surface-muted)]">
+                  Từ ngày
+                </span>
+                <Input
+                  type="date"
+                  value={gridFilters.transaction_date_from ?? ""}
+                  onChange={(e) => patchGridFilter("transaction_date_from", e.target.value)}
+                  className="h-9 w-[9.5rem] py-1 text-xs"
+                />
+              </div>
+              <div className="grid gap-1">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--on-surface-muted)]">
+                  Đến ngày
+                </span>
+                <Input
+                  type="date"
+                  value={gridFilters.transaction_date_to ?? ""}
+                  onChange={(e) => patchGridFilter("transaction_date_to", e.target.value)}
+                  className="h-9 w-[9.5rem] py-1 text-xs"
+                />
+              </div>
+            </div>
             <Button variant="secondary" type="button" size="sm" onClick={openOpeningDialog} className="mr-2">
               Số dư đầu kỳ
             </Button>

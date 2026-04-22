@@ -185,6 +185,8 @@ export async function listCashTransactions(
       q = q.gte("transaction_date", filters.transaction_date_from.trim());
     if (filters.transaction_date_to?.trim())
       q = q.lte("transaction_date", filters.transaction_date_to.trim());
+    if (filters.transaction_date_eq?.trim())
+      q = q.eq("transaction_date", filters.transaction_date_eq.trim());
 
     q = q.order("transaction_date", { ascending: false }).range(from, to);
     const { data, error, count } = await q;

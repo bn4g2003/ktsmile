@@ -17,7 +17,6 @@ const ROUTE_LABELS: Record<string, string> = {
   "/orders/review": "Kiểm tra đơn",
   "/inventory/documents": "Kho — Phiếu",
   "/inventory/stock": "Tồn kho",
-  "/accounting/revenue": "Doanh số theo KH",
   "/accounting/sales": "Doanh số & GBTT",
   "/accounting/cash": "Sổ quỹ",
   "/accounting/debt": "Công nợ",

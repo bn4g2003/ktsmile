@@ -207,6 +207,9 @@ function OrderFiltersPopover({
         <div className="space-y-4" onClick={(e) => e.stopPropagation()}>
           <div className="grid gap-2">
             <Label className="text-xs font-bold uppercase tracking-wider text-[var(--on-surface-muted)]">Thời gian nhận</Label>
+            <p className="text-[10px] leading-snug text-[var(--on-surface-faint)]">
+              Khoảng từ–đến ở đây; lọc đúng một ngày dùng ô lọc trên cột &quot;Ngày nhận&quot;.
+            </p>
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1">
                 <span className="text-[10px] text-[var(--on-surface-faint)]">Từ ngày</span>
@@ -882,7 +885,7 @@ export function OrdersPage() {
         accessorKey: "received_at",
         header: "Ngày nhận",
         size: 160,
-        meta: { filterKey: "received", filterType: "date_range" },
+        meta: { filterKey: "received_day", filterType: "date" },
         cell: ({ row }) => formatDate(row.original.received_at),
       },
       {

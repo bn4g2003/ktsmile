@@ -46,7 +46,6 @@ const HREF_ICONS: Record<string, NavIcon> = {
   "/master/products": NavIconCatalog,
   "/inventory/stock": NavIconStock,
   "/inventory/documents": NavIconWarehouseDoc,
-  "/accounting/revenue": NavIconChart,
   "/accounting/sales": NavIconChart,
   "/accounting/cash": NavIconCash,
   "/accounting/debt": NavIconDebt,
