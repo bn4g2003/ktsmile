@@ -368,11 +368,11 @@ export function buildPayrollSlipHtml(
           color: var(--muted);
         }
         @media print {
-          body { padding: 0; }
-          @page { size: A4; margin: 10mm; }
-        .payroll-slip { max-width: none; }
-        .salary-table th, .salary-table td { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-        .title-band, .section-row td, .total-row td, .value-cell, .employee-table td { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          html, body { max-width: none !important; width: 100% !important; margin: 0 !important; padding: 0 !important; }
+          @page { size: A4 portrait; margin: 10mm; }
+          .payroll-slip { max-width: none; width: 100%; }
+          .salary-table th, .salary-table td { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          .title-band, .section-row td, .total-row td, .value-cell, .employee-table td { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         }
       </style>
     </head>
@@ -504,9 +504,9 @@ export function buildPayrollBatchPrintHtml(
           color: var(--muted);
         }
         @media print {
-          body { padding: 0; }
-          @page { size: A4; margin: 10mm; }
-          .payroll-slip { max-width: none; }
+          html, body { max-width: none !important; width: 100% !important; margin: 0 !important; padding: 0 !important; }
+          @page { size: A4 portrait; margin: 10mm; }
+          .payroll-slip { max-width: none; width: 100%; }
         }
       </style>
     </head>

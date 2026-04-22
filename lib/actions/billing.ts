@@ -247,18 +247,27 @@ async function listLabOrderIdsReceivedInMonth(
 
   let q = supabase
     .from("lab_orders")
-    .select("id")
+    .select("id, payment_notice_doc_number, order_number")
     .gte("received_at", from)
     .lte("received_at", to)
     .neq("status", "cancelled")
-    .order("order_number", { ascending: true })
     .limit(2000);
   if (partnerId?.trim()) {
     q = q.eq("partner_id", partnerId.trim());
   }
   const { data, error } = await q;
   if (error) throw new Error(error.message);
-  return (data ?? []).map((r) => r.id as string);
+  type Row = { id: string; payment_notice_doc_number: string | null; order_number: string };
+  const rows = (data ?? []) as Row[];
+  rows.sort((a, b) => {
+    const an = (a.payment_notice_doc_number ?? "").trim();
+    const bn = (b.payment_notice_doc_number ?? "").trim();
+    if (an && bn) return an.localeCompare(bn, "vi", { numeric: true });
+    if (an && !bn) return -1;
+    if (!an && bn) return 1;
+    return String(a.order_number).localeCompare(String(b.order_number), "vi", { numeric: true });
+  });
+  return rows.map((r) => r.id);
 }
 
 function buildMonthlyGbttExcelAoaFromPayloads(
@@ -394,16 +403,14 @@ export async function buildBatchPaymentNoticePrintDocument(
     throw new Error("Không có đơn nào trong tháng đã chọn (lọc theo ngày nhận đơn).");
   }
 
-  const breakHtml =
-    '<div style="page-break-after:always;break-after:page;height:0;margin:0;padding:0;border:0;font-size:0;line-height:0;">&nbsp;</div>';
   const parts: string[] = [];
   for (const id of ids) {
     const payload = await getPaymentNoticePrintPayload(id);
-    parts.push(`<article class="gbtt-batch-page" style="page-break-inside:avoid;">${buildPaymentNoticeBodyHtml(payload)}</article>`);
+    parts.push(`<article class="gbtt-batch-page">${buildPaymentNoticeBodyHtml(payload)}</article>`);
   }
   return {
     title: `Giấy báo thanh toán — Tháng ${month}/${year}`,
-    innerHtml: parts.join(breakHtml),
+    innerHtml: `<div class="gbtt-batch-print">${parts.join("")}</div>`,
     count: ids.length,
   };
 }

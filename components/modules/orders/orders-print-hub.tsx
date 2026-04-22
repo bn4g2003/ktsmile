@@ -17,7 +17,12 @@ import {
   getMonthlyDeliveryNotePayload,
   getSingleOrderDeliveryNotePayload,
 } from "@/lib/actions/lab-orders";
-import { buildPrintShell, openBlankPrintTab, writeAndPrintToWindow } from "@/lib/reports/print-html";
+import {
+  buildPrintShell,
+  openBlankPrintTab,
+  PRINT_POPUP_BLOCKED_MESSAGE,
+  writeAndPrintToWindow,
+} from "@/lib/reports/print-html";
 import { buildDeliveryNoteBodyHtml, deliveryNotePrintTitle } from "@/lib/reports/delivery-note-html";
 import { buildPaymentNoticeBodyHtml, paymentNoticePrintTitle } from "@/lib/reports/payment-notice-html";
 import { buildDeliveryNoteExcelAoa } from "@/lib/reports/delivery-note-excel";
@@ -78,6 +83,7 @@ export function OrdersPrintHub({ partners }: { partners: Partner[] }) {
     setGbttBusy(true);
     const win = openBlankPrintTab();
     if (!win) {
+      window.alert(PRINT_POPUP_BLOCKED_MESSAGE);
       setGbttBusy(false);
       return;
     }
@@ -109,6 +115,7 @@ export function OrdersPrintHub({ partners }: { partners: Partner[] }) {
     setShipBusy(true);
     const win = openBlankPrintTab();
     if (!win) {
+      window.alert(PRINT_POPUP_BLOCKED_MESSAGE);
       setShipBusy(false);
       return;
     }
@@ -171,6 +178,7 @@ export function OrdersPrintHub({ partners }: { partners: Partner[] }) {
     setOneGbttBusy(true);
     const win = openBlankPrintTab();
     if (!win) {
+      window.alert(PRINT_POPUP_BLOCKED_MESSAGE);
       setOneGbttBusy(false);
       return;
     }
@@ -210,6 +218,7 @@ export function OrdersPrintHub({ partners }: { partners: Partner[] }) {
     setOneShipBusy(true);
     const win = openBlankPrintTab();
     if (!win) {
+      window.alert(PRINT_POPUP_BLOCKED_MESSAGE);
       setOneShipBusy(false);
       return;
     }

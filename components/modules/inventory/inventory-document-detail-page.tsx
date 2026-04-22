@@ -292,7 +292,13 @@ export function InventoryDocumentDetailPage() {
             )}
             <p className="text-xs text-[var(--on-surface-muted)]">ID: {id}</p>
           </div>
-          <StockVoucherPrintButton documentId={id} label="In / lưu PDF (trình duyệt)" />
+          <StockVoucherPrintButton
+            documentId={id}
+            label="In / lưu PDF (trình duyệt)"
+            size="default"
+            variant="primary"
+            className="shrink-0 text-base px-6 min-h-11"
+          />
         </div>
         {docHeader?.posting_status === "draft" ? (
           <div className="rounded-lg border border-[color-mix(in_srgb,var(--primary)_28%,transparent)] bg-[var(--surface-muted)] p-4 space-y-3">
