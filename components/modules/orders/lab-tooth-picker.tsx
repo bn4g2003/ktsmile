@@ -20,6 +20,35 @@ type LabToothPickerProps = {
   className?: string;
 };
 
+function BridgeConnector({
+  active,
+  onClick,
+}: {
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="group relative -mx-1.5 flex h-9 w-3.5 items-center justify-center focus:outline-none z-10"
+      title="Nối cầu răng"
+    >
+      <div
+        className={cn(
+          "h-1.5 w-full rounded-full transition-all duration-200",
+          active
+            ? "bg-[var(--primary)] shadow-[0_0_8px_rgba(15,76,129,0.3)]"
+            : "bg-[var(--border-ghost)] group-hover:bg-[var(--on-surface-faint)]"
+        )}
+      />
+      <div className="absolute -top-7 left-1/2 -translate-x-1/2 scale-0 rounded bg-[var(--on-surface)] px-1.5 py-0.5 text-[9px] font-bold text-white transition-all group-hover:scale-100 whitespace-nowrap shadow-lg">
+        {active ? "Bỏ nối cầu" : "Nối cầu"}
+      </div>
+    </button>
+  );
+}
+
 function ToothBtn({
   num,
   selected,
@@ -52,17 +81,29 @@ function QuadrantRow({
   set,
   toggle,
   align = "left",
+  isBridgeMode,
+  toggleBridge,
 }: {
   teeth: readonly number[];
   set: Set<number>;
   toggle: (n: number) => void;
   align?: "left" | "right";
+  isBridgeMode: boolean;
+  toggleBridge: (a: number, b: number) => void;
 }) {
   const teethArray = align === "right" ? [...teeth].reverse() : [...teeth];
   return (
-    <div className="flex gap-1">
-      {teethArray.map((n) => (
-        <ToothBtn key={n} num={n} selected={set.has(n)} onToggle={() => toggle(n)} />
+    <div className="flex items-center gap-1">
+      {teethArray.map((n, i) => (
+        <React.Fragment key={n}>
+          <ToothBtn num={n} selected={set.has(n)} onToggle={() => toggle(n)} />
+          {isBridgeMode && i < teethArray.length - 1 && (
+            <BridgeConnector
+              active={set.has(n) && set.has(teethArray[i + 1])}
+              onClick={() => toggleBridge(n, teethArray[i + 1])}
+            />
+          )}
+        </React.Fragment>
       ))}
     </div>
   );
@@ -71,12 +112,28 @@ function QuadrantRow({
 export function LabToothPicker({ id, value, onChange, className }: LabToothPickerProps) {
   const set = React.useMemo(() => parseToothPositionsToSet(value), [value]);
   const archConnection = React.useMemo(() => detectArchConnection(set), [set]);
+  const [isBridgeMode, setIsBridgeMode] = React.useState(false);
 
   const toggle = React.useCallback(
     (n: number) => {
       const next = new Set(set);
       if (next.has(n)) next.delete(n);
       else next.add(n);
+      onChange(formatTeethSelection(next));
+    },
+    [set, onChange],
+  );
+
+  const toggleBridge = React.useCallback(
+    (a: number, b: number) => {
+      const next = new Set(set);
+      if (next.has(a) && next.has(b)) {
+        next.delete(a);
+        next.delete(b);
+      } else {
+        next.add(a);
+        next.add(b);
+      }
       onChange(formatTeethSelection(next));
     },
     [set, onChange],
@@ -133,6 +190,25 @@ export function LabToothPicker({ id, value, onChange, className }: LabToothPicke
               Q{cluster.label.at(-1)}
             </button>
           ))}
+          <div className="mx-1 h-3 w-px bg-[var(--border-ghost)]" />
+          <button
+            type="button"
+            onClick={() => setIsBridgeMode(!isBridgeMode)}
+            className={cn(
+              "flex items-center gap-1 rounded px-2.5 py-1 text-[10px] font-bold transition-all shadow-sm",
+              isBridgeMode
+                ? "bg-amber-500 text-white shadow-amber-200"
+                : "bg-white text-amber-600 ring-1 ring-amber-200 hover:bg-amber-50"
+            )}
+          >
+            <span className="relative flex h-1.5 w-1.5">
+              {isBridgeMode && (
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
+              )}
+              <span className={cn("relative inline-flex rounded-full h-1.5 w-1.5", isBridgeMode ? "bg-white" : "bg-amber-500")}></span>
+            </span>
+            CHẾ ĐỘ CẦU RĂNG (CR)
+          </button>
         </div>
         {set.size > 0 && (
           <button
@@ -162,10 +238,31 @@ export function LabToothPicker({ id, value, onChange, className }: LabToothPicke
       
       <div className="space-y-1.5 rounded-[var(--radius-sm)] bg-white p-2.5 shadow-sm">
         {/* Hàm trên */}
-        <div className="flex items-center justify-center gap-1.5 overflow-x-auto">
-          <QuadrantRow teeth={FDI_UPPER_RIGHT} set={set} toggle={toggle} align="right" />
-          <div className="h-9 w-px shrink-0 bg-[var(--border-ghost)]" />
-          <QuadrantRow teeth={FDI_UPPER_LEFT} set={set} toggle={toggle} align="left" />
+        <div className="flex items-center justify-center gap-1 overflow-x-auto py-2">
+          <QuadrantRow
+            teeth={FDI_UPPER_RIGHT}
+            set={set}
+            toggle={toggle}
+            align="right"
+            isBridgeMode={isBridgeMode}
+            toggleBridge={toggleBridge}
+          />
+          {isBridgeMode ? (
+            <BridgeConnector
+              active={set.has(11) && set.has(21)}
+              onClick={() => toggleBridge(11, 21)}
+            />
+          ) : (
+            <div className="h-9 w-px shrink-0 bg-[var(--border-ghost)]" />
+          )}
+          <QuadrantRow
+            teeth={FDI_UPPER_LEFT}
+            set={set}
+            toggle={toggle}
+            align="left"
+            isBridgeMode={isBridgeMode}
+            toggleBridge={toggleBridge}
+          />
         </div>
         
         {/* Đường phân cách hàm */}
@@ -178,10 +275,31 @@ export function LabToothPicker({ id, value, onChange, className }: LabToothPicke
         </div>
         
         {/* Hàm dưới */}
-        <div className="flex items-center justify-center gap-1.5 overflow-x-auto">
-          <QuadrantRow teeth={FDI_LOWER_RIGHT} set={set} toggle={toggle} align="right" />
-          <div className="h-9 w-px shrink-0 bg-[var(--border-ghost)]" />
-          <QuadrantRow teeth={FDI_LOWER_LEFT} set={set} toggle={toggle} align="left" />
+        <div className="flex items-center justify-center gap-1 overflow-x-auto py-2">
+          <QuadrantRow
+            teeth={FDI_LOWER_RIGHT}
+            set={set}
+            toggle={toggle}
+            align="right"
+            isBridgeMode={isBridgeMode}
+            toggleBridge={toggleBridge}
+          />
+          {isBridgeMode ? (
+            <BridgeConnector
+              active={set.has(41) && set.has(31)}
+              onClick={() => toggleBridge(41, 31)}
+            />
+          ) : (
+            <div className="h-9 w-px shrink-0 bg-[var(--border-ghost)]" />
+          )}
+          <QuadrantRow
+            teeth={FDI_LOWER_LEFT}
+            set={set}
+            toggle={toggle}
+            align="left"
+            isBridgeMode={isBridgeMode}
+            toggleBridge={toggleBridge}
+          />
         </div>
       </div>
       
