@@ -225,6 +225,18 @@ export function ProductsPage({ initialCatalogTab = "sales" }: { initialCatalogTa
         cell: ({ getValue }) => ((getValue() as boolean) ? "Có" : "Không"),
       },
       {
+        accessorKey: "created_at",
+        header: "Tạo lúc",
+        size: 160,
+        cell: ({ getValue }) => (getValue() ? new Date(String(getValue())).toLocaleString("vi-VN") : "—"),
+      },
+      {
+        accessorKey: "updated_at",
+        header: "Cập nhật",
+        size: 160,
+        cell: ({ getValue }) => (getValue() ? new Date(String(getValue())).toLocaleString("vi-VN") : "—"),
+      },
+      {
         id: "actions",
         header: "Thao tác",
         enableHiding: false,
@@ -269,6 +281,18 @@ export function ProductsPage({ initialCatalogTab = "sales" }: { initialCatalogTa
           ],
         },
         cell: ({ getValue }) => ((getValue() as boolean) ? "Có" : "Không"),
+      },
+      {
+        accessorKey: "created_at",
+        header: "Tạo lúc",
+        size: 160,
+        cell: ({ getValue }) => (getValue() ? new Date(String(getValue())).toLocaleString("vi-VN") : "—"),
+      },
+      {
+        accessorKey: "updated_at",
+        header: "Cập nhật",
+        size: 160,
+        cell: ({ getValue }) => (getValue() ? new Date(String(getValue())).toLocaleString("vi-VN") : "—"),
       },
       {
         id: "actions",

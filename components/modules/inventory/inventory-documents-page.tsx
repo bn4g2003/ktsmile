@@ -401,7 +401,27 @@ export function InventoryDocumentsPage({ initialTab = "inbound" }: { initialTab?
       {
         accessorKey: "total_amount",
         header: "Tổng tiền",
-        cell: ({ getValue }) => Number(getValue() ?? 0).toLocaleString("vi-VN"),
+        size: 120,
+        cell: ({ getValue }) => (
+          <div className="text-right font-semibold tabular-nums">
+            {Number(getValue() ?? 0).toLocaleString("vi-VN")}
+          </div>
+        ),
+      },
+      { accessorKey: "line_count", header: "Số dòng", size: 90 },
+      { accessorKey: "reason", header: "Lý do / Mô tả", size: 200, meta: { filterKey: "reason", filterType: "text" } },
+      { accessorKey: "notes", header: "Ghi chú", size: 200 },
+      {
+        accessorKey: "created_at",
+        header: "Tạo lúc",
+        size: 160,
+        cell: ({ getValue }) => formatDate(String(getValue())),
+      },
+      {
+        accessorKey: "updated_at",
+        header: "Cập nhật",
+        size: 160,
+        cell: ({ getValue }) => formatDate(String(getValue())),
       },
       {
         id: "actions",

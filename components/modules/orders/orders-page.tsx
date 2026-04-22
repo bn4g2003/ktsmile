@@ -910,13 +910,52 @@ export function OrdersPage() {
       },
       {
         accessorKey: "total_amount",
-        header: "Tổng tiền",
+        header: "Tổng đơn",
         size: 120,
         cell: ({ getValue }) => (
           <div className="text-right font-semibold tabular-nums">
             {Number(getValue() ?? 0).toLocaleString("vi-VN")}
           </div>
         )
+      },
+      {
+        accessorKey: "grand_total",
+        header: "Thành tiền",
+        size: 130,
+        cell: ({ getValue }) => (
+          <div className="text-right font-bold text-[color-mix(in_srgb,var(--primary)_60%,var(--on-surface))] tabular-nums">
+            {Number(getValue() ?? 0).toLocaleString("vi-VN")}
+          </div>
+        )
+      },
+      {
+        accessorKey: "order_category",
+        header: "Loại đơn",
+        size: 100,
+        meta: {
+          filterKey: "order_category",
+          filterType: "select",
+          filterOptions: [...labOrderCategoryOptions],
+        },
+        cell: ({ getValue }) => {
+          const val = String(getValue());
+          return labOrderCategoryOptions.find(o => o.value === val)?.label ?? val;
+        }
+      },
+      { accessorKey: "tooth_positions_summary", header: "Răng", size: 140 },
+      { accessorKey: "tooth_count_total", header: "SL Răng", size: 90, cell: ({ getValue }) => getValue() ?? "—" },
+      { accessorKey: "notes", header: "Ghi chú", size: 200 },
+      { accessorKey: "patient_year_of_birth", header: "Năm sinh", size: 90, cell: ({ getValue }) => getValue() ?? "—" },
+      {
+        accessorKey: "patient_gender",
+        header: "Phái",
+        size: 80,
+        cell: ({ getValue }) => {
+          const val = getValue();
+          if (val === "male") return "Nam";
+          if (val === "female") return "Nữ";
+          return "—";
+        }
       },
       {
         id: "actions",
