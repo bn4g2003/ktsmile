@@ -32,7 +32,7 @@ export async function getSummaryReport(month: number, year: number): Promise<Sum
       tooth_count,
       work_type,
       products!lab_order_lines_product_id_fkey(code, name),
-      lab_orders!lab_order_lines_order_id_fkey(id, received_at, partner_id, status)
+      lab_orders!lab_order_lines_order_id_fkey!inner(id, received_at, partner_id, status)
     `)
     .gte("lab_orders.received_at", startDate)
     .lte("lab_orders.received_at", endDate)
@@ -47,6 +47,8 @@ export async function getSummaryReport(month: number, year: number): Promise<Sum
 
   for (const line of lines ?? []) {
     const order = (line.lab_orders as any);
+    if (!order) continue; // Bỏ qua nếu không có thông tin đơn hàng (do filter)
+
     const product = (line.products as any);
     const count = Number(line.tooth_count ?? 0);
 
