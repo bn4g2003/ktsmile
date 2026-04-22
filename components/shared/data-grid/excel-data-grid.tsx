@@ -619,6 +619,22 @@ export function ExcelDataGrid<T>({
                           onCommit={setFilter}
                           triggerId={"dg-filter-" + String(col.id)}
                         />
+                      ) : ft === "date_range" ? (
+                        <div className="flex items-center gap-2">
+                          <Input
+                            type="date"
+                            value={filters[fk + "_from"] ?? ""}
+                            onChange={(e) => setFilter(fk + "_from", e.target.value)}
+                            className="h-9 py-1 text-xs"
+                          />
+                          <span className="text-[var(--on-surface-faint)]">—</span>
+                          <Input
+                            type="date"
+                            value={filters[fk + "_to"] ?? ""}
+                            onChange={(e) => setFilter(fk + "_to", e.target.value)}
+                            className="h-9 py-1 text-xs"
+                          />
+                        </div>
                       ) : (
                         <Input
                           id={"dg-filter-" + String(col.id)}
@@ -755,6 +771,34 @@ export function ExcelDataGrid<T>({
                             onCommit={setFilter}
                             triggerId={"dg-th-" + String(col.id)}
                           />
+                        </td>
+                      );
+                    }
+                    if (ft === "date_range") {
+                      return (
+                        <td
+                          key={col.id}
+                          className={cn(
+                            "px-3 py-2 first:pl-4 last:pr-4",
+                            col.id === "actions" &&
+                              "sticky right-0 z-20 w-[68px] max-w-[68px] !min-w-0 !px-2 bg-[var(--surface-muted)] shadow-[-4px_0_8px_rgba(0,0,0,0.05)]",
+                          )}
+                        >
+                          <div className="flex items-center gap-1">
+                            <Input
+                              type="date"
+                              value={filters[fk + "_from"] ?? ""}
+                              onChange={(e) => setFilter(fk + "_from", e.target.value)}
+                              className="h-9 px-1 text-[10px]"
+                            />
+                            <span className="text-[var(--on-surface-faint)] text-[10px]">—</span>
+                            <Input
+                              type="date"
+                              value={filters[fk + "_to"] ?? ""}
+                              onChange={(e) => setFilter(fk + "_to", e.target.value)}
+                              className="h-9 px-1 text-[10px]"
+                            />
+                          </div>
                         </td>
                       );
                     }

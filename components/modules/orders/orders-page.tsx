@@ -848,13 +848,12 @@ export function OrdersPage() {
         accessorKey: "received_at",
         header: "Ngày nhận",
         size: 160,
-        meta: { filterKey: "received_from", filterType: "text" },
+        meta: { filterKey: "received", filterType: "date_range" },
         cell: ({ row }) => formatDate(row.original.received_at),
       },
       {
         id: "received_to",
         header: "Thời gian hẹn",
-        meta: { filterKey: "received_to", filterType: "text" },
         cell: ({ row }) => {
           const explicitDue = (row.original as unknown as { due_delivery_at?: string | null }).due_delivery_at;
           const due = explicitDue ?? nextMorningDeliveryFromReceived(row.original.received_at);

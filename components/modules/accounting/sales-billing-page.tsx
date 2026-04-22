@@ -103,7 +103,7 @@ export function SalesBillingPage() {
           </Link>
         ),
       },
-      { accessorKey: "received_at", header: "Ngày nhận", meta: { filterKey: "received_from", filterType: "text" }, cell: ({ row }) => formatDate(row.original.received_at) },
+      { accessorKey: "received_at", header: "Ngày nhận", meta: { filterKey: "received", filterType: "date_range" }, cell: ({ row }) => formatDate(row.original.received_at) },
       { accessorKey: "partner_code", header: "Mã KH", meta: { filterKey: "partner_code", filterType: "text" } },
       { accessorKey: "partner_name", header: "Khách", meta: { filterKey: "partner_name", filterType: "text" } },
       { accessorKey: "patient_name", header: "Bệnh nhân", meta: { filterKey: "patient_name", filterType: "text" } },

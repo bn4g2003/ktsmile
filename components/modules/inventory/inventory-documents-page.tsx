@@ -353,7 +353,7 @@ export function InventoryDocumentsPage({ initialTab = "inbound" }: { initialTab?
       {
         accessorKey: "document_date",
         header: "Ngày",
-        meta: { filterKey: "document_date_from", filterType: "text" },
+        meta: { filterKey: "document_date", filterType: "date_range" },
       },
       {
         accessorKey: "movement_type",

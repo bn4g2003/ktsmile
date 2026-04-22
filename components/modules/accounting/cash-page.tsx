@@ -222,13 +222,7 @@ export function CashPage() {
 
   const columns = React.useMemo<ColumnDef<CashRow, unknown>[]>(
     () => [
-      { accessorKey: "transaction_date", header: "Ngày", meta: { filterKey: "transaction_date_from", filterType: "text" } },
-      {
-        id: "td_to",
-        header: "Đến",
-        meta: { filterKey: "transaction_date_to", filterType: "text" },
-        cell: () => "",
-      },
+      { accessorKey: "transaction_date", header: "Ngày", meta: { filterKey: "transaction_date", filterType: "date_range" } },
       { accessorKey: "doc_number", header: "Số CT", meta: { filterKey: "doc_number", filterType: "text" } },
       { accessorKey: "payment_channel", header: "Kênh", meta: { filterKey: "payment_channel", filterType: "text" } },
       {
