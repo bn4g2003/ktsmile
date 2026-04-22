@@ -17,7 +17,11 @@ export type SummaryReportData = {
 };
 
 /** Báo cáo tổng hợp sản lượng và phát sinh khách hàng */
-export async function getSummaryReport(month: number, year: number): Promise<SummaryReportData> {
+export async function getSummaryReport(
+  month: number,
+  year: number,
+  filters: { partnerId?: string; productId?: string } = {},
+): Promise<SummaryReportData> {
   const supabase = createSupabaseAdmin();
   
   // Tạo dải thời gian từ đầu tháng đến cuối tháng
@@ -25,18 +29,27 @@ export async function getSummaryReport(month: number, year: number): Promise<Sum
   const endDate = new Date(year, month, 0).toISOString().split("T")[0];
 
   // Lấy chi tiết các dòng đơn hàng trong khoảng thời gian
-  const { data: lines, error: linesError } = await supabase
+  let query = supabase
     .from("lab_order_lines")
     .select(`
       id,
       tooth_count,
       work_type,
-      products!lab_order_lines_product_id_fkey(code, name),
+      products!lab_order_lines_product_id_fkey!inner(id, code, name),
       lab_orders!lab_order_lines_order_id_fkey!inner(id, received_at, partner_id, status)
     `)
     .gte("lab_orders.received_at", startDate)
     .lte("lab_orders.received_at", endDate)
     .neq("lab_orders.status", "cancelled");
+
+  if (filters.partnerId) {
+    query = query.eq("lab_orders.partner_id", filters.partnerId);
+  }
+  if (filters.productId) {
+    query = query.eq("product_id", filters.productId);
+  }
+
+  const { data: lines, error: linesError } = await query;
 
   if (linesError) throw new Error(linesError.message);
 
