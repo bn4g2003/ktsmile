@@ -77,10 +77,10 @@ export function DebtPage({ initialTab = "receivables" }: { initialTab?: DebtTab 
     () => [
       { accessorKey: "partner_code", header: "Mã KH", meta: { filterKey: "partner_code", filterType: "text" } },
       { accessorKey: "partner_name", header: "Tên KH", meta: { filterKey: "partner_name", filterType: "text" } },
-      { accessorKey: "opening", header: "Nợ đầu kỳ" },
-      { accessorKey: "orders_month", header: "PS bán (tháng)" },
-      { accessorKey: "receipts_month", header: "Đã thu (tháng)" },
-      { accessorKey: "closing", header: "Nợ cuối kỳ" },
+      { accessorKey: "opening", header: "Nợ đầu kỳ", cell: ({ getValue }) => Number(getValue()).toLocaleString("vi-VN") },
+      { accessorKey: "orders_month", header: "PS bán (tháng)", cell: ({ getValue }) => Number(getValue()).toLocaleString("vi-VN") },
+      { accessorKey: "receipts_month", header: "Đã thu (tháng)", cell: ({ getValue }) => Number(getValue()).toLocaleString("vi-VN") },
+      { accessorKey: "closing", header: "Nợ cuối kỳ", cell: ({ getValue }) => Number(getValue()).toLocaleString("vi-VN") },
       {
         id: "record_payment",
         header: "Ghi thu",
@@ -101,10 +101,10 @@ export function DebtPage({ initialTab = "receivables" }: { initialTab?: DebtTab 
     () => [
       { accessorKey: "supplier_code", header: "Mã NCC", meta: { filterKey: "supplier_code", filterType: "text" } },
       { accessorKey: "supplier_name", header: "Tên NCC", meta: { filterKey: "supplier_name", filterType: "text" } },
-      { accessorKey: "opening", header: "Nợ đầu kỳ" },
-      { accessorKey: "inbound_month", header: "PS nhập (tháng)" },
-      { accessorKey: "payments_month", header: "Đã trả (tháng)" },
-      { accessorKey: "closing", header: "Nợ cuối kỳ" },
+      { accessorKey: "opening", header: "Nợ đầu kỳ", cell: ({ getValue }) => Number(getValue()).toLocaleString("vi-VN") },
+      { accessorKey: "inbound_month", header: "PS nhập (tháng)", cell: ({ getValue }) => Number(getValue()).toLocaleString("vi-VN") },
+      { accessorKey: "payments_month", header: "Đã trả (tháng)", cell: ({ getValue }) => Number(getValue()).toLocaleString("vi-VN") },
+      { accessorKey: "closing", header: "Nợ cuối kỳ", cell: ({ getValue }) => Number(getValue()).toLocaleString("vi-VN") },
       {
         id: "record_payment",
         header: "Ghi chi",

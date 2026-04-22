@@ -240,7 +240,7 @@ export function CashPage() {
         header: "Nghiệp vụ",
         meta: { filterKey: "business_category", filterType: "text" },
       },
-      { accessorKey: "amount", header: "Số tiền" },
+      { accessorKey: "amount", header: "Số tiền", cell: ({ getValue }) => Number(getValue()).toLocaleString("vi-VN") },
       { accessorKey: "partner_code", header: "Mã KH", meta: { filterKey: "partner_code", filterType: "text" } },
       { accessorKey: "partner_name", header: "Khách hàng", meta: { filterKey: "partner_name", filterType: "text" } },
       { accessorKey: "supplier_code", header: "Mã NCC", meta: { filterKey: "supplier_code", filterType: "text" } },

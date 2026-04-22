@@ -209,7 +209,7 @@ export function ProductsPage({ initialCatalogTab = "sales" }: { initialCatalogTa
       { accessorKey: "code", header: "Mã SP", meta: { filterKey: "code", filterType: "text" } },
       { accessorKey: "name", header: "Tên", meta: { filterKey: "name", filterType: "text" } },
       { accessorKey: "unit", header: "ĐVT" },
-      { accessorKey: "unit_price", header: "Đơn giá" },
+      { accessorKey: "unit_price", header: "Đơn giá", cell: ({ getValue }) => Number(getValue()).toLocaleString("vi-VN") },
       { accessorKey: "warranty_years", header: "BH (năm)" },
       {
         accessorKey: "is_active",

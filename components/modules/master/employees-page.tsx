@@ -181,7 +181,7 @@ export function EmployeesPage() {
         header: "Quyền hạn",
         cell: ({ getValue }) => permissionPresetLabel((getValue() as string | null) ?? null),
       },
-      { accessorKey: "base_salary", header: "Lương CB" },
+      { accessorKey: "base_salary", header: "Lương CB", cell: ({ getValue }) => Number(getValue()).toLocaleString("vi-VN") },
       {
         accessorKey: "auth_user_id",
         header: "Auth user",
