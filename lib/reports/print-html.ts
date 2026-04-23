@@ -10,7 +10,8 @@ export function buildPrintShell(title: string, innerBodyHtml: string): string {
   return `<!DOCTYPE html><html lang="vi"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width"/><title>${t}</title><style>
     *,*::before,*::after{box-sizing:border-box;}
     html,body{margin:0;}
-    body{font-family:system-ui,"Segoe UI",Roboto,"Helvetica Neue","Noto Sans",Arial,sans-serif;padding:18px;color:#1a2332;font-size:12px;line-height:1.45;max-width:210mm;margin:0 auto;}
+    body{font-family:system-ui,"Segoe UI",Roboto,"Helvetica Neue","Noto Sans",Arial,sans-serif;padding:18px;color:#1a2332;font-size:12px;line-height:1.45;max-width:190mm;margin:0 auto;}
+    .print-root{max-width:100%;width:100%;min-width:0;}
     .report-header{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;margin-bottom:24px;padding-bottom:12px;}
     .report-header .logo-box{flex:0 0 160px;min-width:0;}
     .report-header .logo{width:100%;height:auto;display:block;}
@@ -41,14 +42,23 @@ export function buildPrintShell(title: string, innerBodyHtml: string): string {
     .gbtt-batch-print article.gbtt-batch-page:last-of-type{page-break-after:auto;break-after:auto;}
 
     @media print{
-      html,body{max-width:none!important;width:100%!important;margin:0!important;padding:0!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
-      @page{margin:10mm;size:A4 portrait;}
-      .report-header{margin-bottom:15px;gap:12px;}
-      .report-header .logo-box{flex:0 0 130px;}
-      table{max-width:100%;}
+      html,body{max-width:100%!important;width:100%!important;margin:0!important;padding:0!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+      /* Lề phải rộng hơn một chút — tránh cắt viền bảng khi in / Xuất PDF (Chrome). */
+      @page{margin:11mm 13mm 11mm 11mm;size:A4 portrait;}
+      .print-root{
+        max-width:100%;
+        width:100%;
+        min-width:0;
+        box-sizing:border-box;
+        padding:0 0.5mm 0 0;
+      }
+      .report-header{margin-bottom:15px;gap:10px;min-width:0;}
+      .report-header .logo-box{flex:0 0 120px;min-width:0;}
+      .report-header .company-box{min-width:0;}
+      table{max-width:100%!important;width:100%!important;}
       th,td{overflow:visible;word-break:break-word;}
     }
-  </style></head><body><div class="report-header"><div class="logo-box"><img src="/logobaocao.png" alt="Logo" class="logo"/></div><div class="company-box"><div class="company-name">CÔNG TY TNHH KTSMILE MILLING CENTER</div><div class="company-info">Địa chỉ: 447/10 Đường Tân Sơn, Phường An Hội Tây, TP.Hồ Chí Minh</div><div class="company-info">MST: 0318968071 · SĐT: 0906353568</div><div class="company-info">STK: 886978683 Ngân hàng Thương mại cổ phần Quân Đội</div></div></div>${innerBodyHtml}</body></html>`;
+  </style></head><body><div class="print-root"><div class="report-header"><div class="logo-box"><img src="/logobaocao.png" alt="Logo" class="logo"/></div><div class="company-box"><div class="company-name">CÔNG TY TNHH KTSMILE MILLING CENTER</div><div class="company-info">Địa chỉ: 447/10 Đường Tân Sơn, Phường An Hội Tây, TP.Hồ Chí Minh</div><div class="company-info">MST: 0318968071 · SĐT: 0906353568</div><div class="company-info">STK: 886978683 Ngân hàng Thương mại cổ phần Quân Đội</div></div></div>${innerBodyHtml}</div></body></html>`;
 }
 
 /**

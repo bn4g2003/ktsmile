@@ -371,7 +371,7 @@ export function buildPayrollSlipHtml(
         }
         @media print {
           html, body { max-width: none !important; width: 100% !important; margin: 0 !important; padding: 0 !important; }
-          @page { size: A4 portrait; margin: 10mm; }
+          @page { size: A4 portrait; margin: 11mm 13mm 11mm 11mm; }
           .payroll-slip { max-width: none; width: 100%; }
           .salary-table th, .salary-table td { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
           .title-band, .section-row td, .total-row td, .value-cell, .employee-table td { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -507,7 +507,7 @@ export function buildPayrollBatchPrintHtml(
         }
         @media print {
           html, body { max-width: none !important; width: 100% !important; margin: 0 !important; padding: 0 !important; }
-          @page { size: A4 portrait; margin: 10mm; }
+          @page { size: A4 portrait; margin: 11mm 13mm 11mm 11mm; }
           .payroll-slip { max-width: none; width: 100%; }
         }
       </style>
