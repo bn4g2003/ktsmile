@@ -50,6 +50,13 @@ function fmtQty(n: number) {
   return new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 4 }).format(n);
 }
 
+function lineDiscountLabel(discountPercent: number, discountAmount: number): string {
+  const parts: string[] = [];
+  if (discountPercent > 0) parts.push(`${discountPercent}%`);
+  if (discountAmount > 0) parts.push(formatVnd(discountAmount));
+  return parts.join(" + ") || "—";
+}
+
 export function buildLabOrderBodyHtml(p: LabOrderPrintPayload): string {
   const gen = formatDateTime(new Date());
   const partnerInner =
@@ -83,6 +90,7 @@ export function buildLabOrderBodyHtml(p: LabOrderPrintPayload): string {
           <td style="width:120px;">${escapeHtml(l.tooth_positions)}${l.shade ? ` · ${escapeHtml(l.shade)}` : ""}</td>
           <td class="num" style="width:40px;">${escapeHtml(fmtQty(l.quantity))}</td>
           <td class="num" style="width:85px;">${escapeHtml(formatVnd(l.unit_price))}</td>
+          <td class="num" style="width:82px;">${escapeHtml(lineDiscountLabel(l.discount_percent, l.discount_amount))}</td>
           <td class="num" style="width:105px;"><strong>${escapeHtml(formatVnd(l.line_amount))}</strong></td>
           <td>${escapeHtml(l.notes ?? "—")}</td>
         </tr>`,
@@ -128,14 +136,15 @@ export function buildLabOrderBodyHtml(p: LabOrderPrintPayload): string {
           <th style="color:#fff;">RĂNG/MÀU</th>
           <th class="num" style="color:#fff;">SL</th>
           <th class="num" style="color:#fff;">ĐƠN GIÁ</th>
+          <th class="num" style="color:#fff;">CK DÒNG</th>
           <th class="num" style="color:#fff;">THÀNH TIỀN</th>
           <th style="color:#fff;">GHI CHÚ</th>
         </tr>
       </thead>
-      <tbody>${rows || `<tr><td colspan="8">Chưa có dòng.</td></tr>`}</tbody>
+      <tbody>${rows || `<tr><td colspan="9">Chưa có dòng.</td></tr>`}</tbody>
       <tfoot>
         <tr class="total-row">
-          <td colspan="6" class="num" style="font-weight:700;border:none;">TỔNG CỘNG:</td>
+          <td colspan="7" class="num" style="font-weight:700;border:none;">TỔNG CỘNG:</td>
           <td class="num" style="font-weight:800;font-size:13px;background:#f1f5f9;">${escapeHtml(formatVnd(total))}</td>
           <td style="border:none;"></td>
         </tr>

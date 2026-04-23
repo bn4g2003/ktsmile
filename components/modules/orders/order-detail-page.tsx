@@ -43,8 +43,7 @@ import {
   createLabOrderLine,
   deleteLabOrderLine,
   getLabOrder,
-  getPartnerDefaultDiscount,
-  getSuggestedLinePrice,
+  getSuggestedLinePricing,
   listLabOrderLines,
   updateLabOrderLine,
   updateLabOrderStatus,
@@ -151,12 +150,9 @@ export function OrderDetailPage() {
 
   const suggestPrice = React.useCallback(async () => {
     if (!partnerId || !productId) return;
-    const [p, d] = await Promise.all([
-      getSuggestedLinePrice(partnerId, productId),
-      getPartnerDefaultDiscount(partnerId),
-    ]);
-    setPrice(String(p));
-    setDisc(String(d));
+    const s = await getSuggestedLinePricing(partnerId, productId);
+    setPrice(String(s.unit_price));
+    setDisc(String(s.discount_percent));
   }, [partnerId, productId]);
 
   React.useEffect(() => {

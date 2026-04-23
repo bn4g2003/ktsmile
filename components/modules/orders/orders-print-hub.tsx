@@ -130,7 +130,7 @@ export function OrdersPrintHub({ partners }: { partners: Partner[] }) {
       writeAndPrintToWindow(win, buildPrintShell(title, buildDeliveryNoteBodyHtml(payload)));
     } catch (e) {
       win.close();
-      window.alert(e instanceof Error ? e.message : "Không in được phiếu giao.");
+      window.alert(e instanceof Error ? e.message : "Không in được hóa đơn.");
     } finally {
       setShipBusy(false);
     }
@@ -152,7 +152,7 @@ export function OrdersPrintHub({ partners }: { partners: Partner[] }) {
       }
       const aoa = buildDeliveryNoteExcelAoa(payload);
       const slug = `${payload.partner_code ?? "giao"}_thang${m}_${y}`.replace(/[^\w.-]+/g, "_");
-      await writeXlsx(aoa, "PhieuGiao", `PhieuGiaoThang_${slug}.xlsx`);
+      await writeXlsx(aoa, "HoaDon", `HoaDonPhongNhaThang_${slug}.xlsx`);
     } catch (e) {
       window.alert(e instanceof Error ? e.message : "Không xuất được Excel.");
     } finally {
@@ -262,7 +262,7 @@ export function OrdersPrintHub({ partners }: { partners: Partner[] }) {
           In giấy báo thanh toán &amp; phiếu giao hàng
         </h1>
         <p className="mt-1 max-w-3xl text-sm text-[var(--on-surface-muted)]">
-          In hoặc <strong>xuất Excel</strong>: GBTT theo tháng, phiếu giao theo tháng từng lab, hoặc theo từng mã đơn.
+          In hoặc <strong>xuất Excel</strong>: GBTT theo tháng, hóa đơn phòng nha/labo theo tháng từng lab, hoặc theo từng mã đơn.
           Lọc theo <strong>ngày nhận đơn</strong>.
         </p>
       </div>
@@ -315,9 +315,9 @@ export function OrdersPrintHub({ partners }: { partners: Partner[] }) {
       </Card>
 
       <Card className="p-5">
-        <h2 className="text-base font-semibold text-[var(--on-surface)]">Phiếu giao hàng theo tháng (từng lab)</h2>
+        <h2 className="text-base font-semibold text-[var(--on-surface)]">Hóa đơn phòng nha/labo theo tháng (từng lab)</h2>
         <p className="mt-1 text-sm text-[var(--on-surface-muted)]">
-          Một phiếu gộp mọi đơn của lab trong tháng (theo ngày nhận), giống phiếu giao theo ngày nhưng cả tháng.
+          Một hóa đơn gộp mọi đơn của lab trong tháng (theo ngày nhận), giống phiếu giao theo ngày nhưng cả tháng.
         </p>
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <div className="grid gap-1.5">
@@ -361,10 +361,10 @@ export function OrdersPrintHub({ partners }: { partners: Partner[] }) {
             disabled={shipBusy}
             onClick={() => void printMonthlyDelivery()}
           >
-            {shipBusy ? "Đang xử lý…" : "In phiếu giao theo tháng (PDF)"}
+            {shipBusy ? "Đang xử lý…" : "In hóa đơn phòng nha/labo theo tháng (PDF)"}
           </Button>
           <Button type="button" variant="secondary" size="sm" disabled={shipBusy} onClick={() => void exportMonthlyDeliveryExcel()}>
-            {shipBusy ? "Đang xử lý…" : "Xuất Excel phiếu giao theo tháng"}
+            {shipBusy ? "Đang xử lý…" : "Xuất Excel hóa đơn theo tháng"}
           </Button>
         </div>
       </Card>

@@ -65,8 +65,7 @@ import {
   fetchLabOrderLinesForExport,
   getDailyDeliveryNotePayload,
   getLabOrder,
-  getPartnerDefaultDiscount,
-  getSuggestedLinePrice,
+  getSuggestedLinePricing,
   listLabOrders,
   updateLabOrder,
   updateLabOrderStatus,
@@ -380,6 +379,16 @@ function OrdersPrintExportMenu({
         if (c && n) return `${c} — ${n}`;
         return c || n || "";
       };
+      const lineDiscountCell = (pct: number, vnd: number) => {
+        const out: string[] = [];
+        if (pct > 0) out.push(`${pct}%`);
+        if (vnd > 0) out.push(vnd.toLocaleString("vi-VN"));
+        return out.join(" + ");
+      };
+      const lineNetUnitPrice = (qty: number, amount: number, fallbackUnitPrice: number) => {
+        if (qty > 0) return amount / qty;
+        return fallbackUnitPrice;
+      };
 
       const aoa: (string | number | null)[][] = [
         [
@@ -395,7 +404,9 @@ function OrdersPrintExportMenu({
           "Sản phẩm",
           "Vị trí răng",
           "Số lượng",
-          "Đơn giá",
+          "Đơn giá gốc",
+          "CK dòng",
+          "Đơn giá sau CK",
           "Thành tiền",
           "Cộng tiền hàng",
           "Phải thu",
@@ -426,6 +437,8 @@ function OrdersPrintExportMenu({
             "",
             "",
             "",
+            "",
+            "",
             r.total_amount,
             r.grand_total,
             r.notes ?? "",
@@ -440,6 +453,8 @@ function OrdersPrintExportMenu({
               ln.tooth_positions,
               ln.quantity,
               ln.unit_price,
+              lineDiscountCell(ln.discount_percent, ln.discount_amount),
+              lineNetUnitPrice(ln.quantity, ln.line_amount, ln.unit_price),
               ln.line_amount,
               r.total_amount,
               r.grand_total,
@@ -571,12 +586,13 @@ export function OrdersPage() {
   const hydrateDraftPrices = React.useCallback(async (key: string, productIdFor: string) => {
     if (!partnerId.trim() || !productIdFor) return;
     try {
-      const [p, d] = await Promise.all([
-        getSuggestedLinePrice(partnerId, productIdFor),
-        getPartnerDefaultDiscount(partnerId),
-      ]);
+      const s = await getSuggestedLinePricing(partnerId, productIdFor);
       setDraftLines((prev) =>
-        prev.map((l) => (l.key === key ? { ...l, price: String(p), disc: String(d) } : l)),
+        prev.map((l) =>
+          l.key === key
+            ? { ...l, price: String(s.unit_price), disc: String(s.discount_percent) }
+            : l,
+        ),
       );
     } catch {
       /* ignore */

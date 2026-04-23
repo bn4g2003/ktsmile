@@ -84,6 +84,15 @@ function noteCell(lineNotes: string | null | undefined, orderNotes: string | nul
   return parts.join(" · ");
 }
 
+function monthlyDisplayUnitPrice(line: DeliveryNoteLine): number {
+  const qty = Number(line.quantity ?? 0);
+  const amount = Number(line.line_amount ?? 0);
+  if (qty > 0 && Number.isFinite(amount)) {
+    return amount / qty;
+  }
+  return Number(line.unit_price ?? 0);
+}
+
 export function deliveryNotePartnerDisplayName(p: Pick<DeliveryNotePayload, "partner_code" | "partner_name">): string {
   const c = p.partner_code?.trim();
   const n = p.partner_name?.trim();
@@ -216,7 +225,7 @@ function buildMonthlyFlatDeliveryNoteHtml(p: DeliveryNotePayload): string {
       const toothRaw = [l.tooth_positions?.trim(), l.shade?.trim()].filter(Boolean).join(" · ") || "—";
       const tooth = escapeHtml(toothRaw);
       const gc = escapeHtml(noteCell(l.notes, o.notes));
-      const up = l.unit_price ?? 0;
+      const up = monthlyDisplayUnitPrice(l);
       const amt = l.line_amount ?? 0;
       rowHtml.push(
         `<tr>
@@ -236,7 +245,7 @@ function buildMonthlyFlatDeliveryNoteHtml(p: DeliveryNotePayload): string {
   }
 
   return `
-    <h1 style="color:#0f172a;text-align:center;margin-bottom:4px;">PHIẾU GIAO HÀNG</h1>
+    <h1 style="color:#0f172a;text-align:center;margin-bottom:4px;">HOÁ ĐƠN PHÒNG NHA / LABO</h1>
     <p style="text-align:center;font-size:15px;font-weight:700;color:#0f172a;margin:0 0 6px;">${heading}</p>
     ${sub ? `<p style="text-align:center;font-size:11px;color:#475569;margin:0 0 10px;">${sub}</p>` : ""}
 
@@ -309,13 +318,14 @@ function buildMonthlyFlatDeliveryNoteHtml(p: DeliveryNotePayload): string {
 
 export function deliveryNotePrintTitle(p: DeliveryNotePayload): string {
   const who = p.partner_code || p.partner_name || "Khách hàng";
+  const docLabel = p.layout === "monthly_flat" ? "Hóa đơn phòng nha/labo" : "Phiếu giao hàng";
   if (p.period_heading?.trim()) {
-    return `Phiếu giao hàng · ${p.period_heading.trim()} · ${who}`;
+    return `${docLabel} · ${p.period_heading.trim()} · ${who}`;
   }
   if (p.period_subtitle?.trim()) {
-    return `Phiếu giao hàng · ${p.period_subtitle.trim()} · ${who}`;
+    return `${docLabel} · ${p.period_subtitle.trim()} · ${who}`;
   }
-  return `Phiếu giao hàng ${p.delivery_date} · ${who}`;
+  return `${docLabel} ${p.delivery_date} · ${who}`;
 }
 
 export function buildDeliveryNoteBodyHtml(p: DeliveryNotePayload): string {

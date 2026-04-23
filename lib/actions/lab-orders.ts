@@ -742,6 +742,43 @@ export async function getPartnerDefaultDiscount(partnerId: string) {
     : 0;
 }
 
+/** Giá + CK gợi ý khi chọn KH + SP ở form dòng đơn. */
+export async function getSuggestedLinePricing(
+  partnerId: string,
+  productId: string,
+): Promise<{ unit_price: number; discount_percent: number }> {
+  const supabase = createSupabaseAdmin();
+
+  const [{ data: pp }, { data: pr }, partnerDisc] = await Promise.all([
+    supabase
+      .from("partner_product_prices")
+      .select("unit_price")
+      .eq("partner_id", partnerId)
+      .eq("product_id", productId)
+      .maybeSingle(),
+    supabase
+      .from("products")
+      .select("unit_price")
+      .eq("id", productId)
+      .maybeSingle(),
+    getPartnerDefaultDiscount(partnerId),
+  ]);
+
+  const basePrice = Number(pr?.unit_price ?? 0);
+  const customPrice = pp?.unit_price != null ? Number(pp.unit_price) : null;
+  if (customPrice != null) {
+    if (basePrice > 0) {
+      const raw = ((basePrice - customPrice) / basePrice) * 100;
+      const clamped = Math.min(100, Math.max(0, raw));
+      const rounded = Math.round(clamped * 100) / 100;
+      return { unit_price: basePrice, discount_percent: rounded };
+    }
+    return { unit_price: customPrice, discount_percent: 0 };
+  }
+
+  return { unit_price: basePrice, discount_percent: partnerDisc };
+}
+
 export async function getLabOrder(id: string) {
   const supabase = createSupabaseAdmin();
   const { data, error } = await supabase
@@ -1203,6 +1240,8 @@ export type LabOrderLineExportFlat = {
   tooth_positions: string;
   quantity: number;
   unit_price: number;
+  discount_percent: number;
+  discount_amount: number;
   line_amount: number;
   product_code: string | null;
   product_name: string | null;
@@ -1224,7 +1263,7 @@ export async function fetchLabOrderLinesForExport(
     const { data, error } = await supabase
       .from("lab_order_lines")
       .select(
-        "id, order_id, created_at, tooth_positions, quantity, unit_price, line_amount, products!lab_order_lines_product_id_fkey(code,name)",
+        "id, order_id, created_at, tooth_positions, quantity, unit_price, discount_percent, discount_amount, line_amount, products!lab_order_lines_product_id_fkey(code,name)",
       )
       .in("order_id", chunk);
     if (error) throw new Error(error.message);
@@ -1238,6 +1277,8 @@ export async function fetchLabOrderLinesForExport(
         tooth_positions: (rec["tooth_positions"] as string) ?? "",
         quantity: finiteNumber(rec["quantity"], 0),
         unit_price: finiteNumber(rec["unit_price"]),
+        discount_percent: finiteNumber(rec["discount_percent"], 0),
+        discount_amount: finiteNumber(rec["discount_amount"], 0),
         line_amount: finiteNumber(rec["line_amount"]),
         product_code: pr?.code ?? null,
         product_name: pr?.name ?? null,

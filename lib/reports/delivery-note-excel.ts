@@ -6,6 +6,13 @@ function noteCell(lineNotes: string | null | undefined, orderNotes: string | nul
   return parts.join(" · ");
 }
 
+function monthlyDisplayUnitPrice(qtyRaw: number, amountRaw: number, fallbackRaw: number): number {
+  const qty = Number(qtyRaw ?? 0);
+  const amount = Number(amountRaw ?? 0);
+  if (qty > 0 && Number.isFinite(amount)) return amount / qty;
+  return Number(fallbackRaw ?? 0);
+}
+
 function appendPartnerDetailRows(aoa: (string | number | null)[][], p: DeliveryNotePayload) {
   const a = p.partner_address?.trim();
   const ph = p.partner_phone?.trim();
@@ -23,7 +30,7 @@ export function buildDeliveryNoteExcelAoa(p: DeliveryNotePayload): (string | num
   if (p.layout === "monthly_flat") {
     const heading = p.period_heading?.trim() || periodLabel;
     const aoa: (string | number | null)[][] = [
-      ["PHIẾU GIAO HÀNG", ""],
+      ["HOÁ ĐƠN PHÒNG NHA / LABO", ""],
       [heading, ""],
       ["Khách hàng (lab)", who || "—"],
     ];
@@ -60,7 +67,7 @@ export function buildDeliveryNoteExcelAoa(p: DeliveryNotePayload): (string | num
           l.product_name || l.product_code || "—",
           tooth,
           l.quantity,
-          l.unit_price ?? 0,
+          monthlyDisplayUnitPrice(l.quantity, l.line_amount ?? 0, l.unit_price ?? 0),
           l.line_amount ?? 0,
           noteCell(l.notes, o.notes),
         ]);
