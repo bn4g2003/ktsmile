@@ -1,4 +1,5 @@
 import { formatVnd } from "@/lib/format/currency";
+import { htmlBangChu } from "@/lib/reports/amount-in-words-html";
 import { formatCashDirection } from "@/lib/format/labels";
 import { formatDateTime } from "@/lib/format/date";
 import { escapeHtml } from "@/lib/reports/escape-html";
@@ -65,6 +66,7 @@ export function buildCashReceiptBodyHtml(p: CashReceiptPrintPayload): string {
           </tr>
         </tbody>
       </table>
+      ${htmlBangChu(p.amount)}
 
       <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; text-align: center; margin-top: 40px; min-height: 120px;">
         <div>

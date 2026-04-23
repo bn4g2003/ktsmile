@@ -1,4 +1,5 @@
 import { formatVnd } from "@/lib/format/currency";
+import { htmlBangChu } from "@/lib/reports/amount-in-words-html";
 import { escapeHtml } from "@/lib/reports/escape-html";
 
 export type PaymentNoticeLine = {
@@ -149,6 +150,7 @@ export function buildPaymentNoticeBodyHtml(p: PaymentNoticePrintPayload): string
         </tr>
       </tfoot>
     </table>
+    ${htmlBangChu(p.grand_total)}
 
     <div class="pn-foot">
       <div class="pn-bank">

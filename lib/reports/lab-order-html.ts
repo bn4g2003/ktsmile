@@ -1,4 +1,5 @@
 import { formatVnd } from "@/lib/format/currency";
+import { htmlBangChu } from "@/lib/reports/amount-in-words-html";
 import { formatArchConnection, formatLabOrderCategory, formatLabOrderLineWorkType, formatOrderStatus, formatPatientGender } from "@/lib/format/labels";
 import { formatDate, formatDateTime } from "@/lib/format/date";
 import { escapeHtml } from "@/lib/reports/escape-html";
@@ -122,6 +123,7 @@ export function buildLabOrderBodyHtml(p: LabOrderPrintPayload): string {
         </tr>
       </tfoot>
     </table>
+    ${htmlBangChu(total)}
 
     <div style="margin-top:20px;font-size:11px;color:#64748b;">
       <p>Ghi chú đơn: ${escapeHtml(p.notes ?? "—")}</p>

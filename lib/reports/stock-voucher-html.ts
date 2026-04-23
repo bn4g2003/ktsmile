@@ -1,4 +1,5 @@
 import { formatVnd } from "@/lib/format/currency";
+import { htmlBangChu } from "@/lib/reports/amount-in-words-html";
 import { formatMovement } from "@/lib/format/labels";
 import { escapeHtml } from "@/lib/reports/escape-html";
 
@@ -98,6 +99,7 @@ export function buildStockVoucherBodyHtml(p: StockDocumentPrintPayload): string 
           </tr>
         </tfoot>
       </table>
+      ${htmlBangChu(total)}
 
       <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; text-align: center; margin-top: 30px; min-height: 100px;">
         <div>

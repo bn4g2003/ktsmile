@@ -1,4 +1,5 @@
 import { escapeHtml } from "@/lib/reports/escape-html";
+import { htmlBangChu } from "@/lib/reports/amount-in-words-html";
 import type { LabOrderRow } from "@/lib/actions/lab-orders";
 import { formatDate } from "@/lib/format/date";
 
@@ -117,6 +118,8 @@ export function buildLabOrderListReportHtml(p: LabOrderListReportPayload): strin
         </tr>
       </tbody>
     </table>
+    ${htmlBangChu(subtotal, "Bằng chữ (cộng tiền hàng)")}
+    ${htmlBangChu(finalBalance, "Bằng chữ (nợ cuối kỳ)")}
 
     <div style="margin-top:20px;display:flex;justify-content:flex-end;align-items:flex-start;">
       <div style="text-align:center;min-width:200px;">

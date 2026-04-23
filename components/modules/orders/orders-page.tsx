@@ -62,6 +62,7 @@ import { CurrencyInput } from "@/components/ui/currency-input";
 import {
   createLabOrder,
   deleteLabOrder,
+  fetchLabOrderLinesForExport,
   getDailyDeliveryNotePayload,
   getLabOrder,
   getPartnerDefaultDiscount,
@@ -371,13 +372,41 @@ function OrdersPrintExportMenu({
         filters,
       });
 
+      const linesByOrder = await fetchLabOrderLinesForExport(res.rows.map((r) => r.id));
+
+      const productCell = (code: string | null, name: string | null) => {
+        const c = code?.trim() ?? "";
+        const n = name?.trim() ?? "";
+        if (c && n) return `${c} — ${n}`;
+        return c || n || "";
+      };
+
       const aoa: (string | number | null)[][] = [
-        ["STT", "Số đơn", "Mã KH", "Khách hàng", "Ngày nhận", "Bệnh nhân", "Nha khoa", "Số điện thoại", "Trạng thái", "Tổng tiền", "Ghi chú"],
+        [
+          "STT",
+          "Số đơn",
+          "Mã KH",
+          "Khách hàng",
+          "Ngày nhận",
+          "Bệnh nhân",
+          "Nha khoa",
+          "Số điện thoại",
+          "Trạng thái",
+          "Sản phẩm",
+          "Vị trí răng",
+          "Số lượng",
+          "Đơn giá",
+          "Thành tiền",
+          "Cộng tiền hàng",
+          "Phải thu",
+          "Ghi chú",
+        ],
       ];
 
-      res.rows.forEach((r, idx) => {
-        aoa.push([
-          idx + 1,
+      let stt = 0;
+      for (const r of res.rows) {
+        const lines = linesByOrder[r.id] ?? [];
+        const base = [
           r.order_number,
           r.partner_code ?? "",
           r.partner_name ?? "",
@@ -386,10 +415,39 @@ function OrdersPrintExportMenu({
           r.clinic_name ?? "",
           r.contact_phone ?? "",
           formatOrderStatus(r.status),
-          r.total_amount,
-          r.notes ?? "",
-        ]);
-      });
+        ] as const;
+        if (!lines.length) {
+          stt += 1;
+          aoa.push([
+            stt,
+            ...base,
+            "",
+            "",
+            "",
+            "",
+            "",
+            r.total_amount,
+            r.grand_total,
+            r.notes ?? "",
+          ]);
+        } else {
+          for (const ln of lines) {
+            stt += 1;
+            aoa.push([
+              stt,
+              ...base,
+              productCell(ln.product_code, ln.product_name),
+              ln.tooth_positions,
+              ln.quantity,
+              ln.unit_price,
+              ln.line_amount,
+              r.total_amount,
+              r.grand_total,
+              r.notes ?? "",
+            ]);
+          }
+        }
+      }
 
       const ws = XLSX.utils.aoa_to_sheet(aoa);
       const wb = XLSX.utils.book_new();
@@ -507,7 +565,7 @@ export function OrdersPage() {
 
   React.useEffect(() => {
     void listCustomerPartnerPicker().then(setPartners).catch(() => {});
-    void listProductPicker().then(setProducts).catch(() => {});
+    void listProductPicker({ forSales: true }).then(setProducts).catch(() => {});
   }, []);
 
   const hydrateDraftPrices = React.useCallback(async (key: string, productIdFor: string) => {

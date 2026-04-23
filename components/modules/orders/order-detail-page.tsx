@@ -123,7 +123,7 @@ export function OrderDetailPage() {
 
   React.useEffect(() => {
     void loadHeader();
-    void listProductPicker().then(setProducts).catch(() => {});
+    void listProductPicker({ forSales: true }).then(setProducts).catch(() => {});
   }, [loadHeader]);
 
   const partnerIdHdr = (header?.partner_id as string) ?? "";

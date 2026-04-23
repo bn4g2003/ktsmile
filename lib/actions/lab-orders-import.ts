@@ -8,6 +8,7 @@ import {
   parseLabOrderSheet,
   type ParsedLabOrderLine,
 } from "@/lib/import/parse-lab-order-excel";
+import { assertProductIdsAllowedOnLabOrder } from "@/lib/actions/lab-orders";
 import { createSupabaseAdmin } from "@/lib/supabase/server";
 
 export type ImportLabOrdersResult = {
@@ -202,6 +203,8 @@ export async function importLabOrdersFromExcel(formData: FormData): Promise<Impo
   let linesCreated = 0;
 
   try {
+    await assertProductIdsAllowedOnLabOrder([...new Set([...lineProductId.values()])]);
+
     for (const lines of groups.values()) {
       const first = lines[0]!;
       const partnerId = partnerByCode.get(normKey(first.partnerCode))!;

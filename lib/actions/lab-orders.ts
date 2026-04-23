@@ -408,6 +408,29 @@ function isUniqueViolation(err: { message?: string; code?: string } | null): boo
   return m.includes("duplicate") || m.includes("unique");
 }
 
+/** Chỉ SP bán hoặc cả hai — không cho NVL thuần (`inventory`) trên đơn lab. */
+export async function assertProductIdsAllowedOnLabOrder(productIds: string[]) {
+  const uniq = [...new Set(productIds.filter(Boolean))];
+  if (!uniq.length) return;
+  const supabase = createSupabaseAdmin();
+  const { data, error } = await supabase
+    .from("products")
+    .select("id, code, product_usage")
+    .in("id", uniq);
+  if (error) throw new Error(error.message);
+  const rows = data ?? [];
+  if (rows.length !== uniq.length) {
+    throw new Error("Một số sản phẩm không tồn tại.");
+  }
+  for (const r of rows) {
+    if (r.product_usage === "inventory") {
+      throw new Error(
+        `Sản phẩm «${r.code}» chỉ là NVL kho — không dùng trên đơn phòng khám/labo.`,
+      );
+    }
+  }
+}
+
 /**
  * Tạo đơn: số đơn cấp tự động trên server theo định dạng MãKH-YYMMDD-xxx; mặc định trạng thái "delivered" nếu không gửi.
  * Kèm danh sách dòng (có thể rỗng — thêm sau tại trang chi tiết).
@@ -431,6 +454,8 @@ export async function createLabOrder(
     throw new Error("Không tìm thấy khách hàng.");
   }
   const partnerCode = (partner as { code: string }).code;
+
+  await assertProductIdsAllowedOnLabOrder(parsedLines.map((l) => l.product_id));
 
   for (let attempt = 0; attempt < 15; attempt++) {
     const order_number = await suggestLabOrderNumber(partnerCode, h.received_at);
@@ -644,6 +669,7 @@ const lineSchema = z.object({
 export async function createLabOrderLine(input: z.infer<typeof lineSchema>) {
   const supabase = createSupabaseAdmin();
   const row = lineSchema.parse(input);
+  await assertProductIdsAllowedOnLabOrder([row.product_id]);
   const { error } = await supabase.from("lab_order_lines").insert({
     ...row,
     discount_percent: row.discount_percent ?? 0,
@@ -663,6 +689,15 @@ export async function updateLabOrderLine(
 ) {
   const supabase = createSupabaseAdmin();
   const row = lineSchema.parse(input);
+  const { data: prev, error: e0 } = await supabase
+    .from("lab_order_lines")
+    .select("product_id")
+    .eq("id", id)
+    .single();
+  if (e0) throw new Error(e0.message);
+  if ((prev?.product_id as string | undefined) !== row.product_id) {
+    await assertProductIdsAllowedOnLabOrder([row.product_id]);
+  }
   const { error } = await supabase.from("lab_order_lines").update(row).eq("id", id);
   if (error) throw new Error(error.message);
   revalidatePath("/orders");
@@ -1061,5 +1096,64 @@ export async function listLabOrdersByPartner(partnerId: string, limit = 50): Pro
     if (!retry) throw new Error(error.message);
   }
   throw new Error(lastMessage || "Không tải được đơn theo đối tác.");
+}
+
+export type LabOrderLineExportFlat = {
+  tooth_positions: string;
+  quantity: number;
+  unit_price: number;
+  line_amount: number;
+  product_code: string | null;
+  product_name: string | null;
+};
+
+const LAB_ORDER_LINE_EXPORT_CHUNK = 400;
+
+/** Dòng chi tiết theo từng đơn (đã sắp theo created_at) — dùng xuất Excel. */
+export async function fetchLabOrderLinesForExport(
+  orderIds: string[],
+): Promise<Record<string, LabOrderLineExportFlat[]>> {
+  const ids = [...new Set(orderIds.filter(Boolean))];
+  if (!ids.length) return {};
+  const supabase = createSupabaseAdmin();
+  type RowAcc = LabOrderLineExportFlat & { _id: string; _created: string; _oid: string };
+  const acc: RowAcc[] = [];
+  for (let i = 0; i < ids.length; i += LAB_ORDER_LINE_EXPORT_CHUNK) {
+    const chunk = ids.slice(i, i + LAB_ORDER_LINE_EXPORT_CHUNK);
+    const { data, error } = await supabase
+      .from("lab_order_lines")
+      .select(
+        "id, order_id, created_at, tooth_positions, quantity, unit_price, line_amount, products!lab_order_lines_product_id_fkey(code,name)",
+      )
+      .in("order_id", chunk);
+    if (error) throw new Error(error.message);
+    for (const r of data ?? []) {
+      const rec = r as Record<string, unknown>;
+      const pr = rec["products"] as { code?: string; name?: string } | null;
+      acc.push({
+        _id: rec["id"] as string,
+        _oid: rec["order_id"] as string,
+        _created: (rec["created_at"] as string) ?? "",
+        tooth_positions: (rec["tooth_positions"] as string) ?? "",
+        quantity: finiteNumber(rec["quantity"], 0),
+        unit_price: finiteNumber(rec["unit_price"]),
+        line_amount: finiteNumber(rec["line_amount"]),
+        product_code: pr?.code ?? null,
+        product_name: pr?.name ?? null,
+      });
+    }
+  }
+  const byOrder = new Map<string, RowAcc[]>();
+  for (const ln of acc) {
+    const arr = byOrder.get(ln._oid);
+    if (arr) arr.push(ln);
+    else byOrder.set(ln._oid, [ln]);
+  }
+  const out: Record<string, LabOrderLineExportFlat[]> = {};
+  for (const [oid, rows] of byOrder) {
+    rows.sort((a, b) => a._created.localeCompare(b._created) || a._id.localeCompare(b._id));
+    out[oid] = rows.map(({ _id: _i, _created: _c, _oid: _o, ...rest }) => rest);
+  }
+  return out;
 }
 

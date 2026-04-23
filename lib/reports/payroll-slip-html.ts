@@ -1,3 +1,4 @@
+import { htmlBangChu } from "@/lib/reports/amount-in-words-html";
 import { escapeHtml } from "@/lib/reports/escape-html";
 
 type PayrollSlipRow = {
@@ -162,6 +163,7 @@ function buildSlipBody(rowData: PayrollSlipRow, opts: PayrollSlipOptions) {
           </tr>
         </tbody>
       </table>
+      ${htmlBangChu(actualNet, "Bằng chữ (thực lĩnh)")}
 
       <div class="signatures">
         <div>
