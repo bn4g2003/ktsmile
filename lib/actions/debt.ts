@@ -217,3 +217,39 @@ export async function getPartnerDebtSnapshot(partnerId: string): Promise<Partner
     closing: round2(closing),
   };
 }
+
+/** Nợ đầu kỳ tháng + tổng thu trên sổ quỹ trong tháng (một đối tác) — dùng chân phiếu giao hàng tháng. */
+export async function getPartnerMonthOpeningAndReceipts(
+  partnerId: string,
+  year: number,
+  month: number,
+): Promise<{ opening: number; receipts_month: number }> {
+  const y = Math.floor(year);
+  const m = Math.floor(month);
+  if (m < 1 || m > 12 || y < 2000 || y > 2100) throw new Error("Tháng/năm không hợp lệ.");
+  const supabase = createSupabaseAdmin();
+  const { start, end } = monthBounds(y, m);
+
+  const { data: openingRow, error: oe } = await supabase
+    .from("partner_opening_balances")
+    .select("opening_balance")
+    .eq("partner_id", partnerId)
+    .eq("year", y)
+    .eq("month", m)
+    .maybeSingle();
+  if (oe) throw new Error(oe.message);
+  const opening = Number(openingRow?.opening_balance ?? 0);
+
+  const { data: cashRows, error: ce } = await supabase
+    .from("v_cash_by_partner_month")
+    .select("total_amount")
+    .eq("partner_id", partnerId)
+    .eq("direction", "receipt")
+    .gte("month", start)
+    .lt("month", end);
+  if (ce) throw new Error(ce.message);
+  let receipts_month = 0;
+  for (const r of cashRows ?? []) receipts_month += Number(r.total_amount);
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  return { opening: round2(opening), receipts_month: round2(receipts_month) };
+}

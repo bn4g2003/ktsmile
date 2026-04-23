@@ -11,14 +11,18 @@ export type PartnerTaxDisplay = {
  * Hoá đơn phòng nha / labo (danh sách): không có `h` = nhiều lab / chưa chọn KH → ẩn block.
  * Có `h` → chỉ in từng dòng khi có dữ liệu (không hiển thị hàng toàn "—").
  */
-export function htmlHoaDonPhongNhaCustomerBlock(h: PartnerTaxDisplay | undefined): string {
+export function htmlHoaDonPhongNhaCustomerBlock(
+  h: PartnerTaxDisplay | undefined,
+  opts?: { nameHeader?: string },
+): string {
   if (!h) return "";
+  const nameHeader = opts?.nameHeader?.trim() || "TÊN KH";
   const rows: string[] = [];
   const n = h.name?.trim();
   const a = h.address?.trim();
   const t = h.taxCode?.trim();
   const p = h.phone?.trim();
-  if (n) rows.push(`<tr><th>TÊN KH</th><td style="color:#0f172a;">: ${escapeHtml(n)}</td></tr>`);
+  if (n) rows.push(`<tr><th>${escapeHtml(nameHeader)}</th><td style="color:#0f172a;">: ${escapeHtml(n)}</td></tr>`);
   if (a) rows.push(`<tr><th>ĐỊA CHỈ</th><td style="color:#0f172a;">: ${escapeHtml(a)}</td></tr>`);
   if (t) rows.push(`<tr><th>MST</th><td style="color:#0f172a;">: ${escapeHtml(t)}</td></tr>`);
   if (p) rows.push(`<tr><th>SĐT</th><td style="color:#0f172a;">: ${escapeHtml(p)}</td></tr>`);

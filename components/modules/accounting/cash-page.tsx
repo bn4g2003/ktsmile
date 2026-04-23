@@ -32,12 +32,14 @@ import { CashReceiptPrintButton } from "@/components/shared/reports/cash-receipt
 import {
   createCashTransaction,
   deleteCashTransaction,
+  listCashFundChannels,
   listCashTransactions,
   updateCashTransaction,
   upsertCashAccountOpeningBalance,
   listCashAccountOpeningBalances,
   type CashRow,
 } from "@/lib/actions/cash";
+import { CASH_BUSINESS_CATEGORIES, defaultCashBusinessCategory } from "@/lib/cash/cash-form-options";
 
 const dirOpts = [
   { value: "receipt", label: "Thu" },
@@ -80,6 +82,7 @@ export function CashPage() {
   ]);
   const [savingOpening, setSavingOpening] = React.useState(false);
   const [gridFilters, setGridFilters] = React.useState<Record<string, string>>({});
+  const [fundChannels, setFundChannels] = React.useState<{ value: string; label: string }[]>([]);
 
   const patchGridFilter = React.useCallback((key: string, val: string) => {
     setGridFilters((prev) => {
@@ -95,13 +98,18 @@ export function CashPage() {
     void listSupplierPicker().then(setSuppliers).catch(() => {});
   }, []);
 
+  React.useEffect(() => {
+    if (!open) return;
+    void listCashFundChannels().then(setFundChannels).catch(() => {});
+  }, [open]);
+
   const reset = () => {
     setEditing(null);
     setTdate(new Date().toISOString().slice(0, 10));
     setDocNum("");
     setChannel("cash");
     setDirection("receipt");
-    setCategory("");
+    setCategory(defaultCashBusinessCategory("receipt"));
     setAmount("0");
     setPartnerId("");
     setSupplierId("");
@@ -142,7 +150,7 @@ export function CashPage() {
     try {
       const payload = {
         transaction_date: tdate,
-        doc_number: docNum.trim(),
+        doc_number: editing ? docNum.trim() : "",
         payment_channel: channel.trim(),
         direction,
         business_category: category.trim(),
@@ -164,6 +172,24 @@ export function CashPage() {
     } finally {
       setPending(false);
     }
+  };
+
+  const catForDir = CASH_BUSINESS_CATEGORIES.filter((c) => c.direction === direction);
+  const legacyCat =
+    Boolean(editing) &&
+    Boolean(category.trim()) &&
+    !catForDir.some((c) => c.value === category);
+  const legacyChannel =
+    Boolean(channel.trim()) && !fundChannels.some((c) => c.value === channel);
+
+  const onDirectionChange = (next: "receipt" | "payment") => {
+    setDirection(next);
+    setCategory((prev) => {
+      const allowed = CASH_BUSINESS_CATEGORIES.filter((c) => c.direction === next);
+      if (allowed.some((c) => c.value === prev)) return prev;
+      if (CASH_BUSINESS_CATEGORIES.some((c) => c.value === prev)) return allowed[0]?.value ?? "";
+      return allowed[0]?.value ?? "";
+    });
   };
 
   const onDelete = async (row: CashRow) => {
@@ -401,24 +427,44 @@ export function CashPage() {
             </div>
             <div className="grid gap-2">
               <Label htmlFor="c-doc">Số chứng từ</Label>
-              <Input id="c-doc" value={docNum} onChange={(e) => setDocNum(e.target.value)} required />
+              {editing ? (
+                <Input id="c-doc" value={docNum} onChange={(e) => setDocNum(e.target.value)} required />
+              ) : (
+                <Input
+                  id="c-doc"
+                  readOnly
+                  value=""
+                  placeholder="Tự động khi lưu (PT-… / PC-…)"
+                  className="bg-[var(--surface-muted)]"
+                />
+              )}
             </div>
             <div className="grid gap-2">
               <Label htmlFor="c-ch">Kênh thanh toán</Label>
-              <Input
+              <Select
                 id="c-ch"
-                placeholder="cash, mbbank, acb…"
                 value={channel}
                 onChange={(e) => setChannel(e.target.value)}
                 required
-              />
+              >
+                {legacyChannel ? (
+                  <option value={channel}>
+                    {channel}
+                  </option>
+                ) : null}
+                {fundChannels.map((ch) => (
+                  <option key={ch.value} value={ch.value}>
+                    {ch.label}
+                  </option>
+                ))}
+              </Select>
             </div>
             <div className="grid gap-2">
               <Label htmlFor="c-dir">Loại</Label>
               <Select
                 id="c-dir"
                 value={direction}
-                onChange={(e) => setDirection(e.target.value as typeof direction)}
+                onChange={(e) => onDirectionChange(e.target.value as "receipt" | "payment")}
               >
                 {dirOpts.map((o) => (
                   <option key={o.value} value={o.value}>
@@ -429,7 +475,19 @@ export function CashPage() {
             </div>
             <div className="grid gap-2 sm:col-span-2">
               <Label htmlFor="c-cat">Nghiệp vụ</Label>
-              <Input id="c-cat" value={category} onChange={(e) => setCategory(e.target.value)} required />
+              <Select
+                id="c-cat"
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                required
+              >
+                {legacyCat ? <option value={category}>{category}</option> : null}
+                {catForDir.map((c) => (
+                  <option key={c.value} value={c.value}>
+                    {c.label}
+                  </option>
+                ))}
+              </Select>
             </div>
             <div className="grid gap-2">
               <Label htmlFor="c-amt">Số tiền</Label>

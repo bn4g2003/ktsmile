@@ -8,6 +8,7 @@ import type { ListArgs, ListResult } from "@/components/shared/data-grid/excel-d
 import { decodeMultiFilter } from "@/lib/grid/multi-filter";
 import type { LabOrderPrintLine, LabOrderPrintPayload } from "@/lib/reports/lab-order-html";
 import type { DeliveryNoteLine, DeliveryNotePayload } from "@/lib/reports/delivery-note-html";
+import { getPartnerMonthOpeningAndReceipts } from "@/lib/actions/debt";
 import {
   type LabOrderStatus,
   isAllowedLabOrderStatusTransition,
@@ -865,7 +866,7 @@ export async function getDailyDeliveryNotePayload(
 
   const { data: partner, error: pErr } = await supabase
     .from("partners")
-    .select("code,name")
+    .select("code,name,address,phone,tax_id")
     .eq("id", partnerId)
     .maybeSingle();
   if (pErr) throw new Error(pErr.message);
@@ -910,6 +911,9 @@ export async function getDailyDeliveryNotePayload(
   return {
     partner_code: (partner["code"] as string | null) ?? null,
     partner_name: (partner["name"] as string | null) ?? null,
+    partner_address: (partner["address"] as string | null) ?? null,
+    partner_phone: (partner["phone"] as string | null) ?? null,
+    partner_tax_id: (partner["tax_id"] as string | null) ?? null,
     delivery_date: date,
     generated_at: new Date().toLocaleString("vi-VN"),
     orders: (orders ?? []).map((o) => ({
@@ -920,6 +924,21 @@ export async function getDailyDeliveryNotePayload(
       lines: linesByOrder.get(o["id"] as string) ?? [],
     })),
   };
+}
+
+function roundMoney2(n: number) {
+  return Math.round(n * 100) / 100;
+}
+
+function monthlyDeliveryDiscountLabel(
+  parts: { pct: number; fixedAmt: number }[],
+): string {
+  const hasFixed = parts.some((p) => p.fixedAmt > 0);
+  const activePcts = parts.filter((p) => p.pct > 0).map((p) => p.pct);
+  if (!hasFixed && activePcts.length > 0 && activePcts.every((x) => x === activePcts[0])) {
+    return `CHIẾT KHẤU GIẢM ${activePcts[0]}%`;
+  }
+  return "CHIẾT KHẤU GIẢM";
 }
 
 /** Phiếu giao gộp cả tháng theo một lab (ngày nhận trong khoảng tháng). */
@@ -938,7 +957,7 @@ export async function getMonthlyDeliveryNotePayload(
 
   const { data: partner, error: pErr } = await supabase
     .from("partners")
-    .select("code,name")
+    .select("code,name,address,phone,tax_id")
     .eq("id", partnerId)
     .maybeSingle();
   if (pErr) throw new Error(pErr.message);
@@ -946,11 +965,14 @@ export async function getMonthlyDeliveryNotePayload(
 
   const { data: orders, error: oErr } = await supabase
     .from("lab_orders")
-    .select("id,order_number,patient_name,clinic_name,notes,status")
+    .select(
+      "id,order_number,patient_name,clinic_name,notes,status,received_at,billing_order_discount_percent,billing_order_discount_amount,billing_other_fees",
+    )
     .eq("partner_id", partnerId)
     .gte("received_at", from)
     .lte("received_at", to)
     .neq("status", "cancelled")
+    .order("received_at", { ascending: true })
     .order("order_number", { ascending: true })
     .limit(500);
   if (oErr) throw new Error(oErr.message);
@@ -959,7 +981,9 @@ export async function getMonthlyDeliveryNotePayload(
   if (orderIds.length > 0) {
     const { data: lineData, error: lErr } = await supabase
       .from("lab_order_lines")
-      .select("order_id,tooth_positions,quantity,shade,products:product_id(code,name)")
+      .select(
+        "order_id,tooth_positions,quantity,shade,unit_price,line_amount,notes,products:product_id(code,name)",
+      )
       .in("order_id", orderIds)
       .order("created_at", { ascending: true })
       .limit(5000);
@@ -968,7 +992,16 @@ export async function getMonthlyDeliveryNotePayload(
   }
   const linesByOrder = new Map<
     string,
-    { product_code: string; product_name: string; tooth_positions: string; quantity: number; shade: string | null }[]
+    {
+      product_code: string;
+      product_name: string;
+      tooth_positions: string;
+      quantity: number;
+      shade: string | null;
+      unit_price: number;
+      line_amount: number;
+      notes: string | null;
+    }[]
   >();
   for (const row of lines) {
     const oid = row["order_id"] as string;
@@ -980,23 +1013,73 @@ export async function getMonthlyDeliveryNotePayload(
       tooth_positions: (row["tooth_positions"] as string) ?? "",
       quantity: Number(row["quantity"] ?? 0),
       shade: (row["shade"] as string | null) ?? null,
+      unit_price: Number(row["unit_price"] ?? 0),
+      line_amount: Number(row["line_amount"] ?? 0),
+      notes: (row["notes"] as string | null) ?? null,
     });
     linesByOrder.set(oid, arr);
   }
 
+  const periodHeading = `THÁNG ${String(month).padStart(2, "0")} ${year}`;
+
+  const discountParts: { pct: number; fixedAmt: number }[] = [];
+  let subtotalGoods = 0;
+  let discountAmount = 0;
+  let otherFeesSum = 0;
+  for (const o of orders ?? []) {
+    const oid = o["id"] as string;
+    const lines = linesByOrder.get(oid) ?? [];
+    const lineSum = roundMoney2(lines.reduce((s, l) => s + l.line_amount, 0));
+    const pct = Number(o["billing_order_discount_percent"] ?? 0);
+    const fixedAmt = Number(o["billing_order_discount_amount"] ?? 0);
+    const fees = Number(o["billing_other_fees"] ?? 0);
+    subtotalGoods += lineSum;
+    discountAmount += lineSum * (pct / 100) + fixedAmt;
+    otherFeesSum += fees;
+    discountParts.push({ pct, fixedAmt });
+  }
+  subtotalGoods = roundMoney2(subtotalGoods);
+  discountAmount = roundMoney2(discountAmount);
+  otherFeesSum = roundMoney2(otherFeesSum);
+
+  const { opening, receipts_month } = await getPartnerMonthOpeningAndReceipts(partnerId, year, month);
+  const closingDebt = roundMoney2(
+    opening + subtotalGoods - discountAmount + otherFeesSum - receipts_month,
+  );
+
   return {
     partner_code: (partner["code"] as string | null) ?? null,
     partner_name: (partner["name"] as string | null) ?? null,
+    partner_address: (partner["address"] as string | null) ?? null,
+    partner_phone: (partner["phone"] as string | null) ?? null,
+    partner_tax_id: (partner["tax_id"] as string | null) ?? null,
     delivery_date: from,
-    period_subtitle: `Tháng ${month}/${year} (ngày nhận ${from} → ${to})`,
+    period_heading: periodHeading,
+    period_subtitle: `Ngày nhận ${from} → ${to}`,
+    layout: "monthly_flat",
     generated_at: new Date().toLocaleString("vi-VN"),
-    orders: (orders ?? []).map((o) => ({
-      order_number: o["order_number"] as string,
-      patient_name: o["patient_name"] as string,
-      clinic_name: (o["clinic_name"] as string | null) ?? null,
-      notes: (o["notes"] as string | null) ?? null,
-      lines: linesByOrder.get(o["id"] as string) ?? [],
-    })),
+    monthly_footer: {
+      subtotal_goods: subtotalGoods,
+      discount_label: monthlyDeliveryDiscountLabel(discountParts),
+      discount_amount: discountAmount,
+      other_fees: otherFeesSum,
+      opening_debt: opening,
+      payments_in_period: receipts_month,
+      closing_debt: closingDebt,
+    },
+    orders: (orders ?? []).map((o) => {
+      const rawRec = o["received_at"] as string | null | undefined;
+      const received_date =
+        rawRec && rawRec.length >= 10 ? rawRec.slice(0, 10) : from;
+      return {
+        order_number: o["order_number"] as string,
+        patient_name: o["patient_name"] as string,
+        clinic_name: (o["clinic_name"] as string | null) ?? null,
+        notes: (o["notes"] as string | null) ?? null,
+        received_date,
+        lines: linesByOrder.get(o["id"] as string) ?? [],
+      };
+    }),
   };
 }
 
@@ -1006,7 +1089,7 @@ export async function getSingleOrderDeliveryNotePayload(orderId: string): Promis
   const { data: order, error: oErr } = await supabase
     .from("lab_orders")
     .select(
-      "id,order_number,patient_name,clinic_name,notes,status,received_at, partners!lab_orders_partner_id_fkey(code,name)",
+      "id,order_number,patient_name,clinic_name,notes,status,received_at, partners!lab_orders_partner_id_fkey(code,name,address,phone,tax_id)",
     )
     .eq("id", orderId)
     .maybeSingle();
@@ -1035,7 +1118,13 @@ export async function getSingleOrderDeliveryNotePayload(orderId: string): Promis
     });
   }
 
-  const partners = order["partners"] as { code?: string; name?: string } | null;
+  const partners = order["partners"] as {
+    code?: string;
+    name?: string;
+    address?: string | null;
+    phone?: string | null;
+    tax_id?: string | null;
+  } | null;
   const receivedRaw = order["received_at"] as string;
   const received = receivedRaw.length >= 10 ? receivedRaw.slice(0, 10) : receivedRaw;
   const orderNumber = order["order_number"] as string;
@@ -1043,6 +1132,9 @@ export async function getSingleOrderDeliveryNotePayload(orderId: string): Promis
   return {
     partner_code: partners?.code ?? null,
     partner_name: partners?.name ?? null,
+    partner_address: partners?.address ?? null,
+    partner_phone: partners?.phone ?? null,
+    partner_tax_id: partners?.tax_id ?? null,
     delivery_date: received,
     period_subtitle: `Đơn ${orderNumber} · Ngày nhận ${received}`,
     generated_at: new Date().toLocaleString("vi-VN"),

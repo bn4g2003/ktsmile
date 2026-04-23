@@ -33,7 +33,8 @@ export type CashRow = {
 
 const cashSchema = z.object({
   transaction_date: z.string().min(1),
-  doc_number: z.string().min(1).max(200),
+  /** Để trống khi tạo mới → server cấp PT-yyyymmdd-xxx / PC-yyyymmdd-xxx */
+  doc_number: z.string().max(200),
   payment_channel: z.string().min(1).max(100),
   direction: z.enum(["receipt", "payment"]),
   business_category: z.string().min(1).max(200),
@@ -210,9 +211,82 @@ export async function listCashTransactions(
   throw new Error(lastMessage || "Không tải được sổ quỹ.");
 }
 
+/** Số chứng từ tiếp theo trong ngày: PT-YYYYMMDD-001 (thu), PC-YYYYMMDD-001 (chi). */
+export async function allocateNextCashDocNumber(
+  transactionDate: string,
+  direction: "receipt" | "payment",
+): Promise<string> {
+  const d = transactionDate.trim().slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) {
+    throw new Error("Ngày chứng từ không hợp lệ.");
+  }
+  const ymd = d.replace(/-/g, "");
+  const prefix = direction === "receipt" ? "PT" : "PC";
+  const supabase = createSupabaseAdmin();
+  const { data, error } = await supabase
+    .from("cash_transactions")
+    .select("doc_number")
+    .like("doc_number", `${prefix}-${ymd}-%`)
+    .limit(1000);
+  if (error) throw new Error(error.message);
+  const re = new RegExp(`^${prefix}-${ymd}-(\\d+)$`);
+  let max = 0;
+  for (const r of data ?? []) {
+    const doc = String((r as { doc_number: string }).doc_number ?? "");
+    const m = doc.match(re);
+    if (m) max = Math.max(max, parseInt(m[1]!, 10));
+  }
+  return `${prefix}-${ymd}-${String(max + 1).padStart(3, "0")}`;
+}
+
+/** Quỹ / kênh thanh toán: mặc định + đã dùng trên chứng từ & số dư đầu kỳ. */
+export async function listCashFundChannels(): Promise<{ value: string; label: string }[]> {
+  const defaults: { value: string; label: string }[] = [
+    { value: "cash", label: "Tiền mặt" },
+    { value: "mbbank", label: "MB Bank (Quân đội)" },
+    { value: "acb", label: "ACB" },
+    { value: "chuyen_khoan", label: "Chuyển khoản" },
+    { value: "vietcombank", label: "Vietcombank" },
+    { value: "other", label: "Khác" },
+  ];
+  const seen = new Set(defaults.map((x) => x.value.toLowerCase()));
+  const extras: { value: string; label: string }[] = [];
+  const supabase = createSupabaseAdmin();
+
+  const { data: tx } = await supabase.from("cash_transactions").select("payment_channel").limit(8000);
+  for (const r of tx ?? []) {
+    const ch = String((r as { payment_channel: string }).payment_channel ?? "").trim();
+    if (!ch) continue;
+    const k = ch.toLowerCase();
+    if (seen.has(k)) continue;
+    seen.add(k);
+    extras.push({ value: ch, label: ch });
+  }
+
+  const { data: ob } = await supabase
+    .from("cash_account_opening_balances")
+    .select("payment_channel")
+    .limit(500);
+  for (const r of ob ?? []) {
+    const ch = String((r as { payment_channel: string }).payment_channel ?? "").trim();
+    if (!ch) continue;
+    const k = ch.toLowerCase();
+    if (seen.has(k)) continue;
+    seen.add(k);
+    extras.push({ value: ch, label: ch });
+  }
+
+  extras.sort((a, b) => a.label.localeCompare(b.label, "vi"));
+  return [...defaults, ...extras];
+}
+
 export async function createCashTransaction(input: z.infer<typeof cashSchema>): Promise<{ id: string }> {
   const supabase = createSupabaseAdmin();
-  const row = cashSchema.parse(input);
+  const parsed = cashSchema.parse(input);
+  const doc_number =
+    parsed.doc_number.trim() ||
+    (await allocateNextCashDocNumber(parsed.transaction_date, parsed.direction));
+  const row = { ...parsed, doc_number };
   const payload = cashInsertPayload(row);
   let { data, error } = await supabase.from("cash_transactions").insert(payload).select("id").single();
   if (
@@ -238,6 +312,9 @@ export async function updateCashTransaction(
 ) {
   const supabase = createSupabaseAdmin();
   const row = cashSchema.parse(input);
+  if (!row.doc_number.trim()) {
+    throw new Error("Số chứng từ không được để trống khi sửa.");
+  }
   const payload = cashInsertPayload(row);
   let { error } = await supabase.from("cash_transactions").update(payload).eq("id", id);
   if (
