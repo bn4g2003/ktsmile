@@ -338,7 +338,7 @@ function OrdersPrintExportMenu({
       const partner = partners.find((p) => p.id === filters["partner_id"]);
       const customerHeader = partner
         ? {
-            name: partner.name,
+            name: partner.name?.trim() || partner.code?.trim() || undefined,
             address: partner.address?.trim() || undefined,
             phone: partner.phone?.trim() || undefined,
             taxCode: partner.tax_id?.trim() || undefined,

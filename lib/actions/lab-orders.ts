@@ -778,14 +778,20 @@ export async function getLabOrderPrintPayload(orderId: string): Promise<LabOrder
   const { data: row, error } = await supabase
     .from("lab_orders")
     .select(
-      "order_number, received_at, patient_name, clinic_name, status, notes, patient_year_of_birth, patient_gender, order_category, due_completion_at, due_delivery_at, clinical_indication, margin_above_gingiva, margin_at_gingiva, margin_subgingival, margin_shoulder, notes_accounting, notes_coordination, accessories, partners!lab_orders_partner_id_fkey(code,name)",
+      "order_number, received_at, patient_name, clinic_name, status, notes, patient_year_of_birth, patient_gender, order_category, due_completion_at, due_delivery_at, clinical_indication, margin_above_gingiva, margin_at_gingiva, margin_subgingival, margin_shoulder, notes_accounting, notes_coordination, accessories, partners!lab_orders_partner_id_fkey(code,name,address,phone,tax_id)",
     )
     .eq("id", orderId)
     .single();
   if (error || !row) throw new Error(error?.message ?? "Không tìm thấy đơn.");
 
   const rec = row as Record<string, unknown>;
-  const partners = rec["partners"] as { code?: string; name?: string } | null;
+  const partners = rec["partners"] as {
+    code?: string;
+    name?: string;
+    address?: string | null;
+    phone?: string | null;
+    tax_id?: string | null;
+  } | null;
 
   const { data: lineRows, error: le } = await supabase
     .from("lab_order_lines")
@@ -828,6 +834,9 @@ export async function getLabOrderPrintPayload(orderId: string): Promise<LabOrder
     status: rec["status"] as string,
     partner_code: partners?.code ?? null,
     partner_name: partners?.name ?? null,
+    partner_address: partners?.address ?? null,
+    partner_phone: partners?.phone ?? null,
+    partner_tax_id: partners?.tax_id ?? null,
     notes: (rec["notes"] as string | null) ?? null,
     order_category: (rec["order_category"] as string | undefined) ?? undefined,
     patient_year_of_birth:

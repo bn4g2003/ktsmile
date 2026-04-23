@@ -29,6 +29,9 @@ export type LabOrderPrintPayload = {
   status: string;
   partner_code: string | null;
   partner_name: string | null;
+  partner_address: string | null;
+  partner_phone: string | null;
+  partner_tax_id: string | null;
   notes: string | null;
   order_category?: string;
   patient_year_of_birth?: number | null;
@@ -49,10 +52,27 @@ function fmtQty(n: number) {
 
 export function buildLabOrderBodyHtml(p: LabOrderPrintPayload): string {
   const gen = formatDateTime(new Date());
-  const partnerLine =
+  const partnerInner =
     p.partner_code || p.partner_name
       ? `${escapeHtml(p.partner_code ?? "")}${p.partner_code && p.partner_name ? " — " : ""}${escapeHtml(p.partner_name ?? "")}`
-      : "—";
+      : null;
+  const leftKvRows: string[] = [];
+  if (partnerInner?.trim()) {
+    leftKvRows.push(`<tr><th>TÊN KH</th><td>: ${partnerInner}</td></tr>`);
+  }
+  if (p.partner_address?.trim()) {
+    leftKvRows.push(`<tr><th>ĐỊA CHỈ</th><td>: ${escapeHtml(p.partner_address.trim())}</td></tr>`);
+  }
+  if (p.partner_tax_id?.trim()) {
+    leftKvRows.push(`<tr><th>MST</th><td>: ${escapeHtml(p.partner_tax_id.trim())}</td></tr>`);
+  }
+  if (p.partner_phone?.trim()) {
+    leftKvRows.push(`<tr><th>SĐT</th><td>: ${escapeHtml(p.partner_phone.trim())}</td></tr>`);
+  }
+  if (p.clinic_name?.trim()) {
+    leftKvRows.push(`<tr><th>NHA KHOA</th><td>: ${escapeHtml(p.clinic_name.trim())}</td></tr>`);
+  }
+  leftKvRows.push(`<tr><th>BỆNH NHÂN</th><td>: ${escapeHtml(p.patient_name)}</td></tr>`);
   const rows = p.lines
     .map(
       (l, i) =>
@@ -82,9 +102,7 @@ export function buildLabOrderBodyHtml(p: LabOrderPrintPayload): string {
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px;">
       <table class="kv">
         <tbody>
-          <tr><th>TÊN KH</th><td>: ${partnerLine}</td></tr>
-          <tr><th>NHA KHOA</th><td>: ${escapeHtml(p.clinic_name ?? "—")}</td></tr>
-          <tr><th>BỆNH NHÂN</th><td>: ${escapeHtml(p.patient_name)}</td></tr>
+          ${leftKvRows.join("")}
           ${cat ? `<tr><th>LOẠI HÀNG</th><td>: ${escapeHtml(cat)}</td></tr>` : ""}
           ${yearG ? `<tr><th>NĂM SINH/GT</th><td>: ${escapeHtml(yearG)}</td></tr>` : ""}
         </tbody>

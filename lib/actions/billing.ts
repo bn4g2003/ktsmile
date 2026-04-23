@@ -175,7 +175,7 @@ export async function getPaymentNoticePrintPayload(orderId: string): Promise<Pay
   const { data: row, error } = await supabase
     .from("lab_orders")
     .select(
-      "order_number, received_at, patient_name, clinic_name, notes, payment_notice_doc_number, payment_notice_issued_at, billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, partners!lab_orders_partner_id_fkey(code,name)",
+      "order_number, received_at, patient_name, clinic_name, notes, payment_notice_doc_number, payment_notice_issued_at, billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, partners!lab_orders_partner_id_fkey(code,name,address,phone,tax_id)",
     )
     .eq("id", orderId)
     .single();
@@ -212,7 +212,13 @@ export async function getPaymentNoticePrintPayload(orderId: string): Promise<Pay
     };
   });
 
-  const partners = row["partners"] as { code?: string; name?: string } | null;
+  const partners = row["partners"] as {
+    code?: string;
+    name?: string;
+    address?: string | null;
+    phone?: string | null;
+    tax_id?: string | null;
+  } | null;
   return {
     payment_notice_doc_number: (row["payment_notice_doc_number"] as string | null) ?? null,
     payment_notice_issued_at: (row["payment_notice_issued_at"] as string | null) ?? null,
@@ -222,6 +228,9 @@ export async function getPaymentNoticePrintPayload(orderId: string): Promise<Pay
     clinic_name: (row["clinic_name"] as string | null) ?? null,
     partner_code: partners?.code ?? null,
     partner_name: partners?.name ?? null,
+    partner_address: partners?.address ?? null,
+    partner_phone: partners?.phone ?? null,
+    partner_tax_id: partners?.tax_id ?? null,
     notes: (row["notes"] as string | null) ?? null,
     lines,
     subtotal_lines: totals.subtotal_lines,

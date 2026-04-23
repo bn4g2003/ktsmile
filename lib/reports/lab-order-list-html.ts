@@ -1,5 +1,6 @@
 import { escapeHtml } from "@/lib/reports/escape-html";
 import { htmlBangChu } from "@/lib/reports/amount-in-words-html";
+import { htmlHoaDonPhongNhaCustomerBlock, type PartnerTaxDisplay } from "@/lib/reports/partner-kv-html";
 import type { LabOrderRow } from "@/lib/actions/lab-orders";
 import { formatDate } from "@/lib/format/date";
 
@@ -7,12 +8,7 @@ export type LabOrderListReportPayload = {
   filtersDesc: string;
   generatedAt: string;
   rows: LabOrderRow[];
-  customerHeader?: {
-    name: string;
-    address?: string;
-    phone?: string;
-    taxCode?: string;
-  };
+  customerHeader?: PartnerTaxDisplay;
   stats?: {
     prevBalance?: number;
     discount?: number;
@@ -59,16 +55,7 @@ export function buildLabOrderListReportHtml(p: LabOrderListReportPayload): strin
   return `
     <h1 style="color:#0f172a;margin-bottom:8px;">HOÁ ĐƠN PHÒNG NHA / LABO</h1>
 
-    <div style="margin-bottom:14px;">
-      <table class="kv dn-kv" style="width:auto;">
-        <tbody>
-          <tr><th>TÊN KH</th><td style="color:#0f172a;">: ${escapeHtml(p.customerHeader?.name ?? "—")}</td></tr>
-          <tr><th>ĐỊA CHỈ</th><td style="color:#0f172a;">: ${escapeHtml(p.customerHeader?.address ?? "—")}</td></tr>
-          <tr><th>MST</th><td style="color:#0f172a;">: ${escapeHtml(p.customerHeader?.taxCode ?? "—")}</td></tr>
-          <tr><th>SĐT</th><td style="color:#0f172a;">: ${escapeHtml(p.customerHeader?.phone ?? "—")}</td></tr>
-        </tbody>
-      </table>
-    </div>
+    ${htmlHoaDonPhongNhaCustomerBlock(p.customerHeader)}
 
     <div style="text-align:center;font-weight:700;margin-bottom:10px;font-size:13px;text-transform:uppercase;color:#334155;">
       ${escapeHtml(p.filtersDesc)}

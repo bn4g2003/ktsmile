@@ -29,9 +29,10 @@ export function buildCashReceiptBodyHtml(p: CashReceiptPrintPayload): string {
   const isPayment = p.direction === "payment";
   const h1 = isPayment ? "Phiếu chi" : "Phiếu thu";
   const counterpartyLabel = isPayment ? "Nhà cung cấp" : "Khách hàng";
-  const counterpartyValue = isPayment 
-    ? (p.supplier_name || p.supplier_code || "—")
-    : (p.partner_name || p.partner_code || "—");
+  const counterpartyRaw = isPayment
+    ? (p.supplier_name || p.supplier_code || "")
+    : (p.partner_name || p.partner_code || "");
+  const counterpartyValue = counterpartyRaw.trim() || "—";
 
   return `
     <div style="margin-top: -10px;">
@@ -48,10 +49,14 @@ export function buildCashReceiptBodyHtml(p: CashReceiptPrintPayload): string {
             <th style="width: 120px;">Người ${isPayment ? 'nhận' : 'nộp'} tiền:</th>
             <td style="font-size: 14px; font-weight: 700; border-bottom: 1px dotted #cbd5e1;">${escapeHtml(p.payer_name || counterpartyValue)}</td>
           </tr>
-          <tr>
+          ${
+            counterpartyValue !== "—"
+              ? `<tr>
             <th>${counterpartyLabel}:</th>
             <td style="border-bottom: 1px dotted #cbd5e1;">${escapeHtml(counterpartyValue)}</td>
-          </tr>
+          </tr>`
+              : ""
+          }
           <tr>
             <th>Nội dung:</th>
             <td style="border-bottom: 1px dotted #cbd5e1;">${escapeHtml(p.description || p.business_category)}</td>

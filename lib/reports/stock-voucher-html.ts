@@ -32,10 +32,10 @@ export function buildStockVoucherBodyHtml(p: StockDocumentPrintPayload): string 
   const kind = formatMovement(p.movement_type);
   const gen = new Date().toLocaleString("vi-VN");
   const isOutbound = p.movement_type === "outbound";
-  const partnerLine =
+  const partnerInner =
     p.partner_code || p.partner_name
       ? `${escapeHtml(p.partner_code ?? "")}${p.partner_code && p.partner_name ? " — " : ""}${escapeHtml(p.partner_name ?? "")}`
-      : "—";
+      : null;
   
   const rows = p.lines
     .map(
@@ -64,18 +64,16 @@ export function buildStockVoucherBodyHtml(p: StockDocumentPrintPayload): string 
 
       <table class="kv" style="margin-bottom: 15px;">
         <tbody>
-          <tr>
+          ${
+            partnerInner
+              ? `<tr>
             <th style="width: 100px;">Đối tác:</th>
-            <td style="font-weight: 700;">${partnerLine}</td>
-          </tr>
-          <tr>
-            <th>Lý do:</th>
-            <td>${escapeHtml(p.reason ?? "—")}</td>
-          </tr>
-          <tr>
-            <th>Ghi chú:</th>
-            <td>${escapeHtml(p.notes ?? "—")}</td>
-          </tr>
+            <td style="font-weight: 700;">${partnerInner}</td>
+          </tr>`
+              : ""
+          }
+          ${p.reason?.trim() ? `<tr><th>Lý do:</th><td>${escapeHtml(p.reason.trim())}</td></tr>` : ""}
+          ${p.notes?.trim() ? `<tr><th>Ghi chú:</th><td>${escapeHtml(p.notes.trim())}</td></tr>` : ""}
         </tbody>
       </table>
 

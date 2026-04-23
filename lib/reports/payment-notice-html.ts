@@ -1,5 +1,6 @@
 import { formatVnd } from "@/lib/format/currency";
 import { htmlBangChu } from "@/lib/reports/amount-in-words-html";
+import { htmlGbttPartnerKvRows } from "@/lib/reports/partner-kv-html";
 import { escapeHtml } from "@/lib/reports/escape-html";
 
 export type PaymentNoticeLine = {
@@ -27,6 +28,9 @@ export type PaymentNoticePrintPayload = {
   clinic_name: string | null;
   partner_code: string | null;
   partner_name: string | null;
+  partner_address: string | null;
+  partner_phone: string | null;
+  partner_tax_id: string | null;
   notes: string | null;
   lines: PaymentNoticeLine[];
   subtotal_lines: number;
@@ -46,10 +50,10 @@ export function paymentNoticePrintTitle(p: PaymentNoticePrintPayload): string {
 }
 
 export function buildPaymentNoticeBodyHtml(p: PaymentNoticePrintPayload): string {
-  const partnerLine =
+  const partnerInner =
     p.partner_code || p.partner_name
       ? `${escapeHtml(p.partner_code ?? "")}${p.partner_code && p.partner_name ? " — " : ""}${escapeHtml(p.partner_name ?? "")}`
-      : "—";
+      : null;
   const rows = p.lines
     .map(
       (l, i) =>
@@ -85,10 +89,15 @@ export function buildPaymentNoticeBodyHtml(p: PaymentNoticePrintPayload): string
 
     <table class="pn-kv">
       <tbody>
-        <tr><th scope="row">Tên KH</th><td>${partnerLine}</td></tr>
-        <tr><th scope="row">Nha khoa</th><td>${escapeHtml(p.clinic_name ?? "—")}</td></tr>
+        ${htmlGbttPartnerKvRows({
+          partnerCellInner: partnerInner,
+          address: p.partner_address,
+          phone: p.partner_phone,
+          taxCode: p.partner_tax_id,
+        })}
+        ${p.clinic_name?.trim() ? `<tr><th scope="row">Nha khoa</th><td>${escapeHtml(p.clinic_name.trim())}</td></tr>` : ""}
         <tr><th scope="row">Bệnh nhân</th><td>${escapeHtml(p.patient_name)}</td></tr>
-        <tr><th scope="row">Ghi chú</th><td>${escapeHtml(p.notes ?? "—")}</td></tr>
+        ${p.notes?.trim() ? `<tr><th scope="row">Ghi chú</th><td>${escapeHtml(p.notes.trim())}</td></tr>` : ""}
       </tbody>
     </table>
 

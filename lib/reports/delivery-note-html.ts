@@ -88,7 +88,7 @@ export function buildDeliveryNoteBodyHtml(p: DeliveryNotePayload): string {
 
     <table class="kv dn-kv" style="margin-bottom:20px;">
       <tbody>
-        <tr><th>KHÁCH HÀNG</th><td style="color:#0f172a;">: ${who}</td></tr>
+        ${p.partner_code?.trim() || p.partner_name?.trim() ? `<tr><th>KHÁCH HÀNG</th><td style="color:#0f172a;">: ${who}</td></tr>` : ""}
         <tr><th>SỐ ĐƠN HÀNG</th><td style="color:#0f172a;">: ${p.orders.length} đơn</td></tr>
       </tbody>
     </table>
