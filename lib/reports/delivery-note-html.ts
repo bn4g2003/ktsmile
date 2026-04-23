@@ -146,18 +146,18 @@ function htmlMonthlyDeliveryFooter(f: DeliveryNoteMonthlyFooter): string {
   const words = amountInWordsVietnamese(Math.round(f.closing_debt)).toLocaleUpperCase("vi-VN");
   const supportHtml = MONTHLY_DELIVERY_NOTE_SUPPORT_LINES.map(
     (t) =>
-      `<p style="margin:4px 0 0;font-size:6.5px;font-style:italic;color:#475569;line-height:1.35;text-align:right;">${escapeHtml(t)}</p>`,
+      `<p style="margin:6px 0 0;font-size:8.5px;font-style:italic;color:#334155;line-height:1.45;text-align:right;">${escapeHtml(t)}</p>`,
   ).join("");
 
   return `
     <div class="dn-monthly-foot-wrap" style="display:flex;justify-content:flex-end;width:100%;margin-top:12px;clear:both;">
-      <div class="dn-monthly-foot" style="width:fit-content;max-width:min(100%,232px);text-align:right;font-size:7.5px;color:#0f172a;">
+      <div class="dn-monthly-foot" style="width:fit-content;max-width:min(100%,420px);text-align:right;font-size:12px;color:#0f172a;">
         <table class="dn-sum-table" style="margin-left:auto;border-collapse:collapse;width:100%;font-size:inherit;">
           <tbody>
             ${lines.join("")}
           </tbody>
         </table>
-        <div style="margin-top:6px;font-size:7px;line-height:1.4;text-align:right;word-break:break-word;">
+        <div style="margin-top:10px;font-size:11px;line-height:1.45;text-align:right;word-break:break-word;">
           <strong>SỐ TIỀN BẰNG CHỮ :</strong>
           <span style="font-weight:700;"> ${escapeHtml(words)} ./.</span>
         </div>
@@ -167,8 +167,8 @@ function htmlMonthlyDeliveryFooter(f: DeliveryNoteMonthlyFooter): string {
     <style>
       .dn-sum-table td {
         border: 1px solid #94a3b8;
-        padding: 2px 5px;
-        font-size: 7.5px;
+        padding: 6px 10px;
+        font-size: 12px;
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
       }
@@ -180,7 +180,7 @@ function htmlMonthlyDeliveryFooter(f: DeliveryNoteMonthlyFooter): string {
       }
       .dn-sum-table .dn-sum-val {
         text-align: right;
-        min-width: 72px;
+        min-width: 160px;
         font-variant-numeric: tabular-nums;
         background: #fff;
       }
