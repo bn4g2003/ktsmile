@@ -80,6 +80,18 @@ export async function getInventoryMovementReport(
 
   if (lErr) throw new Error(lErr.message);
 
+  type MovementLine = {
+    product_id: string;
+    quantity: number | string | null;
+    line_amount: number | string | null;
+    stock_documents: {
+      document_date: string;
+      movement_type: "inbound" | "outbound";
+    };
+  };
+
+  const typedLines = (allLines ?? []) as unknown as MovementLine[];
+
   // Tính toán cho từng sản phẩm
   const rows: InventoryMovementRow[] = [];
   let totalOpeningAmount = 0;
@@ -88,9 +100,7 @@ export async function getInventoryMovementReport(
   let totalClosingAmount = 0;
 
   for (const product of products) {
-    const productLines = (allLines ?? []).filter(
-      (l: any) => l.product_id === product.id,
-    );
+    const productLines = typedLines.filter((l) => l.product_id === product.id);
 
     let openingQty = 0;
     let openingAmount = 0;
@@ -100,9 +110,9 @@ export async function getInventoryMovementReport(
     let outboundAmount = 0;
 
     for (const line of productLines) {
-      const doc = (line as any).stock_documents;
-      const docDate = doc.document_date as string;
-      const movementType = doc.movement_type as "inbound" | "outbound";
+      const doc = line.stock_documents;
+      const docDate = doc.document_date;
+      const movementType = doc.movement_type;
       const qty = Number(line.quantity ?? 0);
       const amount = Number(line.line_amount ?? 0);
 

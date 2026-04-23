@@ -139,7 +139,9 @@ export function Combobox({ options, value, onChange, placeholder, className }: C
             ))
           ) : (
             <div className="px-3 py-4 text-center">
-               <p className="text-sm text-[var(--on-surface-muted)]">Không tìm thấy "{search}"</p>
+               <p className="text-sm text-[var(--on-surface-muted)]">
+                 Không tìm thấy &ldquo;{search}&rdquo;
+               </p>
                <p className="mt-1 text-xs text-[var(--on-surface-faint)]">Nhấn Enter để dùng giá trị này</p>
             </div>
           )}

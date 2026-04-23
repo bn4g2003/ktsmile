@@ -66,7 +66,7 @@ export const CurrencyInput = React.forwardRef<HTMLInputElement, CurrencyInputPro
     }, [value]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      let input = e.target.value;
+      const input = e.target.value;
 
       // Cho phép rỗng
       if (input === "") {

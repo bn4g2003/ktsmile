@@ -136,16 +136,26 @@ export async function listPartnerPicker() {
   return listCustomerPartnerPicker();
 }
 
+/** Một dòng khách trong combobox — thêm địa chỉ/SĐT/MST phục vụ in hóa đơn báo phí. */
+export type CustomerPartnerPickerRow = {
+  id: string;
+  code: string;
+  name: string;
+  phone: string | null;
+  address: string | null;
+  tax_id: string | null;
+};
+
 /** Chỉ khách (phòng khám / labo) — đơn phục hình không chọn NCC. */
-export async function listCustomerPartnerPicker() {
+export async function listCustomerPartnerPicker(): Promise<CustomerPartnerPickerRow[]> {
   const supabase = createSupabaseAdmin();
   const { data, error } = await supabase
     .from("partners")
-    .select("id, code, name")
+    .select("id, code, name, phone, address, tax_id")
     .in("partner_type", ["customer_clinic", "customer_labo"])
     .order("code", { ascending: true })
     .limit(3000);
   if (error) throw new Error(error.message);
-  return (data ?? []) as { id: string; code: string; name: string }[];
+  return (data ?? []) as CustomerPartnerPickerRow[];
 }
 

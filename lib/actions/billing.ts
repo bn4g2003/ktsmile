@@ -116,7 +116,7 @@ export async function issuePaymentNoticeForLabOrder(orderId: string, issueDate?:
     .single();
   if (ce || !cur) throw new Error(ce?.message ?? "Không tìm thấy đơn.");
 
-  let doc = cur.payment_notice_doc_number as string | null;
+  const doc = cur.payment_notice_doc_number as string | null;
   if (!doc) {
     let lastErr: Error | null = null;
     for (let attempt = 0; attempt < 15; attempt++) {

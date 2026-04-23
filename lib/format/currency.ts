@@ -6,9 +6,9 @@ export function amountInWordsVietnamese(amount: number): string {
   const ChuSo = ["không", "một", "hai", "ba", "bốn", "năm", "sáu", "bảy", "tám", "chín"];
   
   function doc3so(so: number): string {
-    let tram = Math.floor(so / 100);
-    let chuc = Math.floor((so % 100) / 10);
-    let donvi = so % 10;
+    const tram = Math.floor(so / 100);
+    const chuc = Math.floor((so % 100) / 10);
+    const donvi = so % 10;
     let res = "";
     if (tram > 0) {
       res += ChuSo[tram] + " trăm ";
@@ -36,13 +36,13 @@ export function amountInWordsVietnamese(amount: number): string {
 
   if (amount === 0) return "Không đồng";
   let res = "";
-  let ti = Math.floor(amount / 1000000000);
+  const ti = Math.floor(amount / 1000000000);
   amount %= 1000000000;
-  let trieu = Math.floor(amount / 1000000);
+  const trieu = Math.floor(amount / 1000000);
   amount %= 1000000;
-  let nghin = Math.floor(amount / 1000);
+  const nghin = Math.floor(amount / 1000);
   amount %= 1000;
-  let dong = amount;
+  const dong = amount;
 
   if (ti > 0) res += doc3so(ti) + " tỷ ";
   if (trieu > 0) res += doc3so(trieu) + " triệu ";

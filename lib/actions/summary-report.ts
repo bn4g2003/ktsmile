@@ -53,16 +53,28 @@ export async function getSummaryReport(
 
   if (linesError) throw new Error(linesError.message);
 
+  type SummaryLine = {
+    tooth_count: number | string | null;
+    work_type: string | null;
+    products: { id: string; code: string; name: string } | null;
+    lab_orders: {
+      id: string;
+      received_at: string;
+      partner_id: string | null;
+      status: string;
+    } | null;
+  };
+
   let totalNewYield = 0;
   let totalWarrantyYield = 0;
   const uniquePartners = new Set<string>();
   const productMap = new Map<string, { code: string; name: string; count: number }>();
 
-  for (const line of lines ?? []) {
-    const order = (line.lab_orders as any);
+  for (const line of (lines ?? []) as unknown as SummaryLine[]) {
+    const order = line.lab_orders;
     if (!order) continue; // Bỏ qua nếu không có thông tin đơn hàng (do filter)
 
-    const product = (line.products as any);
+    const product = line.products;
     const count = Number(line.tooth_count ?? 0);
 
     // Tính sản lượng theo loại công việc

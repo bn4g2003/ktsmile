@@ -34,7 +34,10 @@ import { LabOrderRowDetailPanel } from "@/components/modules/orders/lab-order-ro
 import { LabOrderStatusQuickDialog } from "@/components/modules/orders/lab-order-status-quick-dialog";
 import { OrdersPrintHub } from "@/components/modules/orders/orders-print-hub";
 import { Textarea } from "@/components/ui/textarea";
-import { listCustomerPartnerPicker } from "@/lib/actions/partners";
+import {
+  listCustomerPartnerPicker,
+  type CustomerPartnerPickerRow,
+} from "@/lib/actions/partners";
 import { listProductPicker } from "@/lib/actions/products";
 import {
   allowedLabOrderStatusTargets,
@@ -169,7 +172,7 @@ function OrderFiltersPopover({
 }: {
   filters: Record<string, string>;
   setFilters: (f: Record<string, string>) => void;
-  partners: { id: string; code: string; name: string }[];
+  partners: CustomerPartnerPickerRow[];
 }) {
   const [open, setOpen] = React.useState(false);
   const activeCount = Object.keys(filters).filter((k) => !!filters[k]).length;
@@ -305,7 +308,7 @@ function OrdersPrintExportMenu({
 }: {
   filters: Record<string, string>;
   globalSearch: string;
-  partners: { id: string; code: string; name: string }[];
+  partners: CustomerPartnerPickerRow[];
   onOpenDailyDelivery: () => void;
 }) {
   const [busy, setBusy] = React.useState<null | "list-pdf" | "list-xlsx">(null);
@@ -335,8 +338,9 @@ function OrdersPrintExportMenu({
       const customerHeader = partner
         ? {
             name: partner.name,
-            address: "—",
-            phone: "—",
+            address: partner.address?.trim() || undefined,
+            phone: partner.phone?.trim() || undefined,
+            taxCode: partner.tax_id?.trim() || undefined,
           }
         : undefined;
 
@@ -451,7 +455,7 @@ export function OrdersPage() {
   }, [router]);
   const [open, setOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<LabOrderRow | null>(null);
-  const [partners, setPartners] = React.useState<{ id: string; code: string; name: string }[]>([]);
+  const [partners, setPartners] = React.useState<CustomerPartnerPickerRow[]>([]);
   const [products, setProducts] = React.useState<
     { id: string; code: string; name: string; unit_price: number }[]
   >([]);
@@ -973,24 +977,74 @@ export function OrdersPage() {
         cell: ({ getValue }) => formatPatientGender(String(getValue() ?? "")),
       },
       {
+        accessorKey: "products_summary",
+        header: "Sản phẩm",
+        size: 240,
+        meta: { filterType: "none" },
+        cell: ({ getValue }) => {
+          const s = getValue() as string | null | undefined;
+          return s?.trim() ? (
+            <span className="line-clamp-2 text-[13px] leading-snug" title={s}>
+              {s}
+            </span>
+          ) : (
+            "—"
+          );
+        },
+      },
+      {
+        id: "avg_unit_price",
+        header: "Đơn giá TB",
+        size: 110,
+        meta: { filterType: "none" },
+        cell: ({ row }) => {
+          const r = row.original;
+          const sub = r.total_amount;
+          const q = r.line_quantity_total && r.line_quantity_total > 0 ? r.line_quantity_total : null;
+          const teeth = r.tooth_count_total && r.tooth_count_total > 0 ? r.tooth_count_total : null;
+          const div = q ?? teeth;
+          if (div == null || div <= 0 || !Number.isFinite(sub) || sub <= 0) {
+            return <span className="text-right text-[var(--on-surface-muted)]">—</span>;
+          }
+          const avg = sub / div;
+          const basis = q != null ? "theo SL dòng" : "theo SL răng";
+          return (
+            <div
+              className="text-right tabular-nums text-[13px]"
+              title={`Trung bình ${basis}: cộng tiền hàng ÷ ${div}`}
+            >
+              {Math.round(avg).toLocaleString("vi-VN")}
+            </div>
+          );
+        },
+      },
+      {
         accessorKey: "total_amount",
-        header: "Tổng đơn",
-        size: 120,
+        header: "Cộng tiền hàng",
+        size: 130,
+        meta: { filterType: "none" },
         cell: ({ getValue }) => (
-          <div className="text-right font-semibold tabular-nums">
+          <div
+            className="text-right font-semibold tabular-nums"
+            title="Tổng thành tiền các dòng SP (trước chiết khấu %, CK VNĐ và phí khác)"
+          >
             {Number(getValue() ?? 0).toLocaleString("vi-VN")}
           </div>
-        )
+        ),
       },
       {
         accessorKey: "grand_total",
-        header: "Thành tiền",
-        size: 130,
+        header: "Phải thu",
+        size: 120,
+        meta: { filterType: "none" },
         cell: ({ getValue }) => (
-          <div className="text-right font-bold text-[color-mix(in_srgb,var(--primary)_60%,var(--on-surface))] tabular-nums">
+          <div
+            className="text-right font-bold text-[color-mix(in_srgb,var(--primary)_60%,var(--on-surface))] tabular-nums"
+            title="Số tiền sau CK đơn và phí khác (công thức GBTT)"
+          >
             {Number(getValue() ?? 0).toLocaleString("vi-VN")}
           </div>
-        )
+        ),
       },
       { accessorKey: "tooth_positions_summary", header: "Răng", size: 140 },
       { accessorKey: "tooth_count_total", header: "SL Răng", size: 90, cell: ({ getValue }) => getValue() ?? "—" },

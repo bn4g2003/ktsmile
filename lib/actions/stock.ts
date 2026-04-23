@@ -763,41 +763,33 @@ export async function listProductStock(
   const supabase = createSupabaseAdmin();
   const { page, pageSize, globalSearch, filters } = args;
   const seg = filters.stock_segment?.trim();
+  const isMaterial = seg === "nvl";
+  const codeCol = isMaterial ? "material_code" : "product_code";
+  const nameCol = isMaterial ? "material_name" : "product_name";
 
-  let q: any;
-  if (seg === "nvl") {
-    q = supabase.from("v_material_stock").select("*", { count: "exact" });
-    const g = globalSearch.trim();
-    if (g) {
-      const p = "%" + g + "%";
-      q = q.or("material_code.ilike." + p + ",material_name.ilike." + p);
-    }
-    if (filters.product_code?.trim()) {
-      q = q.ilike("material_code", "%" + filters.product_code.trim() + "%");
-    }
-    if (filters.product_name?.trim()) {
-      q = q.ilike("material_name", "%" + filters.product_name.trim() + "%");
-    }
-    if (filters.unit?.trim()) {
-      q = q.ilike("unit", "%" + filters.unit.trim() + "%");
-    }
-    q = q.order("material_code", { ascending: true });
-  } else {
-    q = supabase.from("v_product_stock").select("*", { count: "exact" });
+  let q = isMaterial
+    ? supabase.from("v_material_stock").select("*", { count: "exact" })
+    : supabase.from("v_product_stock").select("*", { count: "exact" });
+
+  if (!isMaterial) {
     q = q.eq("product_usage", "sales");
-    const g = globalSearch.trim();
-    if (g) {
-      const p = "%" + g + "%";
-      q = q.or("product_code.ilike." + p + ",product_name.ilike." + p);
-    }
-    if (filters.product_code?.trim())
-      q = q.ilike("product_code", "%" + filters.product_code.trim() + "%");
-    if (filters.product_name?.trim())
-      q = q.ilike("product_name", "%" + filters.product_name.trim() + "%");
-    if (filters.unit?.trim())
-      q = q.ilike("unit", "%" + filters.unit.trim() + "%");
-    q = q.order("product_code", { ascending: true });
   }
+
+  const g = globalSearch.trim();
+  if (g) {
+    const p = "%" + g + "%";
+    q = q.or(`${codeCol}.ilike.${p},${nameCol}.ilike.${p}`);
+  }
+  if (filters.product_code?.trim()) {
+    q = q.ilike(codeCol, "%" + filters.product_code.trim() + "%");
+  }
+  if (filters.product_name?.trim()) {
+    q = q.ilike(nameCol, "%" + filters.product_name.trim() + "%");
+  }
+  if (filters.unit?.trim()) {
+    q = q.ilike("unit", "%" + filters.unit.trim() + "%");
+  }
+  q = q.order(codeCol, { ascending: true });
 
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;

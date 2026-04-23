@@ -8,7 +8,9 @@ export type SummaryReportExcelPayload = {
   filters: { partnerName?: string; productName?: string };
 };
 
-export function buildSummaryReportExcelBuffer(payload: SummaryReportExcelPayload): any {
+export function buildSummaryReportExcelBuffer(
+  payload: SummaryReportExcelPayload,
+): ArrayBuffer {
   const { year, month, data, filters } = payload;
   const monthStr = String(month).padStart(2, "0");
 
@@ -51,5 +53,8 @@ export function buildSummaryReportExcelBuffer(payload: SummaryReportExcelPayload
 
   XLSX.utils.book_append_sheet(wb, ws, "Bao_cao_tong_hop");
 
-  return XLSX.write(wb, { bookType: "xlsx", type: "array" });
+  const bytes = XLSX.write(wb, { bookType: "xlsx", type: "array" }) as Uint8Array;
+  const copy = new Uint8Array(bytes.byteLength);
+  copy.set(bytes);
+  return copy.buffer;
 }

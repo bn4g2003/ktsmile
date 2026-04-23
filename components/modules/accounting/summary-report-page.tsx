@@ -231,7 +231,7 @@ export function SummaryReportPage() {
                         width={80}
                       />
                       <Tooltip 
-                        formatter={(v: any) => [`${v} Răng`, "Sản lượng"]}
+                        formatter={(v: number | string) => [`${v} Răng`, "Sản lượng"]}
                         labelFormatter={(label) => `Sản phẩm: ${topProducts.find(p => p.product_code === label)?.product_name || label}`}
                       />
                       <Bar dataKey="count" fill="var(--primary)" radius={[0, 4, 4, 0]} barSize={20} />
