@@ -1,8 +1,8 @@
 import { formatVnd } from "@/lib/format/currency";
 import { htmlBangChu } from "@/lib/reports/amount-in-words-html";
-import { formatCashDirection } from "@/lib/format/labels";
 import { formatDateTime } from "@/lib/format/date";
 import { escapeHtml } from "@/lib/reports/escape-html";
+import { cashVoucherThemeCss } from "@/lib/reports/cash-voucher-theme";
 
 export type CashReceiptPrintPayload = {
   doc_number: string;
@@ -27,74 +27,79 @@ export function cashReceiptPrintTitle(p: CashReceiptPrintPayload): string {
 export function buildCashReceiptBodyHtml(p: CashReceiptPrintPayload): string {
   const gen = formatDateTime(new Date());
   const isPayment = p.direction === "payment";
-  const h1 = isPayment ? "Phiếu chi" : "Phiếu thu";
+  const h1 = isPayment ? "PHIẾU CHI" : "PHIẾU THU";
   const counterpartyLabel = isPayment ? "Nhà cung cấp" : "Khách hàng";
   const counterpartyRaw = isPayment
     ? (p.supplier_name || p.supplier_code || "")
     : (p.partner_name || p.partner_code || "");
   const counterpartyValue = counterpartyRaw.trim() || "—";
 
-  return `
-    <div style="margin-top: -10px;">
-      <h1 style="margin-bottom: 5px;">${h1}</h1>
-      <p style="text-align:center; font-size: 13px; margin: 0 0 20px 0;">
-        Số: <strong>${escapeHtml(p.doc_number)}</strong> 
-        <span style="margin: 0 10px; color: #cbd5e1;">|</span> 
-        Ngày: <strong>${p.transaction_date.split('-').reverse().join('/')}</strong>
-      </p>
+  const actorLabel = `Người ${isPayment ? "nhận" : "nộp"} tiền`;
+  const actorValue = escapeHtml(p.payer_name || counterpartyValue);
+  const docDate = p.transaction_date.split("-").reverse().join("/");
 
-      <table class="kv" style="margin-bottom: 25px;">
+  return `
+    <div class="cr-root">
+      <h1 class="cr-title">${h1}</h1>
+      <div class="cr-meta">
+        <p><span class="cr-meta-k">Số phiếu</span><span class="cr-meta-v"><strong>${escapeHtml(p.doc_number)}</strong></span></p>
+        <p><span class="cr-meta-k">Ngày chứng từ</span><span class="cr-meta-v">${escapeHtml(docDate)}</span></p>
+        <p><span class="cr-meta-k">Loại</span><span class="cr-meta-v">${escapeHtml(isPayment ? "Chi tiền" : "Thu tiền")}</span></p>
+        <p><span class="cr-meta-k">Kênh thanh toán</span><span class="cr-meta-v">${escapeHtml(p.payment_channel)}</span></p>
+      </div>
+
+      <table class="cr-kv">
         <tbody>
           <tr>
-            <th style="width: 120px;">Người ${isPayment ? 'nhận' : 'nộp'} tiền:</th>
-            <td style="font-size: 14px; font-weight: 700; border-bottom: 1px dotted #cbd5e1;">${escapeHtml(p.payer_name || counterpartyValue)}</td>
+            <th scope="row">${actorLabel}</th>
+            <td class="cr-strong">${actorValue}</td>
           </tr>
           ${
             counterpartyValue !== "—"
               ? `<tr>
-            <th>${counterpartyLabel}:</th>
-            <td style="border-bottom: 1px dotted #cbd5e1;">${escapeHtml(counterpartyValue)}</td>
-          </tr>`
+                  <th scope="row">${counterpartyLabel}</th>
+                  <td>${escapeHtml(counterpartyValue)}</td>
+                </tr>`
               : ""
           }
           <tr>
-            <th>Nội dung:</th>
-            <td style="border-bottom: 1px dotted #cbd5e1;">${escapeHtml(p.description || p.business_category)}</td>
+            <th scope="row">Nghiệp vụ</th>
+            <td>${escapeHtml(p.business_category || "—")}</td>
           </tr>
           <tr>
-            <th>Số tiền:</th>
-            <td style="font-size: 15px; font-weight: 800; border-bottom: 1px dotted #cbd5e1;">${formatVnd(p.amount)} VNĐ</td>
+            <th scope="row">Nội dung</th>
+            <td>${escapeHtml(p.description || p.business_category || "—")}</td>
           </tr>
           <tr>
-            <th>Kênh / Chứng từ:</th>
-            <td style="border-bottom: 1px dotted #cbd5e1;">${escapeHtml(p.payment_channel)}</td>
+            <th scope="row">Số tiền</th>
+            <td class="cr-amount">${escapeHtml(formatVnd(p.amount))} VNĐ</td>
           </tr>
         </tbody>
       </table>
-      ${htmlBangChu(p.amount)}
+      ${htmlBangChu(p.amount, "Số tiền bằng chữ")}
 
-      <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; text-align: center; margin-top: 40px; min-height: 120px;">
-        <div>
-          <div style="font-weight: 700;">Giám đốc</div>
-          <div style="font-size: 10px; font-style: italic; color: #64748b;">(Ký, đóng dấu)</div>
+      <div class="cr-sign">
+        <div class="cr-sign-box">
+          <div class="cr-sign-title">Giám đốc</div>
+          <div class="cr-sign-hint">(Ký, đóng dấu)</div>
         </div>
-        <div>
-          <div style="font-weight: 700;">Kế toán</div>
-          <div style="font-size: 10px; font-style: italic; color: #64748b;">(Ký, họ tên)</div>
+        <div class="cr-sign-box">
+          <div class="cr-sign-title">Kế toán</div>
+          <div class="cr-sign-hint">(Ký, họ tên)</div>
         </div>
-        <div>
-          <div style="font-weight: 700;">Thủ quỹ</div>
-          <div style="font-size: 10px; font-style: italic; color: #64748b;">(Ký, họ tên)</div>
+        <div class="cr-sign-box">
+          <div class="cr-sign-title">Thủ quỹ</div>
+          <div class="cr-sign-hint">(Ký, họ tên)</div>
         </div>
-        <div>
-          <div style="font-weight: 700;">Người ${isPayment ? 'nhận' : 'nộp'}</div>
-          <div style="font-size: 10px; font-style: italic; color: #64748b;">(Ký, họ tên)</div>
+        <div class="cr-sign-box">
+          <div class="cr-sign-title">${actorLabel}</div>
+          <div class="cr-sign-hint">(Ký, họ tên)</div>
         </div>
       </div>
 
-      <div style="margin-top: 50px; text-align: right; font-size: 10px; color: #94a3b8;">
-        In lúc: ${escapeHtml(gen)} — Hệ thống quản lý KTSmile Lab
-      </div>
+      <div class="cr-foot">In lúc: ${escapeHtml(gen)} — Hệ thống quản lý KTSmile Lab</div>
     </div>
+
+    <style>${cashVoucherThemeCss()}</style>
   `;
 }
