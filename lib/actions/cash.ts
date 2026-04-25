@@ -220,7 +220,7 @@ function compactEntityKey(raw: string | null | undefined, fallback: string): str
   return fallback.toUpperCase();
 }
 
-/** Số chứng từ tự động: PT/PC-<IDKH|IDNCC>-<YYYYMMDDHHmm>-<001>. */
+/** Số chứng từ tự động: PT/PC-<IDKH|IDNCC>-<YYYYMMDD>-<001> (theo ngày chứng từ, không kèm giờ). */
 export async function allocateNextCashDocNumber(
   transactionDate: string,
   direction: "receipt" | "payment",
@@ -231,8 +231,7 @@ export async function allocateNextCashDocNumber(
   if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) {
     throw new Error("Ngày chứng từ không hợp lệ.");
   }
-  const now = new Date();
-  const ymdhm = `${d.replace(/-/g, "")}${String(now.getHours()).padStart(2, "0")}${String(now.getMinutes()).padStart(2, "0")}`;
+  const ymd = d.replace(/-/g, "");
   const prefix = direction === "receipt" ? "PT" : "PC";
   const supabase = createSupabaseAdmin();
   let entity = "";
@@ -259,7 +258,7 @@ export async function allocateNextCashDocNumber(
       entity = "NCC";
     }
   }
-  const stem = `${prefix}-${entity}-${ymdhm}`;
+  const stem = `${prefix}-${entity}-${ymd}`;
   const { data, error } = await supabase
     .from("cash_transactions")
     .select("doc_number")
