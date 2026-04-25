@@ -308,16 +308,14 @@ export function CashPage() {
         meta: { filterType: "none" },
         cell: ({ row }) => (
           <>
-            {row.original.direction === "receipt" ? (
-              <DropdownMenuItem asChild>
-                <CashReceiptPrintButton
-                  transactionId={row.original.id}
-                  label="In PT"
-                  variant="ghost"
-                  className={dataGridPrintMenuItemButtonClassName}
-                />
-              </DropdownMenuItem>
-            ) : null}
+            <DropdownMenuItem asChild>
+              <CashReceiptPrintButton
+                transactionId={row.original.id}
+                label={row.original.direction === "payment" ? "In PC" : "In PT"}
+                variant="ghost"
+                className={dataGridPrintMenuItemButtonClassName}
+              />
+            </DropdownMenuItem>
             <DataGridMenuEditItem onSelect={() => openEdit(row.original)}>Sửa</DataGridMenuEditItem>
             <DataGridMenuDeleteItem onSelect={() => void onDelete(row.original)}>Xóa</DataGridMenuDeleteItem>
           </>

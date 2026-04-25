@@ -577,6 +577,7 @@ export function OrdersPage() {
   const [filters, setFilters] = React.useState<Record<string, string>>({});
   const [globalSearch, setGlobalSearch] = React.useState("");
   const [mainTab, setMainTab] = React.useState<"list" | "prints">("list");
+  const [selectedOrderIds, setSelectedOrderIds] = React.useState<Set<string>>(new Set());
 
   React.useEffect(() => {
     void listCustomerPartnerPicker().then(setPartners).catch(() => {});
@@ -908,6 +909,35 @@ export function OrdersPage() {
     }
   };
 
+  const toggleSelectOrder = React.useCallback((id: string, checked: boolean) => {
+    setSelectedOrderIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }, []);
+
+  const clearSelectedOrders = React.useCallback(() => {
+    setSelectedOrderIds(new Set());
+  }, []);
+
+  const deleteSelectedOrders = React.useCallback(async () => {
+    const ids = [...selectedOrderIds];
+    if (!ids.length) return;
+    if (!confirm(`Xóa ${ids.length} đơn đã chọn? (xóa cả dòng chi tiết)`)) return;
+    try {
+      for (const id of ids) {
+        await deleteLabOrder(id);
+      }
+      clearSelectedOrders();
+      bumpGrid();
+      alert(`Đã xóa ${ids.length} đơn.`);
+    } catch (e2) {
+      alert(e2 instanceof Error ? e2.message : "Không xóa được hàng loạt");
+    }
+  }, [selectedOrderIds, clearSelectedOrders, bumpGrid]);
+
   const openQuickStatus = React.useCallback((row: LabOrderRow) => {
     setQuickRow(row);
     setQuickStatus(row.status);
@@ -933,6 +963,20 @@ export function OrdersPage() {
 
   const columns = React.useMemo<ColumnDef<LabOrderRow, unknown>[]>(
     () => [
+      {
+        id: "bulk_tick",
+        header: "Tick xóa",
+        size: 70,
+        meta: { filterType: "none" },
+        cell: ({ row }) => (
+          <input
+            type="checkbox"
+            aria-label={"Chọn đơn " + row.original.order_number}
+            checked={selectedOrderIds.has(row.original.id)}
+            onChange={(e) => toggleSelectOrder(row.original.id, e.target.checked)}
+          />
+        ),
+      },
       {
         accessorKey: "order_number",
         header: "Số đơn",
@@ -1170,8 +1214,12 @@ export function OrdersPage() {
         ),
       },
     ],
-    [openQuickStatus],
+    [openQuickStatus, selectedOrderIds, toggleSelectOrder],
   );
+
+  React.useEffect(() => {
+    clearSelectedOrders();
+  }, [gridReload, clearSelectedOrders]);
 
   return (
     <>
@@ -1231,6 +1279,15 @@ export function OrdersPage() {
               partners={partners}
               onOpenDailyDelivery={openDeliveryPrint}
             />
+            <Button
+              variant="ghost"
+              size="sm"
+              type="button"
+              disabled={selectedOrderIds.size === 0}
+              onClick={() => void deleteSelectedOrders()}
+            >
+              {selectedOrderIds.size > 0 ? `Xóa đã chọn (${selectedOrderIds.size})` : "Xóa đã chọn"}
+            </Button>
             <Button variant="primary" size="sm" type="button" onClick={openCreate}>
               Thêm đơn
             </Button>

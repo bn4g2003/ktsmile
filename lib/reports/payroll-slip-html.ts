@@ -409,94 +409,164 @@ export function buildPayrollBatchPrintHtml(
           color: #111827;
           background: #fff;
         }
-        .page-break {
-          break-after: page;
-          page-break-after: always;
-        }
         .payroll-slip {
           max-width: 210mm;
           margin: 0 auto;
           page-break-inside: avoid;
         }
-        .header {
-          text-align: center;
-          margin-bottom: 14px;
+        .page-break {
+          break-after: page;
+          page-break-after: always;
         }
-        .company {
-          font-size: 13px;
+        .header-top {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          font-size: 15px;
           font-weight: 700;
-          text-transform: uppercase;
-          margin-bottom: 10px;
+          margin-bottom: 8px;
         }
-        h1 {
-          margin: 0;
+        .company-name {
+          font-size: 18px;
+          font-weight: 800;
+        }
+        .title-band {
+          background: #c6e0b4;
+          text-align: center;
           font-size: 22px;
           font-weight: 800;
           text-transform: uppercase;
+          padding: 6px 8px;
+          margin-bottom: 4px;
         }
         .period {
-          margin-top: 8px;
-          font-size: 14px;
-        }
-        .employee-box {
-          display: grid;
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 6px 18px;
-          font-size: 13px;
-          margin-bottom: 14px;
-        }
-        .employee-box span {
+          text-align: center;
+          font-size: 17px;
           font-weight: 700;
+          margin-bottom: 10px;
         }
-        .section-title {
-          margin: 12px 0 6px;
-          font-size: 12px;
-          font-weight: 700;
-          text-transform: uppercase;
-        }
-        table {
+        .employee-table {
           width: 100%;
           border-collapse: collapse;
           table-layout: fixed;
+          margin-bottom: 0;
         }
-        th, td {
-          border: 1px solid var(--border);
-          padding: 6px 8px;
-          font-size: 12px;
+        .employee-table td {
+          border: none;
+          padding: 2px 4px;
+          font-size: 15px;
+          font-weight: 700;
           vertical-align: middle;
         }
-        th {
+        .summary-info-table {
+          width: 100%;
+          border-collapse: collapse;
+          table-layout: fixed;
+          margin-bottom: 6px;
+        }
+        .summary-info-table td {
+          border: 1px solid var(--border);
+          padding: 5px 6px;
+          font-size: 13px;
+          line-height: 1.1;
+        }
+        .info-label {
+          width: 110px;
+          background: #f8f8f8;
+          font-weight: 700;
+        }
+        .info-value {
+          font-weight: 600;
+        }
+        .label-cell {
+          width: 115px;
           text-transform: uppercase;
-          background: #f3f4f6;
-          font-size: 11px;
+          padding-left: 0;
+          white-space: nowrap;
+        }
+        .value-cell {
+          background: #ececec;
+          text-align: center;
+          font-size: 18px;
+          font-weight: 800;
+        }
+        .code-cell {
+          width: 160px;
+        }
+        .name-cell {
+          font-size: 17px;
+        }
+        .sub-label-cell,
+        .sub-value-cell {
+          font-size: 13px;
+          font-weight: 500;
+          background: transparent;
+        }
+        .sub-label-cell {
+          width: 70px;
+          padding-left: 18px;
+          white-space: nowrap;
+        }
+        .sub-value-cell {
+          width: 180px;
+          padding-right: 18px;
+        }
+        table.salary-table {
+          width: 100%;
+          border-collapse: collapse;
+          table-layout: fixed;
+          margin-top: 6px;
+        }
+        .salary-table th, .salary-table td {
+          border: 1px solid var(--border);
+          padding: 2px 6px;
+          font-size: 14px;
+          line-height: 1.05;
+          vertical-align: middle;
+        }
+        .salary-table th {
+          text-transform: uppercase;
+          background: #bceff0;
+          font-size: 15px;
+          font-weight: 800;
+          text-align: center;
         }
         .stt {
-          width: 54px;
+          width: 52px;
           text-align: center;
           font-weight: 700;
         }
         .num {
           text-align: right;
           font-variant-numeric: tabular-nums;
+          white-space: nowrap;
         }
-        .detail-table {
-          margin-top: 0;
-        }
-        .summary-table {
-          margin-top: 10px;
-        }
-        .summary-table td {
-          font-size: 14px;
+        .section-row td {
+          background: #f7eec6;
+          text-align: center;
           font-weight: 800;
+          font-size: 15px;
           text-transform: uppercase;
+        }
+        .total-row td {
+          background: #fff200;
+          font-weight: 900;
+          font-size: 16px;
+          text-transform: uppercase;
+        }
+        .total-label {
+          text-align: center;
+        }
+        .total-value {
+          text-align: right;
         }
         .signatures {
           display: grid;
           grid-template-columns: repeat(2, minmax(0, 1fr));
           gap: 24px;
-          margin-top: 42px;
+          margin-top: 30px;
           text-align: center;
-          font-size: 12px;
+          font-size: 13px;
         }
         .label {
           font-weight: 700;
@@ -509,6 +579,8 @@ export function buildPayrollBatchPrintHtml(
           html, body { max-width: none !important; width: 100% !important; margin: 0 !important; padding: 0 !important; }
           @page { size: A4 portrait; margin: 11mm 13mm 11mm 11mm; }
           .payroll-slip { max-width: none; width: 100%; }
+          .salary-table th, .salary-table td { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          .title-band, .section-row td, .total-row td, .value-cell, .employee-table td { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         }
       </style>
     </head>

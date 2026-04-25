@@ -211,32 +211,69 @@ export async function listCashTransactions(
   throw new Error(lastMessage || "Không tải được sổ quỹ.");
 }
 
-/** Số chứng từ tiếp theo trong ngày: PT-YYYYMMDD-001 (thu), PC-YYYYMMDD-001 (chi). */
+function compactEntityKey(raw: string | null | undefined, fallback: string): string {
+  const s = String(raw ?? "")
+    .trim()
+    .replace(/[^A-Za-z0-9]/g, "")
+    .toUpperCase();
+  if (s) return s;
+  return fallback.toUpperCase();
+}
+
+/** Số chứng từ tự động: PT/PC-<IDKH|IDNCC>-<YYYYMMDDHHmm>-<001>. */
 export async function allocateNextCashDocNumber(
   transactionDate: string,
   direction: "receipt" | "payment",
+  partnerId?: string | null,
+  supplierId?: string | null,
 ): Promise<string> {
   const d = transactionDate.trim().slice(0, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) {
     throw new Error("Ngày chứng từ không hợp lệ.");
   }
-  const ymd = d.replace(/-/g, "");
+  const now = new Date();
+  const ymdhm = `${d.replace(/-/g, "")}${String(now.getHours()).padStart(2, "0")}${String(now.getMinutes()).padStart(2, "0")}`;
   const prefix = direction === "receipt" ? "PT" : "PC";
   const supabase = createSupabaseAdmin();
+  let entity = "";
+  if (direction === "receipt") {
+    if (partnerId?.trim()) {
+      const { data: p } = await supabase
+        .from("partners")
+        .select("code")
+        .eq("id", partnerId.trim())
+        .maybeSingle();
+      entity = compactEntityKey((p as { code?: string } | null)?.code ?? partnerId.trim().slice(0, 8), "KH");
+    } else {
+      entity = "KH";
+    }
+  } else {
+    if (supplierId?.trim()) {
+      const { data: s } = await supabase
+        .from("suppliers")
+        .select("code")
+        .eq("id", supplierId.trim())
+        .maybeSingle();
+      entity = compactEntityKey((s as { code?: string } | null)?.code ?? supplierId.trim().slice(0, 8), "NCC");
+    } else {
+      entity = "NCC";
+    }
+  }
+  const stem = `${prefix}-${entity}-${ymdhm}`;
   const { data, error } = await supabase
     .from("cash_transactions")
     .select("doc_number")
-    .like("doc_number", `${prefix}-${ymd}-%`)
+    .like("doc_number", `${stem}-%`)
     .limit(1000);
   if (error) throw new Error(error.message);
-  const re = new RegExp(`^${prefix}-${ymd}-(\\d+)$`);
+  const re = new RegExp(`^${stem}-(\\d+)$`);
   let max = 0;
   for (const r of data ?? []) {
     const doc = String((r as { doc_number: string }).doc_number ?? "");
     const m = doc.match(re);
     if (m) max = Math.max(max, parseInt(m[1]!, 10));
   }
-  return `${prefix}-${ymd}-${String(max + 1).padStart(3, "0")}`;
+  return `${stem}-${String(max + 1).padStart(3, "0")}`;
 }
 
 /** Quỹ / kênh thanh toán: mặc định + đã dùng trên chứng từ & số dư đầu kỳ. */
@@ -285,7 +322,12 @@ export async function createCashTransaction(input: z.infer<typeof cashSchema>): 
   const parsed = cashSchema.parse(input);
   const doc_number =
     parsed.doc_number.trim() ||
-    (await allocateNextCashDocNumber(parsed.transaction_date, parsed.direction));
+    (await allocateNextCashDocNumber(
+      parsed.transaction_date,
+      parsed.direction,
+      parsed.partner_id,
+      parsed.supplier_id,
+    ));
   const row = { ...parsed, doc_number };
   const payload = cashInsertPayload(row);
   let { data, error } = await supabase.from("cash_transactions").insert(payload).select("id").single();

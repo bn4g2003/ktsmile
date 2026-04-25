@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import { createSupabaseAdmin } from "@/lib/supabase/server";
-import { createCashTransaction } from "@/lib/actions/cash";
+import { createCashTransaction, getCashReceiptPrintPayload } from "@/lib/actions/cash";
 
 export type DebtSettlementLine = {
   id: string;
@@ -27,12 +27,6 @@ function calendarMonthBounds(year: number, month: number): { start: string; end:
     start: `${y}-${pad2(m)}-01`,
     end: `${y}-${pad2(m)}-${pad2(last)}`,
   };
-}
-
-function uniqueDoc(prefix: string) {
-  const d = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-  const s = crypto.randomUUID().replace(/-/g, "").slice(0, 8).toUpperCase();
-  return `${prefix}-${d}-${s}`;
 }
 
 export async function listPartnerReceiptsInMonth(
@@ -107,10 +101,9 @@ export async function recordReceivableReceiptFromDebtPage(
   input: z.infer<typeof receivableReceiptSchema>,
 ): Promise<{ id: string; doc_number: string }> {
   const row = receivableReceiptSchema.parse(input);
-  const doc_number = uniqueDoc("PT-KH");
   const { id } = await createCashTransaction({
     transaction_date: row.transaction_date,
-    doc_number,
+    doc_number: "",
     payment_channel: row.payment_channel,
     direction: "receipt",
     business_category: "Thu công nợ KH",
@@ -122,6 +115,8 @@ export async function recordReceivableReceiptFromDebtPage(
     reference_type: "debt_page",
     reference_id: "",
   });
+  const payload = await getCashReceiptPrintPayload(id);
+  const doc_number = payload.doc_number;
   return { id, doc_number };
 }
 
@@ -138,10 +133,9 @@ export async function recordPayablePaymentFromDebtPage(
   input: z.infer<typeof payablePaymentSchema>,
 ): Promise<{ id: string; doc_number: string }> {
   const row = payablePaymentSchema.parse(input);
-  const doc_number = uniqueDoc("PC-NCC");
   const { id } = await createCashTransaction({
     transaction_date: row.transaction_date,
-    doc_number,
+    doc_number: "",
     payment_channel: row.payment_channel,
     direction: "payment",
     business_category: "Chi trả công nợ NCC",
@@ -153,5 +147,7 @@ export async function recordPayablePaymentFromDebtPage(
     reference_type: "debt_page",
     reference_id: "",
   });
+  const payload = await getCashReceiptPrintPayload(id);
+  const doc_number = payload.doc_number;
   return { id, doc_number };
 }
