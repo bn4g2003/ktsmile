@@ -9,6 +9,19 @@ import type { CashReceiptPrintPayload } from "@/lib/reports/cash-receipt-html";
 import type { ListArgs, ListResult } from "@/components/shared/data-grid/excel-data-grid";
 import { decodeMultiFilter } from "@/lib/grid/multi-filter";
 
+/** Chuỗi rỗng / không phải UUID → null (tránh ZodError khó đọc trên production). */
+function preprocessOptionalUuid(val: unknown): string | null {
+  if (val === "" || val === undefined || val === null) return null;
+  const s = String(val).trim();
+  if (!s) return null;
+  const p = z.string().uuid().safeParse(s);
+  return p.success ? p.data : null;
+}
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 export type CashRow = {
   id: string;
   transaction_date: string;
@@ -39,16 +52,20 @@ const cashSchema = z.object({
   direction: z.enum(["receipt", "payment"]),
   business_category: z.string().min(1).max(200),
   amount: z.coerce.number().positive(),
-  partner_id: z.string().uuid().optional().nullable(),
-  supplier_id: z.string().uuid().optional().nullable(),
+  partner_id: z.preprocess(preprocessOptionalUuid, z.union([z.string().uuid(), z.null()])),
+  supplier_id: z.preprocess(preprocessOptionalUuid, z.union([z.string().uuid(), z.null()])),
   payer_name: z.string().max(500).optional().nullable(),
   description: z.string().max(2000).optional().nullable(),
   reference_type: z.string().max(100).optional().nullable(),
-  reference_id: z
-    .union([z.string().uuid(), z.literal("")])
-    .optional()
-    .transform((v) => (v === "" || v === undefined ? null : v)),
+  reference_id: z.preprocess(preprocessOptionalUuid, z.union([z.string().uuid(), z.null()])),
 });
+
+function parseCashPayload(input: unknown): z.infer<typeof cashSchema> {
+  const r = cashSchema.safeParse(input);
+  if (r.success) return r.data;
+  const msg = r.error.issues.map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`).join("; ");
+  throw new Error("Dữ liệu chứng từ không hợp lệ: " + msg);
+}
 
 function cashInsertPayload(row: z.infer<typeof cashSchema>) {
   return {
@@ -265,7 +282,7 @@ export async function allocateNextCashDocNumber(
     .like("doc_number", `${stem}-%`)
     .limit(1000);
   if (error) throw new Error(error.message);
-  const re = new RegExp(`^${stem}-(\\d+)$`);
+  const re = new RegExp(`^${escapeRegExp(stem)}-(\\d+)$`);
   let max = 0;
   for (const r of data ?? []) {
     const doc = String((r as { doc_number: string }).doc_number ?? "");
@@ -318,7 +335,7 @@ export async function listCashFundChannels(): Promise<{ value: string; label: st
 
 export async function createCashTransaction(input: z.infer<typeof cashSchema>): Promise<{ id: string }> {
   const supabase = createSupabaseAdmin();
-  const parsed = cashSchema.parse(input);
+  const parsed = parseCashPayload(input);
   const doc_number =
     parsed.doc_number.trim() ||
     (await allocateNextCashDocNumber(
@@ -352,7 +369,7 @@ export async function updateCashTransaction(
   input: z.infer<typeof cashSchema>,
 ) {
   const supabase = createSupabaseAdmin();
-  const row = cashSchema.parse(input);
+  const row = parseCashPayload(input);
   if (!row.doc_number.trim()) {
     throw new Error("Số chứng từ không được để trống khi sửa.");
   }
