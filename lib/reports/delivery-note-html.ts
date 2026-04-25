@@ -245,18 +245,18 @@ function buildMonthlyFlatDeliveryNoteHtml(p: DeliveryNotePayload): string {
   }
 
   return `
-    <h1 style="color:#0f172a;text-align:center;margin-bottom:4px;">HOÁ ĐƠN PHÒNG NHA / LABO</h1>
-    <p style="text-align:center;font-size:15px;font-weight:700;color:#0f172a;margin:0 0 6px;">${heading}</p>
-    ${sub ? `<p style="text-align:center;font-size:11px;color:#475569;margin:0 0 10px;">${sub}</p>` : ""}
+    <div class="hd-root">
+      <h1 class="hd-title">HOÁ ĐƠN PHÒNG NHA / LABO</h1>
+      <div class="hd-meta">
+        <p><span class="hd-meta-k">Kỳ</span><span class="hd-meta-v">${heading}</span></p>
+        <p><span class="hd-meta-k">Khoảng ngày nhận</span><span class="hd-meta-v">${sub || "—"}</span></p>
+        <p><span class="hd-meta-k">Số dòng phiếu</span><span class="hd-meta-v"><strong>${rowHtml.length}</strong></span></p>
+        <p><span class="hd-meta-k">In lúc</span><span class="hd-meta-v">${escapeHtml(p.generated_at)}</span></p>
+      </div>
 
-    ${htmlDeliveryNotePartnerBlock(p)}
-    <table class="kv dn-kv" style="margin-bottom:14px;">
-      <tbody>
-        <tr><th>SỐ DÒNG PHIẾU</th><td style="color:#0f172a;">: ${rowHtml.length}</td></tr>
-      </tbody>
-    </table>
+      ${htmlDeliveryNotePartnerBlock(p)}
 
-    <table class="dn-month-table">
+      <table class="dn-month-table hd-lines">
       <thead>
         <tr>
           <th class="cen" style="width:36px;">STT</th>
@@ -276,42 +276,133 @@ function buildMonthlyFlatDeliveryNoteHtml(p: DeliveryNotePayload): string {
       </tbody>
     </table>
 
-    <p style="font-size:9px;color:#64748b;margin-top:8px;">In lúc: ${escapeHtml(p.generated_at)}</p>
-
     ${p.monthly_footer ? htmlMonthlyDeliveryFooter(p.monthly_footer) : ""}
 
-    <div style="margin-top:28px;display:grid;grid-template-columns:1fr 1fr;text-align:center;">
-      <div>
-        <div style="font-weight:700;">NGƯỜI NHẬN HÀNG</div>
-        <div style="font-size:10px;margin-top:40px;color:#475569;">(Ký và ghi rõ họ tên)</div>
+    <div class="hd-sign">
+      <div class="hd-sign-box">
+        <div class="hd-sign-title">NGƯỜI NHẬN HÀNG</div>
+        <div class="hd-sign-hint">(Ký và ghi rõ họ tên)</div>
       </div>
-      <div>
-        <div style="font-weight:700;">LAB XÁC NHẬN</div>
-        <div style="font-size:10px;margin-top:40px;color:#475569;">(Ký và ghi rõ họ tên)</div>
+      <div class="hd-sign-box">
+        <div class="hd-sign-title">LAB XÁC NHẬN</div>
+        <div class="hd-sign-hint">(Ký và ghi rõ họ tên)</div>
       </div>
+    </div>
     </div>
 
     <style>
-      .dn-month-table { width: 100%; border-collapse: collapse; font-size: 10px; table-layout: fixed; }
+      .hd-root { color: #0f172a; }
+      .hd-title {
+        color: #1d4ed8 !important;
+        margin: 0 0 12px;
+        text-align: center;
+        font-size: 20px;
+        letter-spacing: 0.04em;
+      }
+      .hd-meta {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 6px 20px;
+        max-width: 100%;
+        margin: 0 auto 14px;
+        padding: 10px 12px;
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 6px;
+        font-size: 11px;
+      }
+      .hd-meta p { margin: 0; display: flex; gap: 10px; align-items: baseline; min-width: 0; }
+      .hd-meta-k {
+        flex: 0 0 7.5rem;
+        color: #64748b;
+        font-weight: 700;
+        text-transform: uppercase;
+        font-size: 10px;
+        letter-spacing: 0.03em;
+      }
+      .hd-meta-v { flex: 1; min-width: 0; word-break: break-word; line-height: 1.35; }
+
+      .dn-month-table { width: 100%; border-collapse: collapse; font-size: 10px; table-layout: fixed; margin-top: 4px; }
       .dn-month-table th,
       .dn-month-table td {
-        border: 1px solid #64748b;
-        padding: 4px 5px;
+        border: 1px solid #cbd5e1;
+        padding: 6px 5px;
         color: #0f172a;
         background: #fff;
-        vertical-align: middle;
+        vertical-align: top;
         word-wrap: break-word;
       }
       .dn-month-table thead th {
-        background: #c6ddf7 !important;
+        background: #2563eb !important;
+        color: #fff !important;
+        border-color: #1d4ed8 !important;
+        font-size: 9px;
+        line-height: 1.25;
+        padding: 8px 5px;
+        text-transform: uppercase;
+        letter-spacing: 0.02em;
         font-weight: 700;
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
       }
+      .dn-month-table tbody td {
+        font-size: 10.5px;
+        line-height: 1.35;
+      }
       .dn-month-table .cen { text-align: center; }
       .dn-month-table .num { text-align: right; }
-      table.dn-kv th { color: #0f172a !important; }
-      table.dn-kv td { color: #0f172a !important; }
+      table.dn-kv {
+        width: 100%;
+        table-layout: fixed;
+        border-collapse: collapse;
+        margin: 0 0 14px;
+        border: 1px solid #cbd5e1;
+        border-radius: 6px;
+        overflow: hidden;
+      }
+      table.dn-kv th, table.dn-kv td {
+        border: 1px solid #e2e8f0;
+        padding: 8px 10px;
+        vertical-align: top;
+        text-align: left;
+      }
+      table.dn-kv th {
+        width: 22%;
+        background: #f1f5f9;
+        font-size: 10px;
+        font-weight: 800;
+        color: #334155 !important;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        white-space: nowrap;
+      }
+      table.dn-kv td {
+        width: 78%;
+        font-size: 12px;
+        line-height: 1.45;
+        font-weight: 500;
+        color: #0f172a !important;
+        word-break: break-word;
+      }
+
+      .hd-sign {
+        margin-top: 28px;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        text-align: center;
+      }
+      .hd-sign-title {
+        font-weight: 800;
+        font-size: 11px;
+        color: #0f172a;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+      .hd-sign-hint {
+        font-size: 10px;
+        margin-top: 40px;
+        color: #94a3b8;
+      }
     </style>
   `;
 }
