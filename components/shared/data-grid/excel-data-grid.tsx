@@ -195,6 +195,8 @@ type ExcelDataGridProps<T> = {
   /** Nội dung modal chỉ đọc khi bấm "Xem" (mở rộng sau này). */
   renderRowDetail?: (row: T) => React.ReactNode;
   rowDetailTitle?: (row: T) => string;
+  /** Class thêm vào từng dòng (desktop `tr`, mobile `li`). */
+  getRowClassName?: (row: T) => string | undefined;
   // External filter state
   filters?: Record<string, string>;
   onFiltersChange?: (filters: Record<string, string>) => void;
@@ -216,6 +218,7 @@ export function ExcelDataGrid<T>({
   disableListCache = false,
   renderRowDetail,
   rowDetailTitle,
+  getRowClassName,
   filters: propsFilters,
   onFiltersChange,
   globalSearch: propsGlobalSearch,
@@ -684,6 +687,7 @@ export function ExcelDataGrid<T>({
                       className={cn(
                         "rounded-[var(--radius-lg)] p-4 shadow-[inset_0_0_0_1px_var(--border-ghost)]",
                         i % 2 === 1 ? "bg-[var(--surface-row-b)]" : "bg-[var(--surface-card)]",
+                        getRowClassName?.(row.original),
                       )}
                     >
                       <dl className="m-0 space-y-2.5">
@@ -877,6 +881,7 @@ export function ExcelDataGrid<T>({
                         "border-b border-[var(--border-ghost)] transition-colors last:border-b-0",
                         "hover:bg-[color-mix(in_srgb,var(--primary)_4%,var(--surface-card))]",
                         i % 2 === 1 ? "bg-[var(--surface-row-b)]" : "bg-[var(--surface-card)]",
+                        getRowClassName?.(row.original),
                       )}
                     >
                       {row.getVisibleCells().map((cell) => (

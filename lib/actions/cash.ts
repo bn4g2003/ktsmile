@@ -8,6 +8,7 @@ import { isSupabaseSchemaDriftError } from "@/lib/supabase/schema-drift";
 import type { CashReceiptPrintPayload } from "@/lib/reports/cash-receipt-html";
 import type { ListArgs, ListResult } from "@/components/shared/data-grid/excel-data-grid";
 import { decodeMultiFilter } from "@/lib/grid/multi-filter";
+import { CASH_FUND_CHANNEL_DEFAULTS, formatCashPaymentChannel } from "@/lib/cash/cash-channel-labels";
 
 /** Chuỗi rỗng / không phải UUID → null (tránh ZodError khó đọc trên production). */
 function preprocessOptionalUuid(val: unknown): string | null {
@@ -206,7 +207,10 @@ export async function listCashTransactions(
     if (filters.transaction_date_eq?.trim())
       q = q.eq("transaction_date", filters.transaction_date_eq.trim());
 
-    q = q.order("transaction_date", { ascending: false }).range(from, to);
+    q = q
+      .order("transaction_date", { ascending: false })
+      .order("created_at", { ascending: false })
+      .range(from, to);
     const { data, error, count } = await q;
     if (!error) {
       const rows: CashRow[] = (data ?? []).map((row) =>
@@ -294,14 +298,7 @@ export async function allocateNextCashDocNumber(
 
 /** Quỹ / kênh thanh toán: mặc định + đã dùng trên chứng từ & số dư đầu kỳ. */
 export async function listCashFundChannels(): Promise<{ value: string; label: string }[]> {
-  const defaults: { value: string; label: string }[] = [
-    { value: "cash", label: "Tiền mặt" },
-    { value: "mbbank", label: "MB Bank (Quân đội)" },
-    { value: "acb", label: "ACB" },
-    { value: "chuyen_khoan", label: "Chuyển khoản" },
-    { value: "vietcombank", label: "Vietcombank" },
-    { value: "other", label: "Khác" },
-  ];
+  const defaults = [...CASH_FUND_CHANNEL_DEFAULTS];
   const seen = new Set(defaults.map((x) => x.value.toLowerCase()));
   const extras: { value: string; label: string }[] = [];
   const supabase = createSupabaseAdmin();
@@ -436,8 +433,9 @@ export type CashLedgerSummary = {
 
 function cashLedgerLabel(channelKey: string, displayRaw: string): string {
   if (channelKey === "cash") return "Tất cả Tiền mặt";
+  if (channelKey === "(trống)") return "Chưa gán kênh";
   const d = displayRaw.trim();
-  return d.length ? d : channelKey;
+  return formatCashPaymentChannel(d.length ? d : channelKey);
 }
 
 /**

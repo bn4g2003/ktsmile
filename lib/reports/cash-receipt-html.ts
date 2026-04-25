@@ -2,6 +2,7 @@ import { formatVnd } from "@/lib/format/currency";
 import { htmlBangChu } from "@/lib/reports/amount-in-words-html";
 import { formatDateTime } from "@/lib/format/date";
 import { escapeHtml } from "@/lib/reports/escape-html";
+import { formatCashPaymentChannel } from "@/lib/cash/cash-channel-labels";
 import { cashVoucherThemeCss } from "@/lib/reports/cash-voucher-theme";
 
 export type CashReceiptPrintPayload = {
@@ -45,7 +46,7 @@ export function buildCashReceiptBodyHtml(p: CashReceiptPrintPayload): string {
         <p><span class="cr-meta-k">Số phiếu</span><span class="cr-meta-v"><strong>${escapeHtml(p.doc_number)}</strong></span></p>
         <p><span class="cr-meta-k">Ngày chứng từ</span><span class="cr-meta-v">${escapeHtml(docDate)}</span></p>
         <p><span class="cr-meta-k">Loại</span><span class="cr-meta-v">${escapeHtml(isPayment ? "Chi tiền" : "Thu tiền")}</span></p>
-        <p><span class="cr-meta-k">Kênh thanh toán</span><span class="cr-meta-v">${escapeHtml(p.payment_channel)}</span></p>
+        <p><span class="cr-meta-k">Kênh thanh toán</span><span class="cr-meta-v">${escapeHtml(formatCashPaymentChannel(p.payment_channel))}</span></p>
       </div>
 
       <table class="cr-kv">

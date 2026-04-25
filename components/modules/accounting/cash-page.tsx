@@ -18,6 +18,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
@@ -39,7 +40,9 @@ import {
   listCashAccountOpeningBalances,
   type CashRow,
 } from "@/lib/actions/cash";
+import { formatCashPaymentChannel } from "@/lib/cash/cash-channel-labels";
 import { CASH_BUSINESS_CATEGORIES, defaultCashBusinessCategory } from "@/lib/cash/cash-form-options";
+import { cn } from "@/lib/utils/cn";
 
 const dirOpts = [
   { value: "receipt", label: "Thu" },
@@ -148,13 +151,15 @@ export function CashPage() {
     setPending(true);
     setErr(null);
     try {
+      const rawAmt = String(amount).trim();
+      const amtParsed = rawAmt === "" ? NaN : Number(rawAmt.replace(",", "."));
       const payload = {
         transaction_date: tdate,
         doc_number: editing ? docNum.trim() : "",
         payment_channel: channel.trim(),
         direction,
         business_category: category.trim(),
-        amount: Number(amount),
+        amount: Number.isFinite(amtParsed) ? amtParsed : NaN,
         partner_id: partnerId || null,
         supplier_id: supplierId || null,
         payer_name: payerName.trim() || null,
@@ -273,22 +278,49 @@ export function CashPage() {
           filterType: "select",
           filterOptions: dirOpts,
         },
-        cell: ({ getValue }) => formatCashDirection(String(getValue())),
+        cell: ({ row, getValue }) => {
+          const isReceipt = row.original.direction === "receipt";
+          return (
+            <span
+              className={cn(
+                "inline-flex rounded px-2 py-0.5 text-xs font-semibold whitespace-nowrap",
+                isReceipt
+                  ? "bg-emerald-100 text-emerald-900 dark:bg-emerald-950/55 dark:text-emerald-100"
+                  : "bg-rose-100 text-rose-900 dark:bg-rose-950/55 dark:text-rose-100",
+              )}
+            >
+              {formatCashDirection(String(getValue()))}
+            </span>
+          );
+        },
       },
       {
         accessorKey: "business_category",
         header: "Nghiệp vụ",
         meta: { filterKey: "business_category", filterType: "text" },
       },
-      { accessorKey: "amount", header: "Số tiền", cell: ({ getValue }) => Number(getValue()).toLocaleString("vi-VN") },
+      {
+        accessorKey: "amount",
+        header: "Số tiền",
+        cell: ({ row, getValue }) => (
+          <span
+            className={cn(
+              "block text-right tabular-nums font-semibold",
+              row.original.direction === "receipt"
+                ? "text-emerald-700 dark:text-emerald-400"
+                : "text-rose-700 dark:text-rose-400",
+            )}
+          >
+            {Number(getValue()).toLocaleString("vi-VN")}
+          </span>
+        ),
+      },
       { accessorKey: "partner_code", header: "Mã KH", meta: { filterKey: "partner_code", filterType: "text" } },
       { accessorKey: "partner_name", header: "Khách hàng", meta: { filterKey: "partner_name", filterType: "text" } },
       { accessorKey: "supplier_code", header: "Mã NCC", meta: { filterKey: "supplier_code", filterType: "text" } },
       { accessorKey: "supplier_name", header: "Nhà cung cấp", meta: { filterKey: "supplier_name", filterType: "text" } },
       { accessorKey: "payer_name", header: "Người nộp", meta: { filterKey: "payer_name", filterType: "text" } },
       { accessorKey: "description", header: "Diễn giải", meta: { filterKey: "description", filterType: "text" } },
-      { accessorKey: "reference_type", header: "Ref type" },
-      { accessorKey: "reference_id", header: "Ref ID" },
       {
         accessorKey: "created_at",
         header: "Tạo lúc",
@@ -331,18 +363,30 @@ export function CashPage() {
         fields={[
           { label: "Ngày", value: row.transaction_date },
           { label: "Số chứng từ", value: row.doc_number },
-          { label: "Kênh thanh toán", value: row.payment_channel },
-          { label: "Thu / Chi", value: formatCashDirection(row.direction) },
+          { label: "Kênh thanh toán", value: formatCashPaymentChannel(row.payment_channel) },
+          {
+            label: "Thu / Chi",
+            value: (
+              <span
+                className={cn(
+                  "inline-flex rounded px-2 py-0.5 text-xs font-semibold",
+                  row.direction === "receipt"
+                    ? "bg-emerald-100 text-emerald-900 dark:bg-emerald-950/55 dark:text-emerald-100"
+                    : "bg-rose-100 text-rose-900 dark:bg-rose-950/55 dark:text-rose-100",
+                )}
+              >
+                {formatCashDirection(row.direction)}
+              </span>
+            ),
+          },
           { label: "Nghiệp vụ", value: row.business_category },
-          { label: "Số tiền", value: row.amount },
+          { label: "Số tiền", value: Number(row.amount).toLocaleString("vi-VN") },
           { label: "Mã KH", value: row.partner_code },
           { label: "Khách hàng", value: row.partner_name },
           { label: "Mã NCC", value: row.supplier_code },
           { label: "Nhà cung cấp", value: row.supplier_name },
           { label: "Người nộp", value: row.payer_name },
           { label: "Diễn giải", value: row.description, span: "full" },
-          { label: "Reference type", value: row.reference_type },
-          { label: "Reference id", value: row.reference_id },
           { label: "ID", value: row.id, span: "full" },
           { label: "Tạo lúc", value: formatDate(row.created_at) },
           { label: "Cập nhật", value: formatDate(row.updated_at) },
@@ -410,12 +454,20 @@ export function CashPage() {
           </>
         }
         getRowId={(r) => r.id}
+        getRowClassName={(r) =>
+          r.direction === "receipt"
+            ? "border-l-[3px] border-l-emerald-600"
+            : "border-l-[3px] border-l-rose-600"
+        }
       />
       <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) reset(); }}>
         <DialogContent size="xl" className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editing ? "Sửa chứng từ" : "Thêm chứng từ"}</DialogTitle>
-            <DialogDescription>Tiền mặt / ngân hàng.</DialogDescription>
+            <DialogDescription>
+              Tiền mặt / ngân hàng. Liên kết tham chiếu (đơn hàng, phiếu kho…) do hệ thống tự ghi khi thu/chi từ
+              các màn hình tương ứng — không cần nhập tay trên form này.
+            </DialogDescription>
           </DialogHeader>
           <form onSubmit={(e) => void submit(e)} className="grid gap-4 sm:grid-cols-2">
             {err ? <p className="text-sm text-[#b91c1c] sm:col-span-2">{err}</p> : null}
@@ -489,14 +541,13 @@ export function CashPage() {
             </div>
             <div className="grid gap-2">
               <Label htmlFor="c-amt">Số tiền</Label>
-              <Input
+              <CurrencyInput
                 id="c-amt"
-                type="number"
-                min={0.01}
-                step={0.01}
                 value={amount}
-                onChange={(e) => setAmount(e.target.value)}
+                onChange={setAmount}
+                placeholder="0"
                 required
+                className="h-10"
               />
             </div>
             <div className="grid gap-2">
@@ -533,14 +584,6 @@ export function CashPage() {
             <div className="grid gap-2 sm:col-span-2">
               <Label htmlFor="c-desc">Diễn giải</Label>
               <Textarea id="c-desc" value={desc} onChange={(e) => setDesc(e.target.value)} />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="c-rt">Reference type</Label>
-              <Input id="c-rt" value={refType} onChange={(e) => setRefType(e.target.value)} />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="c-ri">Reference id (UUID)</Label>
-              <Input id="c-ri" value={refId} onChange={(e) => setRefId(e.target.value)} />
             </div>
             <div className="flex justify-end gap-2 pt-2 sm:col-span-2">
               <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
