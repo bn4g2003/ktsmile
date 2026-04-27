@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag, unstable_cache } from "next/cache";
 import { z } from "zod";
 import { finiteNumber } from "@/lib/billing/order-grand-total";
 import { createSupabaseAdmin } from "@/lib/supabase/server";
@@ -296,38 +296,50 @@ export async function allocateNextCashDocNumber(
   return `${stem}-${String(max + 1).padStart(3, "0")}`;
 }
 
+const listCashFundChannelsCached = unstable_cache(
+  async (): Promise<{ value: string; label: string }[]> => {
+    const defaults = [...CASH_FUND_CHANNEL_DEFAULTS];
+    const seen = new Set(defaults.map((x) => x.value.toLowerCase()));
+    const extras: { value: string; label: string }[] = [];
+    const supabase = createSupabaseAdmin();
+
+    const { data: tx } = await supabase
+      .from("cash_transactions")
+      .select("payment_channel")
+      .order("created_at", { ascending: false })
+      .limit(4000);
+    for (const r of tx ?? []) {
+      const ch = String((r as { payment_channel: string }).payment_channel ?? "").trim();
+      if (!ch) continue;
+      const k = ch.toLowerCase();
+      if (seen.has(k)) continue;
+      seen.add(k);
+      extras.push({ value: ch, label: ch });
+    }
+
+    const { data: ob } = await supabase
+      .from("cash_account_opening_balances")
+      .select("payment_channel")
+      .limit(500);
+    for (const r of ob ?? []) {
+      const ch = String((r as { payment_channel: string }).payment_channel ?? "").trim();
+      if (!ch) continue;
+      const k = ch.toLowerCase();
+      if (seen.has(k)) continue;
+      seen.add(k);
+      extras.push({ value: ch, label: ch });
+    }
+
+    extras.sort((a, b) => a.label.localeCompare(b.label, "vi"));
+    return [...defaults, ...extras];
+  },
+  ["cash-fund-channels-v1"],
+  { revalidate: 60, tags: ["cash-fund-channels"] },
+);
+
 /** Quỹ / kênh thanh toán: mặc định + đã dùng trên chứng từ & số dư đầu kỳ. */
 export async function listCashFundChannels(): Promise<{ value: string; label: string }[]> {
-  const defaults = [...CASH_FUND_CHANNEL_DEFAULTS];
-  const seen = new Set(defaults.map((x) => x.value.toLowerCase()));
-  const extras: { value: string; label: string }[] = [];
-  const supabase = createSupabaseAdmin();
-
-  const { data: tx } = await supabase.from("cash_transactions").select("payment_channel").limit(8000);
-  for (const r of tx ?? []) {
-    const ch = String((r as { payment_channel: string }).payment_channel ?? "").trim();
-    if (!ch) continue;
-    const k = ch.toLowerCase();
-    if (seen.has(k)) continue;
-    seen.add(k);
-    extras.push({ value: ch, label: ch });
-  }
-
-  const { data: ob } = await supabase
-    .from("cash_account_opening_balances")
-    .select("payment_channel")
-    .limit(500);
-  for (const r of ob ?? []) {
-    const ch = String((r as { payment_channel: string }).payment_channel ?? "").trim();
-    if (!ch) continue;
-    const k = ch.toLowerCase();
-    if (seen.has(k)) continue;
-    seen.add(k);
-    extras.push({ value: ch, label: ch });
-  }
-
-  extras.sort((a, b) => a.label.localeCompare(b.label, "vi"));
-  return [...defaults, ...extras];
+  return listCashFundChannelsCached();
 }
 
 export async function createCashTransaction(input: z.infer<typeof cashSchema>): Promise<{ id: string }> {
@@ -358,6 +370,7 @@ export async function createCashTransaction(input: z.infer<typeof cashSchema>): 
   if (error || !data) throw new Error(error?.message ?? "Không tạo được chứng từ.");
   revalidatePath("/accounting/cash");
   revalidatePath("/accounting/debt");
+  revalidateTag("cash-fund-channels", "max");
   return { id: data["id"] as string };
 }
 
@@ -385,6 +398,7 @@ export async function updateCashTransaction(
   if (error) throw new Error(error.message);
   revalidatePath("/accounting/cash");
   revalidatePath("/accounting/debt");
+  revalidateTag("cash-fund-channels", "max");
 }
 
 export async function deleteCashTransaction(id: string) {
@@ -393,6 +407,7 @@ export async function deleteCashTransaction(id: string) {
   if (error) throw new Error(error.message);
   revalidatePath("/accounting/cash");
   revalidatePath("/accounting/debt");
+  revalidateTag("cash-fund-channels", "max");
 }
 
 export type CashFlowTotals = {
@@ -686,6 +701,7 @@ export async function upsertCashAccountOpeningBalance(input: z.infer<typeof open
   );
   if (error) throw new Error(error.message);
   revalidatePath("/accounting/cash");
+  revalidateTag("cash-fund-channels", "max");
 }
 
 export async function getCashAccountOpeningBalance(
