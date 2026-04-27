@@ -20,8 +20,16 @@ function money(n: number) {
   return Math.round(n || 0).toLocaleString("vi-VN");
 }
 
+function moneyVnd(n: number) {
+  const value = Math.round(n || 0);
+  const sign = value < 0 ? "-" : "";
+  return `${sign}${Math.abs(value).toLocaleString("vi-VN")} đ`;
+}
+
 function moneyM(n: number) {
-  return `${Math.round((n || 0) / 1_000_000).toLocaleString("vi-VN")} triệu`;
+  const value = n || 0;
+  const sign = value < 0 ? "-" : "";
+  return `${sign}${Math.round(Math.abs(value) / 1_000_000).toLocaleString("vi-VN")} triệu`;
 }
 
 export function DashboardChartsSection({ data }: { data: DashboardChartsData }) {
@@ -33,6 +41,8 @@ export function DashboardChartsSection({ data }: { data: DashboardChartsData }) 
   }));
   const currentMonthIdx = new Date().getUTCMonth();
   const currentMonth = data.monthlyFinance[currentMonthIdx] ?? { revenue: 0, expense: 0, profit: 0 };
+  const netDebt = data.financial.receivable - data.financial.payable;
+  const totalTopSoldRevenue = data.topSold.reduce((s, r) => s + r.revenue, 0);
 
   const printBody = () => {
     const gen = new Date().toLocaleString("vi-VN");
@@ -73,16 +83,20 @@ export function DashboardChartsSection({ data }: { data: DashboardChartsData }) 
         <div className="grid gap-3 lg:grid-cols-3">
           <div className="rounded-md border border-[var(--border-ghost)] p-3">
             <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--on-surface-muted)]">Tình hình tài chính</h3>
+            <p className="mt-1 text-[11px] text-[var(--on-surface-muted)]">
+              Dòng tiền = Thu tiền - Chi tiền. Công nợ ròng = Phải thu - Phải trả.
+            </p>
             <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-sm">
-              <div>Tổng tiền</div><div className="text-right font-semibold">{money(data.financial.total_money)}</div>
-              <div>Tiền mặt</div><div className="text-right">{money(data.financial.cash_on_hand)}</div>
-              <div>Tiền gửi</div><div className="text-right">{money(data.financial.bank_deposit)}</div>
-              <div>Phải thu</div><div className="text-right">{money(data.financial.receivable)}</div>
-              <div>Phải trả</div><div className="text-right">{money(data.financial.payable)}</div>
-              <div>Doanh thu</div><div className="text-right">{money(data.financial.revenue_year)}</div>
-              <div>Chi phí</div><div className="text-right">{money(data.financial.expense_year)}</div>
-              <div>Lợi nhuận</div><div className="text-right font-semibold">{money(data.financial.profit_year)}</div>
-              <div>Hàng tồn kho</div><div className="text-right">{money(data.financial.inventory_value)}</div>
+              <div>Dòng tiền hiện có</div><div className="text-right font-semibold">{moneyVnd(data.financial.total_money)}</div>
+              <div>Tiền mặt</div><div className="text-right">{moneyVnd(data.financial.cash_on_hand)}</div>
+              <div>Tiền gửi NH</div><div className="text-right">{moneyVnd(data.financial.bank_deposit)}</div>
+              <div>Phải thu KH</div><div className="text-right">{moneyVnd(data.financial.receivable)}</div>
+              <div>Phải trả NCC</div><div className="text-right">{moneyVnd(data.financial.payable)}</div>
+              <div>Công nợ ròng</div><div className="text-right font-semibold">{moneyVnd(netDebt)}</div>
+              <div>Doanh thu năm</div><div className="text-right">{moneyVnd(data.financial.revenue_year)}</div>
+              <div>Chi tiền năm</div><div className="text-right">{moneyVnd(data.financial.expense_year)}</div>
+              <div>Chênh lệch thu-chi</div><div className="text-right font-semibold">{moneyVnd(data.financial.profit_year)}</div>
+              <div>Giá trị tồn kho</div><div className="text-right">{moneyVnd(data.financial.inventory_value)}</div>
             </div>
           </div>
           <div className="rounded-md border border-[var(--border-ghost)] p-3">
@@ -118,11 +132,11 @@ export function DashboardChartsSection({ data }: { data: DashboardChartsData }) 
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card className="p-3.5 sm:p-4">
-          <h3 className="text-sm font-semibold text-[var(--on-surface)]">Doanh thu, chi phí, lợi nhuận ({data.year})</h3>
+          <h3 className="text-sm font-semibold text-[var(--on-surface)]">Doanh thu, chi tiền, chênh lệch thu-chi ({data.year})</h3>
           <div className="mt-1 grid grid-cols-3 gap-2 text-xs">
             <div><div className="font-semibold">{moneyM(currentMonth.revenue)}</div><div className="text-[var(--on-surface-muted)]">Doanh thu tháng</div></div>
-            <div><div className="font-semibold">{moneyM(currentMonth.expense)}</div><div className="text-[var(--on-surface-muted)]">Chi phí tháng</div></div>
-            <div><div className="font-semibold">{moneyM(currentMonth.profit)}</div><div className="text-[var(--on-surface-muted)]">Lợi nhuận tháng</div></div>
+            <div><div className="font-semibold">{moneyM(currentMonth.expense)}</div><div className="text-[var(--on-surface-muted)]">Chi tiền tháng</div></div>
+            <div><div className="font-semibold">{moneyM(currentMonth.profit)}</div><div className="text-[var(--on-surface-muted)]">Chênh lệch tháng</div></div>
           </div>
           <div className="h-64 mt-2">
             <ResponsiveContainer width="100%" height="100%">
@@ -130,10 +144,10 @@ export function DashboardChartsSection({ data }: { data: DashboardChartsData }) 
                 <CartesianGrid strokeDasharray="3 3" stroke="color-mix(in srgb, var(--on-surface) 12%, transparent)" />
                 <XAxis dataKey="label" tick={{ fontSize: 11 }} />
                 <YAxis tick={{ fontSize: 11 }} />
-                <Tooltip formatter={(v: number) => [money(v), ""]} />
+                <Tooltip formatter={(v: number) => [moneyVnd(v), ""]} />
                 <Bar dataKey="revenue" fill="#22c55e" name="Doanh thu" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="expense" fill="#f59e0b" name="Chi phí" radius={[4, 4, 0, 0]} />
-                <Line dataKey="profit" stroke="#0ea5e9" strokeWidth={2} dot={{ r: 2 }} name="Lợi nhuận" />
+                <Bar dataKey="expense" fill="#f59e0b" name="Chi tiền" radius={[4, 4, 0, 0]} />
+                <Line dataKey="profit" stroke="#0ea5e9" strokeWidth={2} dot={{ r: 2 }} name="Chênh lệch thu-chi" />
               </ComposedChart>
             </ResponsiveContainer>
           </div>
@@ -175,7 +189,7 @@ export function DashboardChartsSection({ data }: { data: DashboardChartsData }) 
         <Card className="p-3.5 sm:p-4">
           <h3 className="text-sm font-semibold text-[var(--on-surface)]">Mặt hàng bán chạy</h3>
           <div className="text-2xl font-bold mt-1">
-            {moneyM(data.topSold.reduce((s, r) => s + r.revenue, 0))}
+            {moneyM(totalTopSoldRevenue)}
           </div>
           <div className="text-xs text-[var(--on-surface-muted)] mb-2">Doanh thu top mặt hàng</div>
           <div className="space-y-1 text-sm">
