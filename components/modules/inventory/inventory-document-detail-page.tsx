@@ -38,6 +38,10 @@ import {
   type StockDocumentHeader,
   type StockLineRow,
 } from "@/lib/actions/stock";
+import {
+  listCashTransactionsByReference,
+  type CashTransactionReferenceRow,
+} from "@/lib/actions/cash";
 
 export function InventoryDocumentDetailPage() {
   const params = useParams();
@@ -65,6 +69,7 @@ export function InventoryDocumentDetailPage() {
   const [headerLoading, setHeaderLoading] = React.useState(true);
   const [postPending, setPostPending] = React.useState(false);
   const [postMsg, setPostMsg] = React.useState<string | null>(null);
+  const [linkedCashRows, setLinkedCashRows] = React.useState<CashTransactionReferenceRow[]>([]);
 
   const reloadHeader = React.useCallback(async () => {
     const h = await getStockDocumentById(id);
@@ -87,6 +92,13 @@ export function InventoryDocumentDetailPage() {
   React.useEffect(() => {
     void listProductPicker({ forInventory: true }).then(setProducts).catch(() => {});
   }, []);
+
+  React.useEffect(() => {
+    if (!id) return;
+    void listCashTransactionsByReference("stock_document", id)
+      .then(setLinkedCashRows)
+      .catch(() => setLinkedCashRows([]));
+  }, [id, gridReload]);
 
   React.useEffect(() => {
     if (!productId || !docHeader || docHeader.movement_type !== "inbound") {
@@ -318,6 +330,61 @@ export function InventoryDocumentDetailPage() {
           </div>
         ) : null}
       </Card>
+
+      {docHeader?.movement_type === "inbound" ? (
+        <Card className="space-y-3 p-5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold text-[var(--on-surface)]">
+              Phiếu chi đã ghi nhận
+            </h2>
+            <span className="text-xs text-[var(--on-surface-muted)]">
+              Tổng đã chi:{" "}
+              <strong className="text-rose-700">
+                {linkedCashRows
+                  .filter((r) => r.direction === "payment")
+                  .reduce((s, r) => s + r.amount, 0)
+                  .toLocaleString("vi-VN")}
+              </strong>
+            </span>
+          </div>
+          {linkedCashRows.length === 0 ? (
+            <p className="text-xs text-[var(--on-surface-muted)]">
+              Chưa có phiếu chi nào liên kết với phiếu nhập này. Có thể tạo từ Sổ quỹ
+              hoặc trang công nợ NCC.
+            </p>
+          ) : (
+            <div className="overflow-x-auto rounded-[var(--radius-sm)] border border-[var(--border-ghost)]">
+              <table className="w-full text-sm">
+                <thead className="bg-[var(--surface-muted)] text-xs uppercase text-[var(--on-surface-muted)]">
+                  <tr>
+                    <th className="px-3 py-2 text-left">Số phiếu</th>
+                    <th className="px-3 py-2 text-left">Ngày</th>
+                    <th className="px-3 py-2 text-left">Kênh</th>
+                    <th className="px-3 py-2 text-right">Số tiền</th>
+                    <th className="px-3 py-2 text-left">Diễn giải</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {linkedCashRows.map((r) => (
+                    <tr key={r.id} className="border-t border-[var(--border-ghost)]">
+                      <td className="px-3 py-2 font-mono text-xs">{r.doc_number}</td>
+                      <td className="px-3 py-2">{formatDate(r.transaction_date)}</td>
+                      <td className="px-3 py-2">{r.payment_channel_label}</td>
+                      <td className="px-3 py-2 text-right font-semibold text-rose-700">
+                        {r.amount.toLocaleString("vi-VN")}
+                      </td>
+                      <td className="px-3 py-2 text-[var(--on-surface-muted)]">
+                        {r.description ?? ""}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+      ) : null}
+
       <ExcelDataGrid<StockLineRow>
         moduleId={"stock_lines_" + id}
         title="Dòng phiếu"

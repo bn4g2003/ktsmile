@@ -50,6 +50,10 @@ import {
   type LabOrderLineRow,
   type LabOrderRow,
 } from "@/lib/actions/lab-orders";
+import {
+  listCashTransactionsByReference,
+  type CashTransactionReferenceRow,
+} from "@/lib/actions/cash";
 import { LabToothPicker } from "@/components/modules/orders/lab-tooth-picker";
 import { parseToothPositionsToSet, detectArchConnection } from "@/lib/dental/fdi-teeth";
 import {
@@ -108,6 +112,7 @@ export function OrderDetailPage() {
   const [billTotals, setBillTotals] = React.useState<{ subtotal_lines: number; grand_total: number } | null>(null);
   const [billBusy, setBillBusy] = React.useState(false);
   const [issueBusy, setIssueBusy] = React.useState(false);
+  const [linkedCashRows, setLinkedCashRows] = React.useState<CashTransactionReferenceRow[]>([]);
 
   const loadHeader = React.useCallback(async () => {
     const h = await getLabOrder(id);
@@ -145,6 +150,13 @@ export function OrderDetailPage() {
       .then((t) => (t ? setBillTotals({ subtotal_lines: t.subtotal_lines, grand_total: t.grand_total }) : setBillTotals(null)))
       .catch(() => setBillTotals(null));
   }, [header, id, gridReload]);
+
+  React.useEffect(() => {
+    if (!id) return;
+    void listCashTransactionsByReference("lab_order", id)
+      .then(setLinkedCashRows)
+      .catch(() => setLinkedCashRows([]));
+  }, [id, gridReload]);
 
   const partnerId = (header?.partner_id as string) ?? "";
 
@@ -606,6 +618,60 @@ export function OrderDetailPage() {
             </div>
           </Card>
         </div>
+      ) : null}
+
+      {header ? (
+        <Card className="space-y-3 p-5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold text-[var(--on-surface)]">
+              Phiếu thu đã ghi nhận
+            </h2>
+            <span className="text-xs text-[var(--on-surface-muted)]">
+              Tổng đã thu:{" "}
+              <strong className="text-emerald-700">
+                {linkedCashRows
+                  .filter((r) => r.direction === "receipt")
+                  .reduce((s, r) => s + r.amount, 0)
+                  .toLocaleString("vi-VN")}
+              </strong>
+            </span>
+          </div>
+          {linkedCashRows.length === 0 ? (
+            <p className="text-xs text-[var(--on-surface-muted)]">
+              Chưa có phiếu thu nào liên kết với đơn này. Có thể tạo từ Sổ quỹ hoặc trang
+              công nợ KH.
+            </p>
+          ) : (
+            <div className="overflow-x-auto rounded-[var(--radius-sm)] border border-[var(--border-ghost)]">
+              <table className="w-full text-sm">
+                <thead className="bg-[var(--surface-muted)] text-xs uppercase text-[var(--on-surface-muted)]">
+                  <tr>
+                    <th className="px-3 py-2 text-left">Số phiếu</th>
+                    <th className="px-3 py-2 text-left">Ngày</th>
+                    <th className="px-3 py-2 text-left">Kênh</th>
+                    <th className="px-3 py-2 text-right">Số tiền</th>
+                    <th className="px-3 py-2 text-left">Diễn giải</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {linkedCashRows.map((r) => (
+                    <tr key={r.id} className="border-t border-[var(--border-ghost)]">
+                      <td className="px-3 py-2 font-mono text-xs">{r.doc_number}</td>
+                      <td className="px-3 py-2">{formatDate(r.transaction_date)}</td>
+                      <td className="px-3 py-2">{r.payment_channel_label}</td>
+                      <td className="px-3 py-2 text-right font-semibold text-emerald-700">
+                        {r.amount.toLocaleString("vi-VN")}
+                      </td>
+                      <td className="px-3 py-2 text-[var(--on-surface-muted)]">
+                        {r.description ?? ""}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
       ) : null}
 
       <ExcelDataGrid<LabOrderLineRow>

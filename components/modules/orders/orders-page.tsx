@@ -71,6 +71,7 @@ import {
   updateLabOrderStatus,
   type LabOrderRow,
 } from "@/lib/actions/lab-orders";
+import { listCashFundChannels } from "@/lib/actions/cash";
 import {
   buildLabOrderListReportHtml,
 } from "@/lib/reports/lab-order-list-html";
@@ -574,6 +575,11 @@ export function OrdersPage() {
   const [deliveryDate, setDeliveryDate] = React.useState(new Date().toISOString().slice(0, 10));
   const [deliveryExcelBusy, setDeliveryExcelBusy] = React.useState(false);
 
+  const [payNow, setPayNow] = React.useState(false);
+  const [payChannel, setPayChannel] = React.useState("cash");
+  const [payAmount, setPayAmount] = React.useState("");
+  const [payChannels, setPayChannels] = React.useState<{ value: string; label: string }[]>([]);
+
   const [filters, setFilters] = React.useState<Record<string, string>>({});
   const [globalSearch, setGlobalSearch] = React.useState("");
   const [mainTab, setMainTab] = React.useState<"list" | "prints">("list");
@@ -583,6 +589,19 @@ export function OrdersPage() {
     void listCustomerPartnerPicker().then(setPartners).catch(() => {});
     void listProductPicker({ forSales: true }).then(setProducts).catch(() => {});
   }, []);
+
+  React.useEffect(() => {
+    if (!open || editing) return;
+    void listCashFundChannels()
+      .then((rows) => {
+        setPayChannels(rows);
+        setPayChannel((prev) => {
+          if (prev && rows.some((r) => r.value === prev)) return prev;
+          return rows.find((r) => r.value === "cash")?.value ?? rows[0]?.value ?? "cash";
+        });
+      })
+      .catch(() => {});
+  }, [open, editing]);
 
   const hydrateDraftPrices = React.useCallback(async (key: string, productIdFor: string) => {
     if (!partnerId.trim() || !productIdFor) return;
@@ -629,6 +648,8 @@ export function OrdersPage() {
     resetProductionFields();
     setDraftLines([newDraftLine()]);
     setErr(null);
+    setPayNow(false);
+    setPayAmount("");
   };
 
   const openCreate = () => {
@@ -842,7 +863,17 @@ export function OrdersPage() {
             arch_connection: l.arch_connection,
             notes: l.notes.trim() || null,
           }));
-        const { id } = await createLabOrder(
+        const autoPaymentArg = payNow
+          ? {
+              payment_channel: payChannel.trim() || "cash",
+              transaction_date: receivedAt,
+              amount:
+                payAmount.trim() === ""
+                  ? undefined
+                  : Number(payAmount.replace(/\./g, "").replace(/,/g, ".")) || undefined,
+            }
+          : null;
+        const result = await createLabOrder(
           {
             received_at: receivedAt,
             partner_id: partnerId,
@@ -854,7 +885,16 @@ export function OrdersPage() {
             ...ph,
           },
           linesPayload,
+          autoPaymentArg,
         );
+        const { id } = result;
+        if (payNow && result.autoPayment && !result.autoPayment.ok) {
+          alert(
+            "Đơn đã tạo nhưng không tạo được phiếu thu: " +
+              (result.autoPayment.message ?? "Lỗi không xác định") +
+              "\nVui lòng tạo phiếu thu thủ công ở Sổ quỹ.",
+          );
+        }
         setOpen(false);
         reset();
         bumpGrid();
@@ -1761,6 +1801,53 @@ export function OrdersPage() {
                     </div>
                   ))}
                 </div>
+              </div>
+            ) : null}
+
+            {!editing ? (
+              <div className="space-y-3 border-t border-[var(--border-ghost)] pt-4 sm:col-span-2">
+                <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold text-[var(--on-surface)]">
+                  <input
+                    type="checkbox"
+                    checked={payNow}
+                    onChange={(e) => setPayNow(e.target.checked)}
+                    className="h-4 w-4 rounded border-[var(--border-ghost)]"
+                  />
+                  Thanh toán ngay (tự động tạo phiếu thu khớp đơn)
+                </label>
+                {payNow ? (
+                  <div className="grid gap-3 rounded-[var(--radius-md)] bg-[var(--surface-muted)] p-3 sm:grid-cols-2">
+                    <div className="grid gap-2">
+                      <Label htmlFor="lo-pay-channel">Kênh thanh toán</Label>
+                      <Select
+                        id="lo-pay-channel"
+                        value={payChannel}
+                        onChange={(e) => setPayChannel(e.target.value)}
+                      >
+                        {payChannels.length === 0 ? (
+                          <option value="cash">Tiền mặt</option>
+                        ) : (
+                          payChannels.map((c) => (
+                            <option key={c.value} value={c.value}>
+                              {c.label}
+                            </option>
+                          ))
+                        )}
+                      </Select>
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="lo-pay-amount">Số tiền (để trống = tổng tiền hàng)</Label>
+                      <CurrencyInput
+                        value={payAmount}
+                        onChange={setPayAmount}
+                        allowDecimal={false}
+                      />
+                      <p className="text-[11px] text-[var(--on-surface-muted)]">
+                        Phiếu thu (PT) sẽ được sinh tự động và liên kết tới đơn vừa tạo.
+                      </p>
+                    </div>
+                  </div>
+                ) : null}
               </div>
             ) : null}
 

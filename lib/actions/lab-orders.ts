@@ -16,6 +16,7 @@ import {
 } from "@/lib/format/labels";
 import { computeOrderGrandTotal, finiteNumber } from "@/lib/billing/order-grand-total";
 import { LAB_ORDER_ACCESSORY_DEFS, parseAccessoriesJson } from "@/lib/lab/order-accessories";
+import { createCashTransaction } from "@/lib/actions/cash";
 
 export type LabOrderRow = {
   id: string;
@@ -336,6 +337,23 @@ const labOrderLineDraftSchema = z.object({
   notes: z.string().max(1000).optional().nullable(),
 });
 
+/** Cờ "Thanh toán ngay" khi tạo đơn — sinh tự động một phiếu thu khớp đơn. */
+const labOrderAutoPaymentSchema = z.object({
+  payment_channel: z.string().min(1).max(100),
+  transaction_date: z.string().min(1).optional(),
+  amount: z.coerce.number().positive().optional(),
+  description: z.string().max(2000).optional().nullable(),
+});
+
+export type LabOrderAutoPaymentInput = z.infer<typeof labOrderAutoPaymentSchema>;
+
+export type LabOrderAutoPaymentResult = {
+  ok: boolean;
+  message?: string;
+  cashId?: string;
+  amount?: number;
+};
+
 const labOrderUpdateSchema = z
   .object({
     order_number: z.string().min(1).max(100),
@@ -439,9 +457,13 @@ export async function assertProductIdsAllowedOnLabOrder(productIds: string[]) {
 export async function createLabOrder(
   header: z.infer<typeof labOrderCreateHeaderSchema>,
   lines: z.infer<typeof labOrderLineDraftSchema>[] = [],
-): Promise<{ id: string }> {
+  autoPaymentRaw?: LabOrderAutoPaymentInput | null,
+): Promise<{ id: string; autoPayment?: LabOrderAutoPaymentResult }> {
   const h = labOrderCreateHeaderSchema.parse(header);
   const parsedLines = lines.map((l) => labOrderLineDraftSchema.parse(l));
+  const autoPayment = autoPaymentRaw
+    ? labOrderAutoPaymentSchema.parse(autoPaymentRaw)
+    : null;
   const supabase = createSupabaseAdmin();
   let lastErr: Error | null = null;
 
@@ -512,7 +534,52 @@ export async function createLabOrder(
 
     revalidatePath("/orders");
     revalidatePath("/orders/" + id);
-    return { id };
+
+    let autoPaymentResult: LabOrderAutoPaymentResult | undefined;
+    if (autoPayment) {
+      const computed = parsedLines.reduce((sum, ln) => {
+        const qty = finiteNumber(ln.quantity);
+        const price = finiteNumber(ln.unit_price);
+        const dp = finiteNumber(ln.discount_percent ?? 0);
+        const da = finiteNumber(ln.discount_amount ?? 0);
+        const lineAfterPct = qty * price * (1 - dp / 100);
+        const lineAmount = Math.max(0, lineAfterPct - da);
+        return sum + lineAmount;
+      }, 0);
+      const amount = autoPayment.amount ?? Math.round(computed * 100) / 100;
+      if (amount > 0) {
+        try {
+          const cashRes = await createCashTransaction({
+            transaction_date: autoPayment.transaction_date ?? h.received_at,
+            doc_number: "",
+            payment_channel: autoPayment.payment_channel,
+            direction: "receipt",
+            business_category: "Thu bán hàng / dịch vụ",
+            amount,
+            partner_id: h.partner_id,
+            supplier_id: null,
+            payer_name: null,
+            description:
+              autoPayment.description?.trim() || `Thu khớp đơn ${order_number}`,
+            reference_type: "lab_order",
+            reference_id: id,
+          });
+          autoPaymentResult = { ok: true, cashId: cashRes.id, amount };
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : "Lỗi tạo phiếu thu";
+          console.warn("[createLabOrder] auto-payment failed:", msg);
+          autoPaymentResult = { ok: false, message: msg, amount };
+        }
+      } else {
+        autoPaymentResult = {
+          ok: false,
+          message: "Tổng tiền đơn = 0, không tạo phiếu thu.",
+          amount: 0,
+        };
+      }
+    }
+
+    return { id, autoPayment: autoPaymentResult };
   }
 
   throw lastErr ?? new Error("Không cấp được số đơn duy nhất.");

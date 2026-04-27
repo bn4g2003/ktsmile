@@ -440,7 +440,16 @@ function cashLedgerLabel(channelKey: string, displayRaw: string): string {
 
 /**
  * Bảng thu–chi–tồn theo kênh thanh toán (mẫu «THU CHI VÀ TỒN QUỸ»).
- * Tồn đầu kỳ = thu trừ chi trước ngày `dateFrom`; trong kỳ: [dateFrom, dateTo].
+ *
+ * Tồn đầu kỳ ưu tiên dùng `cash_account_opening_balances` (số dư đầu kỳ do
+ * người dùng nạp khi tạo tài khoản). Cụ thể, với mỗi kênh:
+ *   - Tìm dòng OB mới nhất có (year, month) ≤ tháng của `dateFrom` → "anchor".
+ *   - opening = anchor.opening_balance + Σ(net cash của kênh) trong khoảng
+ *     [đầu tháng anchor, dateFrom-1]. Giao dịch trước "đầu tháng anchor" được
+ *     coi như đã gói vào số dư đầu kỳ → bỏ qua để tránh đếm trùng.
+ *   - Kênh không có dòng OB nào ≤ tháng `dateFrom` → fallback cộng dồn toàn
+ *     bộ giao dịch trước `dateFrom` (giữ hành vi cũ để dữ liệu lịch sử không
+ *     thay đổi đột ngột).
  */
 export async function getCashLedgerSummary(
   dateFrom: string,
@@ -452,6 +461,44 @@ export async function getCashLedgerSummary(
   if (from > to) throw new Error("Từ ngày không được sau Đến ngày.");
 
   const supabase = createSupabaseAdmin();
+
+  const fy = Number(from.slice(0, 4));
+  const fm = Number(from.slice(5, 7));
+  const ymKey = (yy: number, mm: number) => yy * 12 + (mm - 1);
+  const targetKey = ymKey(fy, fm);
+
+  const obRes = await supabase
+    .from("cash_account_opening_balances")
+    .select("payment_channel, year, month, opening_balance");
+  if (obRes.error) throw new Error(obRes.error.message);
+
+  type Anchor = {
+    key: string;
+    display: string;
+    ob: number;
+    ymKey: number;
+    year: number;
+    month: number;
+  };
+  const anchorByKey = new Map<string, Anchor>();
+  for (const raw of obRes.data ?? []) {
+    const r = raw as { payment_channel: string; year: number; month: number; opening_balance: number };
+    const rawCh = String(r.payment_channel ?? "").trim();
+    const key = rawCh.toLowerCase() || "(trống)";
+    const yy = Number(r.year);
+    const mm = Number(r.month);
+    if (!Number.isFinite(yy) || !Number.isFinite(mm)) continue;
+    const k = ymKey(yy, mm);
+    if (k > targetKey) continue;
+    const ob = Number(r.opening_balance);
+    if (!Number.isFinite(ob)) continue;
+    const cur = anchorByKey.get(key);
+    if (!cur || k > cur.ymKey) {
+      anchorByKey.set(key, { key, display: rawCh || key, ob, ymKey: k, year: yy, month: mm });
+    }
+  }
+  const anchorDateOf = (a: Anchor) => `${a.year}-${String(a.month).padStart(2, "0")}-01`;
+
   const { data, error } = await supabase
     .from("cash_transactions")
     .select("transaction_date, payment_channel, direction, amount")
@@ -460,6 +507,10 @@ export async function getCashLedgerSummary(
 
   type Agg = { key: string; display: string; openR: number; openP: number; inR: number; inP: number };
   const byKey = new Map<string, Agg>();
+
+  for (const [key, a] of anchorByKey) {
+    byKey.set(key, { key, display: a.display, openR: 0, openP: 0, inR: 0, inP: 0 });
+  }
 
   for (const raw of data ?? []) {
     const r = raw as {
@@ -479,6 +530,8 @@ export async function getCashLedgerSummary(
     if (!Number.isFinite(amt)) continue;
     const d = r.transaction_date;
     if (d < from) {
+      const anchor = anchorByKey.get(key);
+      if (anchor && d < anchorDateOf(anchor)) continue;
       if (r.direction === "receipt") a.openR += amt;
       else a.openP += amt;
     } else {
@@ -489,7 +542,9 @@ export async function getCashLedgerSummary(
 
   const rows: CashLedgerChannelRow[] = [];
   for (const a of byKey.values()) {
-    const opening = roundMoney(a.openR - a.openP);
+    const anchor = anchorByKey.get(a.key);
+    const obSeed = anchor?.ob ?? 0;
+    const opening = roundMoney(obSeed + a.openR - a.openP);
     const receiptInPeriod = roundMoney(a.inR);
     const paymentInPeriod = roundMoney(a.inP);
     const closing = roundMoney(opening + receiptInPeriod - paymentInPeriod);
@@ -672,4 +727,54 @@ export async function listCashAccountOpeningBalances(
     created_at: r.created_at as string,
     updated_at: r.updated_at as string,
   }));
+}
+
+export type CashTransactionReferenceRow = {
+  id: string;
+  doc_number: string;
+  transaction_date: string;
+  payment_channel: string;
+  payment_channel_label: string;
+  direction: "receipt" | "payment";
+  amount: number;
+  description: string | null;
+  created_at: string;
+};
+
+/**
+ * Liệt kê các phiếu thu/chi đã link tới một chứng từ gốc (đơn hàng, phiếu nhập…).
+ * Sắp xếp mới → cũ theo `transaction_date`, sau đó `created_at`.
+ */
+export async function listCashTransactionsByReference(
+  referenceType: string,
+  referenceId: string,
+): Promise<CashTransactionReferenceRow[]> {
+  const refType = referenceType.trim();
+  const refId = referenceId.trim();
+  if (!refType || !refId) return [];
+  const supabase = createSupabaseAdmin();
+  const { data, error } = await supabase
+    .from("cash_transactions")
+    .select(
+      "id, doc_number, transaction_date, payment_channel, direction, amount, description, created_at",
+    )
+    .eq("reference_type", refType)
+    .eq("reference_id", refId)
+    .order("transaction_date", { ascending: false })
+    .order("created_at", { ascending: false });
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((r) => {
+    const ch = String((r as { payment_channel?: string }).payment_channel ?? "");
+    return {
+      id: (r as { id: string }).id,
+      doc_number: String((r as { doc_number?: string }).doc_number ?? ""),
+      transaction_date: String((r as { transaction_date?: string }).transaction_date ?? ""),
+      payment_channel: ch,
+      payment_channel_label: formatCashPaymentChannel(ch),
+      direction: ((r as { direction?: string }).direction ?? "receipt") as "receipt" | "payment",
+      amount: Number((r as { amount?: number }).amount ?? 0),
+      description: ((r as { description?: string | null }).description ?? null) as string | null,
+      created_at: String((r as { created_at?: string }).created_at ?? ""),
+    };
+  });
 }

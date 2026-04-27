@@ -19,6 +19,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { CurrencyInput } from "@/components/ui/currency-input";
+import { Card } from "@/components/ui/card";
+import { DetailTabStrip } from "@/components/ui/detail-tab-strip";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
@@ -33,6 +35,8 @@ import { CashReceiptPrintButton } from "@/components/shared/reports/cash-receipt
 import {
   createCashTransaction,
   deleteCashTransaction,
+  getCashLedgerSummary,
+  type CashLedgerChannelRow,
   listCashFundChannels,
   listCashTransactions,
   updateCashTransaction,
@@ -75,6 +79,7 @@ export function CashPage() {
   const [refType, setRefType] = React.useState("");
   const [refId, setRefId] = React.useState("");
   const [showCharts, setShowCharts] = React.useState(true);
+  const [activeTab, setActiveTab] = React.useState<"ledger" | "funds">("ledger");
   const [openOpening, setOpenOpening] = React.useState(false);
   const [openingYear, setOpeningYear] = React.useState(String(new Date().getFullYear()));
   const [openingMonth, setOpeningMonth] = React.useState(String(new Date().getMonth() + 1));
@@ -86,6 +91,10 @@ export function CashPage() {
   const [savingOpening, setSavingOpening] = React.useState(false);
   const [gridFilters, setGridFilters] = React.useState<Record<string, string>>({});
   const [fundChannels, setFundChannels] = React.useState<{ value: string; label: string }[]>([]);
+  const [focusFundChannel, setFocusFundChannel] = React.useState("cash");
+  const [fundSummary, setFundSummary] = React.useState<CashLedgerChannelRow | null>(null);
+  const [fundSummaryErr, setFundSummaryErr] = React.useState<string | null>(null);
+  const [fundSummaryLoading, setFundSummaryLoading] = React.useState(false);
 
   const patchGridFilter = React.useCallback((key: string, val: string) => {
     setGridFilters((prev) => {
@@ -102,9 +111,67 @@ export function CashPage() {
   }, []);
 
   React.useEffect(() => {
-    if (!open) return;
     void listCashFundChannels().then(setFundChannels).catch(() => {});
-  }, [open]);
+  }, [gridReload]);
+
+  React.useEffect(() => {
+    if (!fundChannels.length) return;
+    if (fundChannels.some((c) => c.value === focusFundChannel)) return;
+    setFocusFundChannel(fundChannels[0]!.value);
+  }, [fundChannels, focusFundChannel]);
+
+  const defaultOpeningBalances = React.useMemo(() => {
+    const preset = ["cash", "mbbank", "acb"];
+    const chosen = fundChannels
+      .filter((ch) => preset.includes(ch.value.toLowerCase()))
+      .map((ch) => ({ channel: ch.value, amount: "0" }));
+    if (chosen.length > 0) return chosen;
+    return [{ channel: "cash", amount: "0" }];
+  }, [fundChannels]);
+
+  const fundDateRange = React.useMemo(() => {
+    const y = Number(openingYear);
+    const m = Number(openingMonth);
+    if (!Number.isFinite(y) || !Number.isFinite(m) || m < 1 || m > 12) return null;
+    const from = `${String(y).padStart(4, "0")}-${String(m).padStart(2, "0")}-01`;
+    const lastDay = new Date(y, m, 0).getDate();
+    const to = `${String(y).padStart(4, "0")}-${String(m).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+    return { from, to };
+  }, [openingMonth, openingYear]);
+
+  const loadFundSummary = React.useCallback(async () => {
+    if (!fundDateRange) return;
+    setFundSummaryLoading(true);
+    setFundSummaryErr(null);
+    try {
+      const summary = await getCashLedgerSummary(fundDateRange.from, fundDateRange.to);
+      const key = focusFundChannel.trim().toLowerCase();
+      const row = summary.rows.find((r) => r.channelKey === key) ?? null;
+      setFundSummary(
+        row ?? {
+          channelKey: key,
+          label: formatCashPaymentChannel(focusFundChannel),
+          openingBook: 0,
+          openingPeriod: 0,
+          receiptInPeriod: 0,
+          paymentInPeriod: 0,
+          closing: 0,
+        },
+      );
+    } catch (e) {
+      setFundSummaryErr(e instanceof Error ? e.message : "Không tải được tổng hợp quỹ.");
+      setFundSummary(null);
+    } finally {
+      setFundSummaryLoading(false);
+    }
+  }, [focusFundChannel, fundDateRange]);
+
+  React.useEffect(() => {
+    if (activeTab !== "funds") return;
+    if (!focusFundChannel.trim()) return;
+    if (!fundDateRange) return;
+    void loadFundSummary();
+  }, [activeTab, focusFundChannel, fundDateRange, loadFundSummary]);
 
   const reset = () => {
     setEditing(null);
@@ -207,7 +274,7 @@ export function CashPage() {
     }
   };
 
-  const openOpeningDialog = async () => {
+  const loadOpeningBalances = React.useCallback(async () => {
     const y = Number(openingYear);
     const m = Number(openingMonth);
     try {
@@ -219,20 +286,14 @@ export function CashPage() {
             amount: String(b.opening_balance),
           })),
         );
-      } else {
-        setOpeningBalances([
-          { channel: "cash", amount: "0" },
-          { channel: "mbbank", amount: "0" },
-          { channel: "acb", amount: "0" },
-        ]);
-      }
+      } else setOpeningBalances(defaultOpeningBalances);
     } catch {
-      setOpeningBalances([
-        { channel: "cash", amount: "0" },
-        { channel: "mbbank", amount: "0" },
-        { channel: "acb", amount: "0" },
-      ]);
+      setOpeningBalances(defaultOpeningBalances);
     }
+  }, [defaultOpeningBalances, openingMonth, openingYear]);
+
+  const openOpeningDialog = async () => {
+    await loadOpeningBalances();
     setOpenOpening(true);
   };
 
@@ -252,7 +313,6 @@ export function CashPage() {
           });
         }
       }
-      setOpenOpening(false);
       bumpGrid();
     } catch (e2) {
       alert(e2 instanceof Error ? e2.message : "Lỗi");
@@ -269,7 +329,12 @@ export function CashPage() {
         meta: { filterKey: "transaction_date_eq", filterType: "date" },
       },
       { accessorKey: "doc_number", header: "Số CT", meta: { filterKey: "doc_number", filterType: "text" } },
-      { accessorKey: "payment_channel", header: "Kênh", meta: { filterKey: "payment_channel", filterType: "text" } },
+      {
+        accessorKey: "payment_channel",
+        header: "Kênh",
+        meta: { filterKey: "payment_channel", filterType: "text" },
+        cell: ({ getValue }) => formatCashPaymentChannel(String(getValue())),
+      },
       {
         accessorKey: "direction",
         header: "Thu/Chi",
@@ -397,69 +462,235 @@ export function CashPage() {
 
   return (
     <>
-      <div className="mb-5 flex flex-col gap-3">
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          className="w-fit"
-          onClick={() => setShowCharts((v) => !v)}
-        >
-          {showCharts ? "Ẩn báo cáo thu / chi / tồn" : "Hiện báo cáo thu / chi / tồn"}
-        </Button>
-        {showCharts ? <CashFlowChartsSection /> : null}
+      <div className="mb-4">
+        <DetailTabStrip
+          items={[
+            { id: "ledger", label: "Sổ quỹ thu / chi" },
+            { id: "funds", label: "Quản lý sổ quỹ chi tiết" },
+          ]}
+          value={activeTab}
+          onChange={(v) => setActiveTab(v as "ledger" | "funds")}
+        />
       </div>
-      <ExcelDataGrid<CashRow>
-        moduleId="cash_transactions"
-        title="Sổ quỹ thu / chi"
-        columns={columns}
-        list={listCashTransactions}
-        reloadSignal={gridReload}
-        filters={gridFilters}
-        onFiltersChange={setGridFilters}
-        renderRowDetail={renderCashDetail}
-        rowDetailTitle={(r) => "Chứng từ " + r.doc_number}
-        toolbarExtra={
-          <>
-            <div className="flex flex-wrap items-end gap-2 rounded-[var(--radius-md)] border border-[var(--border-ghost)] bg-[var(--surface-muted)] px-2 py-2">
-              <div className="grid gap-1">
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--on-surface-muted)]">
-                  Từ ngày
-                </span>
-                <Input
-                  type="date"
-                  value={gridFilters.transaction_date_from ?? ""}
-                  onChange={(e) => patchGridFilter("transaction_date_from", e.target.value)}
-                  className="h-9 w-[9.5rem] py-1 text-xs"
-                />
+
+      {activeTab === "ledger" ? (
+        <>
+          <div className="mb-5 flex flex-col gap-3">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="w-fit"
+              onClick={() => setShowCharts((v) => !v)}
+            >
+              {showCharts ? "Ẩn báo cáo thu / chi / tồn" : "Hiện báo cáo thu / chi / tồn"}
+            </Button>
+            {showCharts ? <CashFlowChartsSection /> : null}
+          </div>
+          <ExcelDataGrid<CashRow>
+            moduleId="cash_transactions"
+            title="Sổ quỹ thu / chi"
+            columns={columns}
+            list={listCashTransactions}
+            reloadSignal={gridReload}
+            filters={gridFilters}
+            onFiltersChange={setGridFilters}
+            renderRowDetail={renderCashDetail}
+            rowDetailTitle={(r) => "Chứng từ " + r.doc_number}
+            toolbarExtra={
+              <>
+                <div className="flex flex-wrap items-end gap-2 rounded-[var(--radius-md)] border border-[var(--border-ghost)] bg-[var(--surface-muted)] px-2 py-2">
+                  <div className="grid gap-1">
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--on-surface-muted)]">
+                      Từ ngày
+                    </span>
+                    <Input
+                      type="date"
+                      value={gridFilters.transaction_date_from ?? ""}
+                      onChange={(e) => patchGridFilter("transaction_date_from", e.target.value)}
+                      className="h-9 w-[9.5rem] py-1 text-xs"
+                    />
+                  </div>
+                  <div className="grid gap-1">
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--on-surface-muted)]">
+                      Đến ngày
+                    </span>
+                    <Input
+                      type="date"
+                      value={gridFilters.transaction_date_to ?? ""}
+                      onChange={(e) => patchGridFilter("transaction_date_to", e.target.value)}
+                      className="h-9 w-[9.5rem] py-1 text-xs"
+                    />
+                  </div>
+                </div>
+                <Button variant="secondary" type="button" size="sm" onClick={openOpeningDialog} className="mr-2">
+                  Số dư đầu kỳ
+                </Button>
+                <Button variant="primary" type="button" size="sm" onClick={openCreate}>
+                  Thêm chứng từ
+                </Button>
+              </>
+            }
+            getRowId={(r) => r.id}
+            getRowClassName={(r) =>
+              r.direction === "receipt"
+                ? "border-l-[3px] border-l-emerald-600"
+                : "border-l-[3px] border-l-rose-600"
+            }
+          />
+        </>
+      ) : (
+        <Card className="space-y-4">
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="grid gap-1">
+              <Label htmlFor="fund-year">Năm</Label>
+              <Input
+                id="fund-year"
+                type="number"
+                min={1900}
+                max={2100}
+                value={openingYear}
+                onChange={(e) => setOpeningYear(e.target.value)}
+                className="h-9 w-28"
+              />
+            </div>
+            <div className="grid gap-1">
+              <Label htmlFor="fund-month">Tháng</Label>
+              <Input
+                id="fund-month"
+                type="number"
+                min={1}
+                max={12}
+                value={openingMonth}
+                onChange={(e) => setOpeningMonth(e.target.value)}
+                className="h-9 w-24"
+              />
+            </div>
+            <Button type="button" variant="secondary" size="sm" onClick={() => void loadOpeningBalances()}>
+              Tải số dư tháng
+            </Button>
+            <div className="grid gap-1">
+              <Label htmlFor="fund-focus-channel">Quỹ xem chi tiết</Label>
+              <Select
+                id="fund-focus-channel"
+                value={focusFundChannel}
+                onChange={(e) => setFocusFundChannel(e.target.value)}
+                className="h-9 min-w-[14rem]"
+              >
+                {fundChannels.map((ch) => (
+                  <option key={ch.value} value={ch.value}>
+                    {ch.label}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => void loadFundSummary()}
+              disabled={!fundDateRange || fundSummaryLoading}
+            >
+              {fundSummaryLoading ? "Đang tải thống kê…" : "Tải thống kê quỹ"}
+            </Button>
+            <Button type="button" variant="primary" size="sm" onClick={() => void saveOpeningBalances()} disabled={savingOpening}>
+              {savingOpening ? "Đang lưu…" : "Lưu số dư"}
+            </Button>
+          </div>
+
+          {fundSummaryErr ? <p className="text-sm text-[#b91c1c]">{fundSummaryErr}</p> : null}
+          {fundSummary ? (
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="rounded-[var(--radius-md)] border border-[var(--border-ghost)] bg-[var(--surface-muted)] p-3">
+                <div className="text-[11px] font-semibold uppercase text-[var(--on-surface-muted)]">Tồn đầu kỳ</div>
+                <div className="text-lg font-bold tabular-nums">{fundSummary.openingPeriod.toLocaleString("vi-VN")}</div>
               </div>
-              <div className="grid gap-1">
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--on-surface-muted)]">
-                  Đến ngày
-                </span>
-                <Input
-                  type="date"
-                  value={gridFilters.transaction_date_to ?? ""}
-                  onChange={(e) => patchGridFilter("transaction_date_to", e.target.value)}
-                  className="h-9 w-[9.5rem] py-1 text-xs"
-                />
+              <div className="rounded-[var(--radius-md)] border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-900/40 dark:bg-emerald-950/30">
+                <div className="text-[11px] font-semibold uppercase text-emerald-700 dark:text-emerald-300">Thu trong kỳ</div>
+                <div className="text-lg font-bold tabular-nums text-emerald-700 dark:text-emerald-300">
+                  {fundSummary.receiptInPeriod.toLocaleString("vi-VN")}
+                </div>
+              </div>
+              <div className="rounded-[var(--radius-md)] border border-rose-200 bg-rose-50 p-3 dark:border-rose-900/40 dark:bg-rose-950/30">
+                <div className="text-[11px] font-semibold uppercase text-rose-700 dark:text-rose-300">Chi trong kỳ</div>
+                <div className="text-lg font-bold tabular-nums text-rose-700 dark:text-rose-300">
+                  {fundSummary.paymentInPeriod.toLocaleString("vi-VN")}
+                </div>
+              </div>
+              <div className="rounded-[var(--radius-md)] border border-[var(--border-ghost)] bg-[var(--surface-muted)] p-3">
+                <div className="text-[11px] font-semibold uppercase text-[var(--on-surface-muted)]">Tồn cuối kỳ</div>
+                <div className="text-lg font-bold tabular-nums">{fundSummary.closing.toLocaleString("vi-VN")}</div>
               </div>
             </div>
-            <Button variant="secondary" type="button" size="sm" onClick={openOpeningDialog} className="mr-2">
-              Số dư đầu kỳ
+          ) : null}
+
+          <div className="space-y-2">
+            {openingBalances.map((b, i) => (
+              <div key={i} className="grid gap-2 rounded-[var(--radius-md)] border border-[var(--border-ghost)] p-3 sm:grid-cols-2">
+                <div className="grid gap-1">
+                  <Label htmlFor={`fund-chan-${i}`}>Kênh quỹ</Label>
+                  <Select
+                    id={`fund-chan-${i}`}
+                    value={b.channel}
+                    onChange={(e) => {
+                      const nb = [...openingBalances];
+                      nb[i]!.channel = e.target.value;
+                      setOpeningBalances(nb);
+                    }}
+                  >
+                    {fundChannels.map((ch) => (
+                      <option key={ch.value} value={ch.value}>
+                        {ch.label}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+                <div className="grid gap-1">
+                  <Label htmlFor={`fund-amt-${i}`}>Số dư đầu kỳ</Label>
+                  <CurrencyInput
+                    id={`fund-amt-${i}`}
+                    value={b.amount}
+                    onChange={(v) => {
+                      const nb = [...openingBalances];
+                      nb[i]!.amount = v;
+                      setOpeningBalances(nb);
+                    }}
+                  />
+                </div>
+              </div>
+            ))}
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setOpeningBalances([...openingBalances, { channel: fundChannels[0]?.value ?? "cash", amount: "0" }])}
+            >
+              + Thêm kênh quỹ
             </Button>
-            <Button variant="primary" type="button" size="sm" onClick={openCreate}>
-              Thêm chứng từ
-            </Button>
-          </>
-        }
-        getRowId={(r) => r.id}
-        getRowClassName={(r) =>
-          r.direction === "receipt"
-            ? "border-l-[3px] border-l-emerald-600"
-            : "border-l-[3px] border-l-rose-600"
-        }
-      />
+          </div>
+
+          <ExcelDataGrid<CashRow>
+            moduleId={"cash_transactions_fund_" + focusFundChannel}
+            title={"Danh sách giao dịch quỹ: " + formatCashPaymentChannel(focusFundChannel)}
+            columns={columns}
+            list={listCashTransactions}
+            reloadSignal={gridReload}
+            prependFilters={{
+              payment_channel: focusFundChannel,
+              transaction_date_from: fundDateRange?.from ?? "",
+              transaction_date_to: fundDateRange?.to ?? "",
+            }}
+            renderRowDetail={renderCashDetail}
+            rowDetailTitle={(r) => "Chứng từ " + r.doc_number}
+            getRowId={(r) => r.id}
+            getRowClassName={(r) =>
+              r.direction === "receipt"
+                ? "border-l-[3px] border-l-emerald-600"
+                : "border-l-[3px] border-l-rose-600"
+            }
+          />
+        </Card>
+      )}
       <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) reset(); }}>
         <DialogContent size="xl" className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>

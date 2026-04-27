@@ -9,6 +9,7 @@ import type {
   StockDocumentPrintLine,
   StockDocumentPrintPayload,
 } from "@/lib/reports/stock-voucher-html";
+import { createCashTransaction } from "@/lib/actions/cash";
 
 export type StockDocumentRow = {
   id: string;
@@ -295,14 +296,39 @@ const inboundMaterialPurchaseSchema = z
     }
   });
 
+/** Cờ "Thanh toán ngay" cho phiếu nhập NVL — sinh tự động một phiếu chi khớp phiếu nhập. */
+const inboundAutoPaymentSchema = z.object({
+  payment_channel: z.string().min(1).max(100),
+  transaction_date: z.string().min(1).optional(),
+  amount: z.coerce.number().positive().optional(),
+  description: z.string().max(2000).optional().nullable(),
+});
+
+export type InboundAutoPaymentInput = z.infer<typeof inboundAutoPaymentSchema>;
+
+export type InboundAutoPaymentResult = {
+  ok: boolean;
+  message?: string;
+  cashId?: string;
+  amount?: number;
+};
+
 /**
  * Phiếu nhập kho NVL từ NCC: bắt buộc đã có dòng danh mục material_suppliers (fallback product_suppliers cho DB cũ).
  * Đơn giá dòng: dùng giá nhập nhập tay, hoặc giá tham chiếu trong danh mục, hoặc 0.
  */
 export async function createInboundMaterialPurchase(
   input: z.infer<typeof inboundMaterialPurchaseSchema>,
-): Promise<{ documentId: string; document_number: string }> {
+  autoPaymentRaw?: InboundAutoPaymentInput | null,
+): Promise<{
+  documentId: string;
+  document_number: string;
+  autoPayment?: InboundAutoPaymentResult;
+}> {
   const row = inboundMaterialPurchaseSchema.parse(input);
+  const autoPayment = autoPaymentRaw
+    ? inboundAutoPaymentSchema.parse(autoPaymentRaw)
+    : null;
   const supabase = createSupabaseAdmin();
 
   const uniqueIds = [...new Set(row.lines.map((l) => l.product_id))];
@@ -422,7 +448,51 @@ export async function createInboundMaterialPurchase(
   revalidatePath("/inventory/documents");
   revalidatePath("/inventory/stock");
   revalidatePath("/accounting/debt");
-  return { documentId: docId, document_number };
+
+  let autoPaymentResult: InboundAutoPaymentResult | undefined;
+  if (autoPayment) {
+    const computed = row.lines.reduce((sum, line) => {
+      const qty = Number(line.quantity);
+      const fallback = refPriceByProduct.get(line.product_id) ?? 0;
+      const price = line.unit_price != null ? Number(line.unit_price) : Number(fallback);
+      const amt = (Number.isFinite(qty) ? qty : 0) * (Number.isFinite(price) ? price : 0);
+      return sum + amt;
+    }, 0);
+    const amount = autoPayment.amount ?? Math.round(computed * 100) / 100;
+    if (amount > 0) {
+      try {
+        const cashRes = await createCashTransaction({
+          transaction_date: autoPayment.transaction_date ?? row.document_date,
+          doc_number: "",
+          payment_channel: autoPayment.payment_channel,
+          direction: "payment",
+          business_category: "Chi mua NVL / hàng hoá",
+          amount,
+          partner_id: null,
+          supplier_id: row.supplier_id,
+          payer_name: null,
+          description:
+            autoPayment.description?.trim() ||
+            `Chi khớp phiếu nhập ${document_number}`,
+          reference_type: "stock_document",
+          reference_id: docId,
+        });
+        autoPaymentResult = { ok: true, cashId: cashRes.id, amount };
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Lỗi tạo phiếu chi";
+        console.warn("[createInboundMaterialPurchase] auto-payment failed:", msg);
+        autoPaymentResult = { ok: false, message: msg, amount };
+      }
+    } else {
+      autoPaymentResult = {
+        ok: false,
+        message: "Tổng tiền phiếu nhập = 0, không tạo phiếu chi.",
+        amount: 0,
+      };
+    }
+  }
+
+  return { documentId: docId, document_number, autoPayment: autoPaymentResult };
 }
 
 const outboundRequestSchema = z.object({

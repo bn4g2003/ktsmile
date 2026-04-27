@@ -174,8 +174,10 @@ export function DashboardChartsSection({ data }: { data: DashboardChartsData }) 
 
         <Card className="p-3.5 sm:p-4">
           <h3 className="text-sm font-semibold text-[var(--on-surface)]">Mặt hàng bán chạy</h3>
-          <div className="text-2xl font-bold mt-1">{moneyM(data.financial.revenue_year)}</div>
-          <div className="text-xs text-[var(--on-surface-muted)] mb-2">Tổng doanh thu</div>
+          <div className="text-2xl font-bold mt-1">
+            {moneyM(data.topSold.reduce((s, r) => s + r.revenue, 0))}
+          </div>
+          <div className="text-xs text-[var(--on-surface-muted)] mb-2">Doanh thu top mặt hàng</div>
           <div className="space-y-1 text-sm">
             {data.topSold.slice(0, 6).map((r) => (
               <div key={r.product_code} className="grid grid-cols-[1fr_auto_auto] gap-2 border-b border-[var(--border-ghost)] py-1">

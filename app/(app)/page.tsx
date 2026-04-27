@@ -139,6 +139,20 @@ export default async function HomePage() {
   } catch {
     chartData = null;
   }
+  const fmtMoney = (n: number) => Math.round(n || 0).toLocaleString("vi-VN");
+  const waitingInvoiceCount = chartData
+    ? chartData.orderByStatus
+        .filter((s) => s.status === "draft" || s.status === "in_progress")
+        .reduce((sum, s) => sum + s.count, 0)
+    : 0;
+  const processingOrderCount = chartData
+    ? chartData.orderByStatus
+        .filter((s) => s.status === "in_progress")
+        .reduce((sum, s) => sum + s.count, 0)
+    : 0;
+  const quickDebt = chartData
+    ? Math.max(0, chartData.financial.receivable) + Math.max(0, chartData.financial.payable)
+    : 0;
 
   return (
     <div className="space-y-6 sm:space-y-8">
@@ -152,13 +166,25 @@ export default async function HomePage() {
       </div>
 
       <div className="grid gap-3 sm:gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Doanh thu " value="—" hint="Kết nối báo cáo sau" />
-        <StatCard label="Hóa đơn chờ" value="—" />
-        <StatCard label="Đơn đang xử lý" value="—" />
+        <StatCard
+          label="Doanh thu năm"
+          value={chartData ? `${fmtMoney(chartData.financial.revenue_year)} đ` : "—"}
+          hint={chartData ? `Lợi nhuận: ${fmtMoney(chartData.financial.profit_year)} đ` : "Kết nối báo cáo sau"}
+        />
+        <StatCard
+          label="Chứng từ chờ xử lý"
+          value={chartData ? waitingInvoiceCount.toLocaleString("vi-VN") : "—"}
+          hint="Trạng thái draft + in_progress"
+        />
+        <StatCard
+          label="Đơn đang xử lý"
+          value={chartData ? processingOrderCount.toLocaleString("vi-VN") : "—"}
+          hint="Riêng trạng thái in_progress"
+        />
         <StatCard
           label="Tổng hợp nhanh"
-          value="Mở module"
-          hint="Đối tác, đơn hàng, kho, kế toán"
+          value={chartData ? `${fmtMoney(quickDebt)} đ` : "Mở module"}
+          hint={chartData ? "Phải thu + phải trả hiện tại" : "Đối tác, đơn hàng, kho, kế toán"}
           accent="purple"
         />
       </div>

@@ -45,6 +45,7 @@ import {
   listSupplierPurchasableProducts,
   type SupplierPurchasableProduct,
 } from "@/lib/actions/product-suppliers";
+import { listCashFundChannels } from "@/lib/actions/cash";
 
 const movOpts = [
   { value: "inbound", label: "Nhập kho" },
@@ -98,6 +99,10 @@ export function InventoryDocumentsPage({ initialTab = "inbound" }: { initialTab?
   const [nvlLines, setNvlLines] = React.useState<NvlFormLine[]>([]);
   const [nvlErr, setNvlErr] = React.useState<string | null>(null);
   const [nvlPending, setNvlPending] = React.useState(false);
+  const [nvlPayNow, setNvlPayNow] = React.useState(false);
+  const [nvlPayChannel, setNvlPayChannel] = React.useState("cash");
+  const [nvlPayAmount, setNvlPayAmount] = React.useState("");
+  const [nvlPayChannels, setNvlPayChannels] = React.useState<{ value: string; label: string }[]>([]);
 
   const [gridFilters, setGridFilters] = React.useState<Record<string, string>>({});
 
@@ -141,6 +146,19 @@ export function InventoryDocumentsPage({ initialTab = "inbound" }: { initialTab?
     };
   }, [openNvlInbound, nvlSupplierId]);
 
+  React.useEffect(() => {
+    if (!openNvlInbound) return;
+    void listCashFundChannels()
+      .then((rows) => {
+        setNvlPayChannels(rows);
+        setNvlPayChannel((prev) => {
+          if (prev && rows.some((r) => r.value === prev)) return prev;
+          return rows.find((r) => r.value === "cash")?.value ?? rows[0]?.value ?? "cash";
+        });
+      })
+      .catch(() => {});
+  }, [openNvlInbound]);
+
   const reset = () => {
     setEditing(null);
     setDocNum("");
@@ -177,6 +195,8 @@ export function InventoryDocumentsPage({ initialTab = "inbound" }: { initialTab?
     setNvlNotes("");
     setNvlErr(null);
     setNvlLines([{ key: newNvlLineKey(), product_id: "", qty: "1", price: "" }]);
+    setNvlPayNow(false);
+    setNvlPayAmount("");
     setOpenNvlInbound(true);
   };
 
@@ -224,12 +244,33 @@ export function InventoryDocumentsPage({ initialTab = "inbound" }: { initialTab?
     setNvlPending(true);
     setNvlErr(null);
     try {
-      const { documentId } = await createInboundMaterialPurchase({
-        supplier_id: nvlSupplierId,
-        document_date: nvlDocDate,
-        notes: nvlNotes.trim() || null,
-        lines: linesPayload,
-      });
+      const autoPaymentArg = nvlPayNow
+        ? {
+            payment_channel: nvlPayChannel.trim() || "cash",
+            transaction_date: nvlDocDate,
+            amount:
+              nvlPayAmount.trim() === ""
+                ? undefined
+                : Number(nvlPayAmount.replace(/\./g, "").replace(/,/g, ".")) || undefined,
+          }
+        : null;
+      const result = await createInboundMaterialPurchase(
+        {
+          supplier_id: nvlSupplierId,
+          document_date: nvlDocDate,
+          notes: nvlNotes.trim() || null,
+          lines: linesPayload,
+        },
+        autoPaymentArg,
+      );
+      const { documentId } = result;
+      if (nvlPayNow && result.autoPayment && !result.autoPayment.ok) {
+        alert(
+          "Phiếu nhập đã tạo nhưng không tạo được phiếu chi: " +
+            (result.autoPayment.message ?? "Lỗi không xác định") +
+            "\nVui lòng tạo phiếu chi thủ công ở Sổ quỹ.",
+        );
+      }
       setOpenNvlInbound(false);
       bumpGrid();
       router.push("/inventory/documents/" + documentId);
@@ -855,6 +896,51 @@ export function InventoryDocumentsPage({ initialTab = "inbound" }: { initialTab?
                   ))}
                 </div>
               )}
+            </div>
+
+            <div className="space-y-3 border-t border-[var(--border-ghost)] pt-3">
+              <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold text-[var(--on-surface)]">
+                <input
+                  type="checkbox"
+                  checked={nvlPayNow}
+                  onChange={(e) => setNvlPayNow(e.target.checked)}
+                  className="h-4 w-4 rounded border-[var(--border-ghost)]"
+                />
+                Thanh toán ngay (tự động tạo phiếu chi khớp phiếu nhập)
+              </label>
+              {nvlPayNow ? (
+                <div className="grid gap-3 rounded-[var(--radius-md)] bg-[var(--surface-muted)] p-3 sm:grid-cols-2">
+                  <div className="grid gap-2">
+                    <Label htmlFor="nvl-pay-channel">Kênh thanh toán</Label>
+                    <Select
+                      id="nvl-pay-channel"
+                      value={nvlPayChannel}
+                      onChange={(e) => setNvlPayChannel(e.target.value)}
+                    >
+                      {nvlPayChannels.length === 0 ? (
+                        <option value="cash">Tiền mặt</option>
+                      ) : (
+                        nvlPayChannels.map((c) => (
+                          <option key={c.value} value={c.value}>
+                            {c.label}
+                          </option>
+                        ))
+                      )}
+                    </Select>
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="nvl-pay-amount">Số tiền (để trống = tổng phiếu nhập)</Label>
+                    <CurrencyInput
+                      value={nvlPayAmount}
+                      onChange={setNvlPayAmount}
+                      allowDecimal={false}
+                    />
+                    <p className="text-[11px] text-[var(--on-surface-muted)]">
+                      Phiếu chi (PC) sẽ được sinh tự động và liên kết tới phiếu nhập vừa tạo.
+                    </p>
+                  </div>
+                </div>
+              ) : null}
             </div>
 
             <div className="flex justify-end gap-2 pt-2">
