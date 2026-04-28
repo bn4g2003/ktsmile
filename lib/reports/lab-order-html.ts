@@ -1,6 +1,6 @@
 import { formatVnd } from "@/lib/format/currency";
-import { htmlBangChu } from "@/lib/reports/amount-in-words-html";
-import { formatArchConnection, formatLabOrderCategory, formatLabOrderLineWorkType, formatOrderStatus, formatPatientGender } from "@/lib/format/labels";
+import { amountInWordsVietnamese } from "@/lib/format/currency";
+import { formatLabOrderCategory, formatOrderStatus, formatPatientGender } from "@/lib/format/labels";
 import { formatDate, formatDateTime } from "@/lib/format/date";
 import { escapeHtml } from "@/lib/reports/escape-html";
 
@@ -58,120 +58,146 @@ function lineDiscountLabel(discountPercent: number, discountAmount: number): str
 }
 
 export function buildLabOrderBodyHtml(p: LabOrderPrintPayload): string {
-  const gen = formatDateTime(new Date());
   const partnerInner =
     p.partner_code || p.partner_name
       ? `${escapeHtml(p.partner_code ?? "")}${p.partner_code && p.partner_name ? " — " : ""}${escapeHtml(p.partner_name ?? "")}`
       : null;
-  const leftKvRows: string[] = [];
-  if (partnerInner?.trim()) {
-    leftKvRows.push(`<tr><th>TÊN KH</th><td>: ${partnerInner}</td></tr>`);
-  }
-  if (p.partner_address?.trim()) {
-    leftKvRows.push(`<tr><th>ĐỊA CHỈ</th><td>: ${escapeHtml(p.partner_address.trim())}</td></tr>`);
-  }
-  if (p.partner_tax_id?.trim()) {
-    leftKvRows.push(`<tr><th>MST</th><td>: ${escapeHtml(p.partner_tax_id.trim())}</td></tr>`);
-  }
-  if (p.partner_phone?.trim()) {
-    leftKvRows.push(`<tr><th>SĐT</th><td>: ${escapeHtml(p.partner_phone.trim())}</td></tr>`);
-  }
-  if (p.clinic_name?.trim()) {
-    leftKvRows.push(`<tr><th>NHA KHOA</th><td>: ${escapeHtml(p.clinic_name.trim())}</td></tr>`);
-  }
-  leftKvRows.push(`<tr><th>BỆNH NHÂN</th><td>: ${escapeHtml(p.patient_name)}</td></tr>`);
-  const rows = p.lines
-    .map(
-      (l, i) =>
-        `<tr>
-          <td class="num">${i + 1}</td>
-          <td style="width:70px;">${escapeHtml(l.product_code)}</td>
-          <td>${escapeHtml(l.product_name)}</td>
-          <td style="width:120px;">${escapeHtml(l.tooth_positions)}${l.shade ? ` · ${escapeHtml(l.shade)}` : ""}</td>
-          <td class="num" style="width:40px;">${escapeHtml(fmtQty(l.quantity))}</td>
-          <td class="num" style="width:85px;">${escapeHtml(formatVnd(l.unit_price))}</td>
-          <td class="num" style="width:82px;">${escapeHtml(lineDiscountLabel(l.discount_percent, l.discount_amount))}</td>
-          <td class="num" style="width:105px;"><strong>${escapeHtml(formatVnd(l.line_amount))}</strong></td>
-          <td>${escapeHtml(l.notes ?? "—")}</td>
-        </tr>`,
-    )
-    .join("");
-  const total = p.lines.reduce((s, l) => s + l.line_amount, 0);
-  const cat = p.order_category ? formatLabOrderCategory(p.order_category) : null;
+  const cat = p.order_category ? formatLabOrderCategory(p.order_category) : "—";
   const yearG =
     p.patient_year_of_birth != null || p.patient_gender
       ? (p.patient_year_of_birth != null ? String(p.patient_year_of_birth) : "") +
         (p.patient_gender ? (p.patient_year_of_birth != null ? " · " : "") + formatPatientGender(p.patient_gender) : "")
-      : null;
+      : "—";
+  const rows = p.lines
+    .map(
+      (l, i) =>
+        `<tr>
+          <td class="c">${i + 1}</td>
+          <td>${escapeHtml(l.product_code || "—")}</td>
+          <td><strong>${escapeHtml(l.product_name || "—")}</strong></td>
+          <td>
+            ${escapeHtml(l.tooth_positions || "—")}
+            ${l.shade ? `<br/><span class="shade">Màu: ${escapeHtml(l.shade)}</span>` : ""}
+          </td>
+          <td class="r">${escapeHtml(fmtQty(l.quantity))}</td>
+          <td class="r">${escapeHtml(formatVnd(l.unit_price))}</td>
+          <td class="c">${escapeHtml(lineDiscountLabel(l.discount_percent, l.discount_amount))}</td>
+          <td class="r"><strong>${escapeHtml(formatVnd(l.line_amount))}</strong></td>
+        </tr>`,
+    )
+    .join("");
+  const total = p.lines.reduce((s, l) => s + l.line_amount, 0);
+  const words = amountInWordsVietnamese(Math.round(total));
+  const now = new Date();
+  const dayLine = `TP. HCM, ngày ${String(now.getDate()).padStart(2, "0")} tháng ${String(now.getMonth() + 1).padStart(2, "0")} năm ${now.getFullYear()}`;
+
   return `
-    <h1 style="color:#2563eb;">PHIẾU XÁC NHẬN ĐƠN HÀNG</h1>
-    <p class="muted" style="text-align:center;">Số đơn: <strong>${escapeHtml(p.order_number)}</strong> · Ngày nhận: ${escapeHtml(p.received_at)}</p>
-
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px;">
-      <table class="kv">
-        <tbody>
-          ${leftKvRows.join("")}
-          ${cat ? `<tr><th>LOẠI HÀNG</th><td>: ${escapeHtml(cat)}</td></tr>` : ""}
-          ${yearG ? `<tr><th>NĂM SINH/GT</th><td>: ${escapeHtml(yearG)}</td></tr>` : ""}
-        </tbody>
-      </table>
-      <table class="kv">
-        <tbody>
-          <tr><th>HẸN HOÀN THÀNH</th><td>: ${p.due_completion_at ? escapeHtml(formatDateTime(p.due_completion_at)) : "—"}</td></tr>
-          <tr><th>HẸN GIAO</th><td>: ${p.due_delivery_at ? escapeHtml(formatDateTime(p.due_delivery_at)) : "—"}</td></tr>
-          <tr><th>GIỎ HÀNG</th><td>: ${escapeHtml(p.accessories_summary ?? "—")}</td></tr>
-          <tr><th>TRẠNG THÁI</th><td>: ${escapeHtml(formatOrderStatus(p.status))}</td></tr>
-        </tbody>
-      </table>
-    </div>
-
-    ${p.clinical_indication ? `<div style="margin-bottom:10px;font-size:11px;"><strong>CHỈ ĐỊNH:</strong> ${escapeHtml(p.clinical_indication)}</div>` : ""}
-
-    <table>
-      <thead>
-        <tr style="background:#2563eb;color:#fff;">
-          <th class="num" style="color:#fff;">STT</th>
-          <th style="color:#fff;">MÃ SP</th>
-          <th style="color:#fff;">TÊN SẢN PHẨM</th>
-          <th style="color:#fff;">RĂNG/MÀU</th>
-          <th class="num" style="color:#fff;">SL</th>
-          <th class="num" style="color:#fff;">ĐƠN GIÁ</th>
-          <th class="num" style="color:#fff;">CK DÒNG</th>
-          <th class="num" style="color:#fff;">THÀNH TIỀN</th>
-          <th style="color:#fff;">GHI CHÚ</th>
-        </tr>
-      </thead>
-      <tbody>${rows || `<tr><td colspan="9">Chưa có dòng.</td></tr>`}</tbody>
-      <tfoot>
-        <tr class="total-row">
-          <td colspan="7" class="num" style="font-weight:700;border:none;">TỔNG CỘNG:</td>
-          <td class="num" style="font-weight:800;font-size:13px;background:#f1f5f9;">${escapeHtml(formatVnd(total))}</td>
-          <td style="border:none;"></td>
-        </tr>
-      </tfoot>
-    </table>
-    ${htmlBangChu(total)}
-
-    <div style="margin-top:20px;font-size:11px;color:#64748b;">
-      <p>Ghi chú đơn: ${escapeHtml(p.notes ?? "—")}</p>
-      ${p.notes_accounting ? `<p>Ghi chú kế toán: ${escapeHtml(p.notes_accounting)}</p>` : ""}
-    </div>
-
-    <div style="margin-top:40px;display:flex;justify-content:space-between;align-items:flex-start;">
-      <div style="font-size:11px;font-style:italic;max-width:60%;color:#64748b;">
-        * Vui lòng kiểm tra kỹ thông tin đơn hàng khi nhận phiếu. Trân trọng cảm ơn!
+    <section class="ocf-root">
+      <div class="ocf-title-wrap">
+        <h1>PHIẾU XÁC NHẬN ĐƠN HÀNG</h1>
+        <div class="ocf-sub">Số đơn: <strong>${escapeHtml(p.order_number)}</strong> · Ngày nhận: ${escapeHtml(formatDate(p.received_at))}</div>
       </div>
-      <div style="text-align:center;min-width:200px;">
-        <div style="font-size:11px;">${new Date().toLocaleDateString("vi-VN", { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</div>
-        <div style="font-weight:700;margin-top:5px;">NGƯỜI LẬP PHIẾU</div>
-        <div style="margin-top:50px;font-size:10px;color:#94a3b8;">(Ký và ghi rõ họ tên)</div>
+
+      <div class="ocf-meta-grid">
+        <div class="ocf-meta-box">
+          <div class="ocf-meta-head">THÔNG TIN KHÁCH HÀNG</div>
+          <table class="ocf-kv">
+            <tbody>
+              <tr><th>Tên KH:</th><td>${partnerInner || "—"}</td></tr>
+              <tr><th>Địa chỉ:</th><td>${escapeHtml(p.partner_address?.trim() || "—")}</td></tr>
+              <tr><th>MST:</th><td>${escapeHtml(p.partner_tax_id?.trim() || "—")}</td></tr>
+              <tr><th>ĐT:</th><td>${escapeHtml(p.partner_phone?.trim() || "—")}</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="ocf-meta-box">
+          <div class="ocf-meta-head">THÔNG TIN PHỤC HÌNH</div>
+          <table class="ocf-kv">
+            <tbody>
+              <tr><th>Nha khoa:</th><td>${escapeHtml(p.clinic_name?.trim() || "—")}</td></tr>
+              <tr><th>Bệnh nhân:</th><td><strong>${escapeHtml(p.patient_name)}</strong></td></tr>
+              <tr><th>Loại hàng:</th><td>${escapeHtml(cat)}</td></tr>
+              <tr><th>Năm sinh/GT:</th><td>${escapeHtml(yearG)}</td></tr>
+              <tr><th>Hẹn giao:</th><td>${p.due_delivery_at ? escapeHtml(formatDateTime(p.due_delivery_at)) : "—"}</td></tr>
+              <tr><th>Hẹn hoàn thành:</th><td>${p.due_completion_at ? escapeHtml(formatDateTime(p.due_completion_at)) : "—"}</td></tr>
+              <tr><th>Trạng thái:</th><td>${escapeHtml(formatOrderStatus(p.status))}</td></tr>
+            </tbody>
+          </table>
+        </div>
       </div>
-    </div>
+
+      ${p.clinical_indication ? `<div class="ocf-note"><strong>Chỉ định:</strong> ${escapeHtml(p.clinical_indication)}</div>` : ""}
+
+      <table class="ocf-table">
+        <thead>
+          <tr>
+            <th class="c" style="width:44px;">STT</th>
+            <th style="width:72px;">Mã SP</th>
+            <th>Tên sản phẩm</th>
+            <th style="width:135px;">Răng/Màu</th>
+            <th class="r" style="width:50px;">SL</th>
+            <th class="r" style="width:90px;">Đơn giá</th>
+            <th class="c" style="width:86px;">CK</th>
+            <th class="r" style="width:105px;">Thành tiền</th>
+          </tr>
+        </thead>
+        <tbody>${rows || `<tr><td colspan="8" class="c">Chưa có dòng sản phẩm.</td></tr>`}</tbody>
+        <tfoot>
+          <tr>
+            <td colspan="7" class="r lbl">Tổng cộng (VND):</td>
+            <td class="r val">${escapeHtml(formatVnd(total))}</td>
+          </tr>
+        </tfoot>
+      </table>
+
+      <div class="ocf-foot-note">
+        <p><strong>Bằng chữ:</strong> <em>${escapeHtml(words)}.</em></p>
+        <p><strong>Ghi chú đơn:</strong> <em>${escapeHtml(p.notes?.trim() || "Không có ghi chú.")}</em></p>
+        ${p.notes_accounting ? `<p><strong>Ghi chú kế toán:</strong> <em>${escapeHtml(p.notes_accounting)}</em></p>` : ""}
+        ${p.notes_coordination ? `<p><strong>Ghi chú điều phối:</strong> <em>${escapeHtml(p.notes_coordination)}</em></p>` : ""}
+      </div>
+
+      <div class="ocf-sign-wrap">
+        <div class="sg"><p class="ttl">Khách hàng</p><p class="hint">(Ký, ghi rõ họ tên)</p></div>
+        <div class="sg"><p class="ttl">Người giao hàng</p><p class="hint">(Ký, ghi rõ họ tên)</p></div>
+        <div class="sg"><p class="date">${escapeHtml(dayLine)}</p><p class="ttl">Người lập phiếu</p><p class="hint">(Ký, ghi rõ họ tên)</p></div>
+      </div>
+      <p class="ocf-bottom">* Phiếu xác nhận này đồng thời là căn cứ đối chiếu công nợ. Vui lòng kiểm tra kỹ thông tin trước khi ký nhận.</p>
+    </section>
 
     <style>
-      table:not(.kv) th { background-color: #2563eb !important; border-color: #1e40af !important; color: #fff !important; }
-      td { height: 22px; }
-      table.kv th { background: none !important; color: #1e293b !important; }
+      .ocf-root{color:#111827;font-family:"Times New Roman",Times,serif;}
+      .ocf-title-wrap{text-align:center;margin-bottom:14px;}
+      .ocf-title-wrap h1{margin:0;font-size:28px;font-weight:800;letter-spacing:.02em;color:#111827;}
+      .ocf-sub{margin-top:6px;font-size:12px;color:#4b5563;}
+      .ocf-meta-grid{display:grid;grid-template-columns:1fr 1fr;border:2px solid #111827;margin:0 0 16px;}
+      .ocf-meta-box{min-width:0;}
+      .ocf-meta-box:first-child{border-right:2px solid #111827;}
+      .ocf-meta-head{background:#f3f4f6;padding:7px 10px;font-weight:700;font-size:11px;letter-spacing:.08em;text-transform:uppercase;border-bottom:2px solid #111827;}
+      .ocf-kv{width:100%;border-collapse:collapse;margin:0;}
+      .ocf-kv th,.ocf-kv td{border:none;padding:4px 10px;vertical-align:top;font-size:12px;}
+      .ocf-kv th{width:94px;color:#4b5563;font-weight:600;text-align:left;text-transform:none;}
+      .ocf-kv td{color:#111827;}
+      .ocf-note{margin-bottom:10px;font-size:12px;color:#111827;}
+      .ocf-table{width:100%;border-collapse:collapse;border:2px solid #111827;margin-top:8px;}
+      .ocf-table th,.ocf-table td{border:1px solid #9ca3af;padding:7px 8px;font-size:11px;vertical-align:top;}
+      .ocf-table th{background:#f3f4f6;color:#111827;font-weight:700;text-transform:uppercase;letter-spacing:.03em;}
+      .ocf-table .c{text-align:center;}
+      .ocf-table .r{text-align:right;font-variant-numeric:tabular-nums;}
+      .ocf-table .shade{font-size:10px;font-weight:700;color:#111827;}
+      .ocf-table tfoot td{border-top:2px solid #111827;background:#f9fafb;}
+      .ocf-table tfoot td.lbl{font-weight:700;text-transform:uppercase;}
+      .ocf-table tfoot td.val{font-weight:800;font-size:16px;}
+      .ocf-foot-note{margin-top:12px;font-size:12px;color:#374151;line-height:1.5;}
+      .ocf-foot-note p{margin:3px 0;}
+      .ocf-sign-wrap{margin-top:22px;border-top:1px solid #d1d5db;padding-top:14px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center;}
+      .ocf-sign-wrap .ttl{margin:0;font-size:12px;font-weight:700;text-transform:uppercase;}
+      .ocf-sign-wrap .hint{margin:4px 0 0;font-size:11px;color:#6b7280;}
+      .ocf-sign-wrap .date{margin:0 0 5px;font-size:11px;font-style:italic;color:#4b5563;}
+      .ocf-bottom{margin-top:65px;text-align:center;font-size:10px;color:#6b7280;font-style:italic;}
+      @media print{
+        .ocf-meta-grid{break-inside:avoid;}
+      }
     </style>
   `;
 }

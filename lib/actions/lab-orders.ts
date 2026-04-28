@@ -52,6 +52,11 @@ export type LabOrderRow = {
   line_quantity_total?: number | null;
 };
 
+export type LabOrderFilterSuggestions = {
+  clinics: string[];
+  patients: string[];
+};
+
 /* Gợi ý FK theo tên constraint (tránh PGRST201 khi PostgREST không chọn đúng quan hệ). */
 const LAB_ORDERS_LIST_SELECT_FULL =
   "id, order_number, received_at, partner_id, patient_name, clinic_name, contact_phone, status, notes, created_at, updated_at, order_category, patient_year_of_birth, coord_review_status, doctor_prescription_id, billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, payment_notice_doc_number, payment_notice_issued_at, partners!lab_orders_partner_id_fkey(code,name), doctor_prescriptions!lab_orders_doctor_prescription_id_fkey(slip_code), lab_order_lines!lab_order_lines_order_id_fkey(line_amount,tooth_positions,tooth_count,quantity,products!lab_order_lines_product_id_fkey(code,name))";
@@ -245,10 +250,13 @@ export async function listLabOrders(args: ListArgs): Promise<ListResult<LabOrder
     if (filters.received_to?.trim()) q = q.lte("received_at", filters.received_to.trim());
     if (filters.received_day?.trim()) q = q.eq("received_at", filters.received_day.trim());
     // Lọc theo tên bệnh nhân, nha khoa (cột trực tiếp trên lab_orders)
-    if (filters.patient_name?.trim())
-      q = q.ilike("patient_name", "%" + filters.patient_name.trim() + "%");
-    if (filters.clinic_name?.trim())
-      q = q.ilike("clinic_name", "%" + filters.clinic_name.trim() + "%");
+    const patientVals = decodeMultiFilter(filters.patient_name);
+    if (patientVals.length === 1) q = q.eq("patient_name", patientVals[0]!);
+    else if (patientVals.length > 1) q = q.in("patient_name", patientVals);
+
+    const clinicVals = decodeMultiFilter(filters.clinic_name);
+    if (clinicVals.length === 1) q = q.eq("clinic_name", clinicVals[0]!);
+    else if (clinicVals.length > 1) q = q.in("clinic_name", clinicVals);
     if (filters.contact_phone?.trim())
       q = q.ilike("contact_phone", "%" + filters.contact_phone.trim() + "%");
     const orderCategory = filters.order_category?.trim();
@@ -283,6 +291,30 @@ export async function listLabOrders(args: ListArgs): Promise<ListResult<LabOrder
   }
 
   throw new Error(lastMessage || "Không tải được danh sách đơn.");
+}
+
+export async function listLabOrderFilterSuggestions(): Promise<LabOrderFilterSuggestions> {
+  const supabase = createSupabaseAdmin();
+  const { data, error } = await supabase
+    .from("lab_orders")
+    .select("clinic_name, patient_name, status, received_at")
+    .neq("status", "cancelled")
+    .order("received_at", { ascending: false })
+    .limit(5000);
+  if (error) throw new Error(error.message);
+
+  const clinicSet = new Set<string>();
+  const patientSet = new Set<string>();
+  for (const row of (data ?? []) as Record<string, unknown>[]) {
+    const clinic = String(row["clinic_name"] ?? "").trim();
+    const patient = String(row["patient_name"] ?? "").trim();
+    if (clinic) clinicSet.add(clinic);
+    if (patient) patientSet.add(patient);
+  }
+  return {
+    clinics: [...clinicSet].sort((a, b) => a.localeCompare(b, "vi")).slice(0, 500),
+    patients: [...patientSet].sort((a, b) => a.localeCompare(b, "vi")).slice(0, 1000),
+  };
 }
 
 const labOrderProductionHeaderSchema = z.object({
@@ -967,10 +999,36 @@ export async function getDailyDeliveryNotePayload(
   const supabase = createSupabaseAdmin();
   const date = deliveryDate.trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error("Ngày giao không hợp lệ.");
-  const fromIso = `${date}T00:00:00+07:00`;
-  const toDay = new Date(`${date}T00:00:00+07:00`);
-  toDay.setDate(toDay.getDate() + 1);
-  const toIso = toDay.toISOString();
+  const prevDateObj = new Date(`${date}T00:00:00+07:00`);
+  prevDateObj.setDate(prevDateObj.getDate() - 1);
+  const prevDate = `${prevDateObj.getFullYear()}-${String(prevDateObj.getMonth() + 1).padStart(2, "0")}-${String(prevDateObj.getDate()).padStart(2, "0")}`;
+
+  const fallbackDueFromReceived = (receivedAt: string | null | undefined): string | null => {
+    const raw = String(receivedAt ?? "").trim();
+    const baseDate = raw.slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(baseDate)) return null;
+    const d = new Date(`${baseDate}T08:30:00+07:00`);
+    if (Number.isNaN(d.getTime())) return null;
+    d.setDate(d.getDate() + 1);
+    return d.toISOString();
+  };
+  const localDateKey = (iso: string | null | undefined): string | null => {
+    const raw = String(iso ?? "").trim();
+    if (!raw) return null;
+    const d = new Date(raw);
+    if (Number.isNaN(d.getTime())) return null;
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: "Asia/Ho_Chi_Minh",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(d);
+    const year = parts.find((p) => p.type === "year")?.value ?? "";
+    const month = parts.find((p) => p.type === "month")?.value ?? "";
+    const day = parts.find((p) => p.type === "day")?.value ?? "";
+    if (!year || !month || !day) return null;
+    return `${year}-${month}-${day}`;
+  };
 
   const { data: partner, error: pErr } = await supabase
     .from("partners")
@@ -980,18 +1038,49 @@ export async function getDailyDeliveryNotePayload(
   if (pErr) throw new Error(pErr.message);
   if (!partner) throw new Error("Không tìm thấy khách hàng.");
 
-  const { data: orders, error: oErr } = await supabase
+  const { data: ordersRaw, error: oErr } = await supabase
     .from("lab_orders")
-    .select("id,order_number,patient_name,clinic_name,notes,status,due_delivery_at")
+    .select("id,order_number,patient_name,clinic_name,notes,status,received_at,due_delivery_at")
     .eq("partner_id", partnerId)
-    .gte("due_delivery_at", fromIso)
-    .lt("due_delivery_at", toIso)
-    .neq("status", "cancelled")
-    .order("due_delivery_at", { ascending: true })
-    .order("order_number", { ascending: true })
-    .limit(500);
+    .order("received_at", { ascending: false })
+    .limit(5000);
   if (oErr) throw new Error(oErr.message);
-  const orderIds = (orders ?? []).map((o) => o.id as string);
+
+  const matchedOrders = ((ordersRaw ?? []) as Record<string, unknown>[])
+    .filter((o) => {
+      const explicitDue = (o["due_delivery_at"] as string | null) ?? null;
+      const receivedRaw = String((o["received_at"] as string | null) ?? "").trim();
+      const receivedDate = receivedRaw.slice(0, 10);
+      const effectiveDue = explicitDue ?? fallbackDueFromReceived((o["received_at"] as string | null) ?? null);
+      const dueDate = localDateKey(effectiveDue);
+      // Dữ liệu cũ có thể chưa lưu due_delivery_at chuẩn, nên mở rộng thêm received_at cùng ngày/Ngày-1.
+      return dueDate === date || receivedDate === date || receivedDate === prevDate;
+    })
+    .sort((a, b) => {
+    const dueA = String((a["due_delivery_at"] as string | null) ?? fallbackDueFromReceived(a["received_at"] as string | null) ?? "");
+    const dueB = String((b["due_delivery_at"] as string | null) ?? fallbackDueFromReceived(b["received_at"] as string | null) ?? "");
+    if (dueA !== dueB) return dueA.localeCompare(dueB);
+    return String(a["order_number"] ?? "").localeCompare(String(b["order_number"] ?? ""));
+    });
+  if (matchedOrders.length === 0) {
+    const sample = ((ordersRaw ?? []) as Record<string, unknown>[])
+      .slice(0, 12)
+      .map((o) => {
+        const explicitDue = (o["due_delivery_at"] as string | null) ?? null;
+        const received = (o["received_at"] as string | null) ?? null;
+        const effectiveDue = explicitDue ?? fallbackDueFromReceived(received);
+        return {
+          order: String(o["order_number"] ?? ""),
+          status: String(o["status"] ?? ""),
+          due_delivery_at: explicitDue,
+          received_at: received,
+          effective_due: effectiveDue,
+          effective_date: localDateKey(effectiveDue),
+        };
+      });
+    console.warn("[delivery-note] no-matches", { partnerId, date, totalOrders: (ordersRaw ?? []).length, sample });
+  }
+  const orderIds = matchedOrders.map((o) => o["id"] as string);
   let lines: Record<string, unknown>[] = [];
   if (orderIds.length > 0) {
     const { data: lineData, error: lErr } = await supabase
@@ -1026,7 +1115,7 @@ export async function getDailyDeliveryNotePayload(
     partner_tax_id: (partner["tax_id"] as string | null) ?? null,
     delivery_date: date,
     generated_at: new Date().toLocaleString("vi-VN"),
-    orders: (orders ?? []).map((o) => ({
+    orders: matchedOrders.map((o) => ({
       order_number: o["order_number"] as string,
       patient_name: o["patient_name"] as string,
       clinic_name: (o["clinic_name"] as string | null) ?? null,

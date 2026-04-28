@@ -14,6 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
@@ -66,9 +67,11 @@ import {
   getDailyDeliveryNotePayload,
   getLabOrder,
   getSuggestedLinePricing,
+  listLabOrderFilterSuggestions,
   listLabOrders,
   updateLabOrder,
   updateLabOrderStatus,
+  type LabOrderFilterSuggestions,
   type LabOrderRow,
 } from "@/lib/actions/lab-orders";
 import { listCashFundChannels } from "@/lib/actions/cash";
@@ -78,6 +81,7 @@ import {
 import { buildDeliveryNoteExcelAoa } from "@/lib/reports/delivery-note-excel";
 import { buildPrintShell, openBlankPrintTab, writeAndPrintToWindow } from "@/lib/reports/print-html";
 import { formatDate, formatDateTime } from "@/lib/format/date";
+import { decodeMultiFilter, encodeMultiFilter } from "@/lib/grid/multi-filter";
 
 const DENTAL_SHADES = [
   "A1", "A2", "A3", "A3.5", "A4",
@@ -170,12 +174,16 @@ function OrderFiltersPopover({
   filters,
   setFilters,
   partners,
+  suggestions,
 }: {
   filters: Record<string, string>;
   setFilters: (f: Record<string, string>) => void;
   partners: CustomerPartnerPickerRow[];
+  suggestions: LabOrderFilterSuggestions;
 }) {
   const [open, setOpen] = React.useState(false);
+  const [clinicSearch, setClinicSearch] = React.useState("");
+  const [patientSearch, setPatientSearch] = React.useState("");
   const activeCount = Object.keys(filters).filter((k) => !!filters[k]).length;
 
   const setFilter = (key: string, val: string) => {
@@ -183,6 +191,31 @@ function OrderFiltersPopover({
     if (!val) delete next[key];
     setFilters(next);
   };
+
+  const selectedStatus = React.useMemo(() => new Set(decodeMultiFilter(filters["status"])), [filters]);
+  const selectedClinic = React.useMemo(() => new Set(decodeMultiFilter(filters["clinic_name"])), [filters]);
+  const selectedPatient = React.useMemo(() => new Set(decodeMultiFilter(filters["patient_name"])), [filters]);
+
+  const toggleMulti = (key: string, current: Set<string>, value: string, checked: boolean) => {
+    const next = new Set(current);
+    if (checked) next.add(value);
+    else next.delete(value);
+    setFilter(key, encodeMultiFilter([...next]));
+  };
+
+  const clinicOptions = React.useMemo(() => {
+    const q = clinicSearch.trim().toLowerCase();
+    const base = suggestions.clinics;
+    if (!q) return base.slice(0, 30);
+    return base.filter((v) => v.toLowerCase().includes(q)).slice(0, 30);
+  }, [clinicSearch, suggestions.clinics]);
+
+  const patientOptions = React.useMemo(() => {
+    const q = patientSearch.trim().toLowerCase();
+    const base = suggestions.patients;
+    if (!q) return base.slice(0, 30);
+    return base.filter((v) => v.toLowerCase().includes(q)).slice(0, 30);
+  }, [patientSearch, suggestions.patients]);
 
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
@@ -252,34 +285,62 @@ function OrderFiltersPopover({
           </div>
           <div className="grid gap-1.5">
             <Label className="text-xs font-bold uppercase tracking-wider text-[var(--on-surface-muted)]">Trạng thái</Label>
-            <Select
-              value={filters["status"] ?? ""}
-              onChange={(e) => setFilter("status", e.target.value)}
-              className="h-9 text-xs"
-            >
-              <option value="">Tất cả trạng thái</option>
+            <div className="max-h-28 space-y-1 overflow-y-auto rounded-md border border-[var(--border-ghost)] bg-[var(--surface-card)] p-1.5">
               {labOrderStatusOptions.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
+                <label key={o.value} className="flex items-center gap-2 rounded px-1 py-0.5 text-xs hover:bg-[var(--surface-muted)]">
+                  <input
+                    type="checkbox"
+                    checked={selectedStatus.has(o.value)}
+                    onChange={(e) => toggleMulti("status", selectedStatus, o.value, e.target.checked)}
+                  />
+                  <span>{o.label}</span>
+                </label>
               ))}
-            </Select>
+            </div>
           </div>
           <div className="grid gap-1.5">
             <Label className="text-xs font-bold uppercase tracking-wider text-[var(--on-surface-muted)]">Nha khoa / Bệnh nhân</Label>
             <div className="grid gap-2">
-              <Input
-                placeholder="Tên nha khoa…"
-                value={filters["clinic_name"] ?? ""}
-                onChange={(e) => setFilter("clinic_name", e.target.value)}
-                className="h-8 py-1 text-xs"
-              />
-              <Input
-                placeholder="Tên bệnh nhân…"
-                value={filters["patient_name"] ?? ""}
-                onChange={(e) => setFilter("patient_name", e.target.value)}
-                className="h-8 py-1 text-xs"
-              />
+              <div className="space-y-1 rounded-md border border-[var(--border-ghost)] bg-[var(--surface-card)] p-1.5">
+                <Input
+                  placeholder="Gõ tìm nha khoa..."
+                  value={clinicSearch}
+                  onChange={(e) => setClinicSearch(e.target.value)}
+                  className="h-8 py-1 text-xs"
+                />
+                <div className="max-h-28 space-y-1 overflow-y-auto">
+                  {clinicOptions.map((name) => (
+                    <label key={name} className="flex items-center gap-2 rounded px-1 py-0.5 text-xs hover:bg-[var(--surface-muted)]">
+                      <input
+                        type="checkbox"
+                        checked={selectedClinic.has(name)}
+                        onChange={(e) => toggleMulti("clinic_name", selectedClinic, name, e.target.checked)}
+                      />
+                      <span className="truncate">{name}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-1 rounded-md border border-[var(--border-ghost)] bg-[var(--surface-card)] p-1.5">
+                <Input
+                  placeholder="Gõ tìm bệnh nhân..."
+                  value={patientSearch}
+                  onChange={(e) => setPatientSearch(e.target.value)}
+                  className="h-8 py-1 text-xs"
+                />
+                <div className="max-h-28 space-y-1 overflow-y-auto">
+                  {patientOptions.map((name) => (
+                    <label key={name} className="flex items-center gap-2 rounded px-1 py-0.5 text-xs hover:bg-[var(--surface-muted)]">
+                      <input
+                        type="checkbox"
+                        checked={selectedPatient.has(name)}
+                        onChange={(e) => toggleMulti("patient_name", selectedPatient, name, e.target.checked)}
+                      />
+                      <span className="truncate">{name}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
           <div className="pt-2">
@@ -530,6 +591,10 @@ export function OrdersPage() {
   const [open, setOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<LabOrderRow | null>(null);
   const [partners, setPartners] = React.useState<CustomerPartnerPickerRow[]>([]);
+  const [filterSuggestions, setFilterSuggestions] = React.useState<LabOrderFilterSuggestions>({
+    clinics: [],
+    patients: [],
+  });
   const [products, setProducts] = React.useState<
     { id: string; code: string; name: string; unit_price: number }[]
   >([]);
@@ -572,6 +637,7 @@ export function OrdersPage() {
   const [quickErr, setQuickErr] = React.useState<string | null>(null);
   const [deliveryOpen, setDeliveryOpen] = React.useState(false);
   const [deliveryPartnerId, setDeliveryPartnerId] = React.useState("");
+  const [deliveryPartnerSearch, setDeliveryPartnerSearch] = React.useState("");
   const [deliveryDate, setDeliveryDate] = React.useState(new Date().toISOString().slice(0, 10));
   const [deliveryExcelBusy, setDeliveryExcelBusy] = React.useState(false);
 
@@ -585,9 +651,24 @@ export function OrdersPage() {
   const [mainTab, setMainTab] = React.useState<"list" | "prints">("list");
   const [selectedOrderIds, setSelectedOrderIds] = React.useState<Set<string>>(new Set());
 
+  const deliveryPartnerOptions = React.useMemo(
+    () => partners.map((p) => ({ id: p.id, label: `${p.code} — ${p.name}` })),
+    [partners],
+  );
+  const deliveryPartnerLabelById = React.useMemo(
+    () => new Map(deliveryPartnerOptions.map((o) => [o.id, o.label])),
+    [deliveryPartnerOptions],
+  );
+  const filteredDeliveryPartners = React.useMemo(() => {
+    const q = deliveryPartnerSearch.trim().toLowerCase();
+    if (!q) return deliveryPartnerOptions;
+    return deliveryPartnerOptions.filter((o) => o.label.toLowerCase().includes(q));
+  }, [deliveryPartnerOptions, deliveryPartnerSearch]);
+
   React.useEffect(() => {
     void listCustomerPartnerPicker().then(setPartners).catch(() => {});
     void listProductPicker({ forSales: true }).then(setProducts).catch(() => {});
+    void listLabOrderFilterSuggestions().then(setFilterSuggestions).catch(() => {});
   }, []);
 
   React.useEffect(() => {
@@ -1312,7 +1393,12 @@ export function OrdersPage() {
             >
               {importBusy ? "Đang nhập…" : "Nhập Excel"}
             </Button>
-            <OrderFiltersPopover filters={filters} setFilters={setFilters} partners={partners} />
+            <OrderFiltersPopover
+              filters={filters}
+              setFilters={setFilters}
+              partners={partners}
+              suggestions={filterSuggestions}
+            />
             <OrdersPrintExportMenu
               filters={filters}
               globalSearch={globalSearch}
@@ -1885,7 +1971,7 @@ export function OrdersPage() {
       <Dialog open={deliveryOpen} onOpenChange={setDeliveryOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>In phiếu giao hàng theo ngày</DialogTitle>
+            <DialogTitle>In phiếu giao hàng theo ngày hẹn</DialogTitle>
             <DialogDescription>
               Gộp nhiều đơn / nhiều bệnh nhân của cùng một lab trong ngày thành một phiếu giao.
             </DialogDescription>
@@ -1893,21 +1979,29 @@ export function OrdersPage() {
           <div className="grid gap-4">
             <div className="grid gap-2">
               <Label htmlFor="dg-partner">Lab / Khách hàng</Label>
+              <Input
+                value={deliveryPartnerSearch}
+                onChange={(e) => setDeliveryPartnerSearch(e.target.value)}
+                placeholder="Gõ để tìm lab..."
+              />
               <Select
                 id="dg-partner"
                 value={deliveryPartnerId}
                 onChange={(e) => setDeliveryPartnerId(e.target.value)}
               >
                 <option value="">Chọn lab…</option>
-                {partners.map((p) => (
+                {filteredDeliveryPartners.map((p) => (
                   <option key={p.id} value={p.id}>
-                    {p.code} — {p.name}
+                    {p.label}
                   </option>
                 ))}
               </Select>
+              <p className="text-[11px] text-[var(--on-surface-muted)]">
+                {deliveryPartnerId ? `Đã chọn: ${deliveryPartnerLabelById.get(deliveryPartnerId) ?? ""}` : "Chưa chọn lab hợp lệ"}
+              </p>
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="dg-date">Ngày giao</Label>
+              <Label htmlFor="dg-date">Ngày hẹn</Label>
               <Input
                 id="dg-date"
                 type="date"

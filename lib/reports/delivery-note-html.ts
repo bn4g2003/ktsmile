@@ -48,7 +48,7 @@ export type DeliveryNotePayload = {
   partner_tax_id?: string | null;
   /** Ngày đại diện (vd ngày đầu tháng hoặc ngày nhận đơn). */
   delivery_date: string;
-  /** Nếu có: hiển thị thay cho dòng “Ngày giao” (vd tháng hoặc mã đơn). */
+  /** Nếu có: hiển thị thay cho dòng “Ngày hẹn” (vd tháng hoặc mã đơn). */
   period_subtitle?: string | null;
   /** Tiêu đề lớn kiểu “THÁNG 02 2026” (phiếu giao tháng). */
   period_heading?: string | null;
@@ -460,7 +460,7 @@ export function buildDeliveryNoteBodyHtml(p: DeliveryNotePayload): string {
 
   const periodLine = p.period_subtitle?.trim()
     ? escapeHtml(p.period_subtitle.trim())
-    : `Ngày giao: <strong>${escapeHtml(p.delivery_date)}</strong>`;
+    : `Ngày hẹn: <strong>${escapeHtml(p.delivery_date)}</strong>`;
 
   return `
     <h1 style="color:#0f172a;">PHIẾU GIAO HÀNG TỔNG HỢP</h1>
