@@ -806,6 +806,151 @@ export async function deleteStockLine(id: string) {
   revalidatePath("/inventory/stock");
 }
 
+/**
+ * Lấy phiếu xuất nháp gần nhất có chứa đúng 1 dòng của sản phẩm này.
+ * Dùng cho thao tác nhanh Sửa/Xóa từ màn Tồn kho.
+ */
+export async function getLatestSingleLineDraftOutboundByProduct(
+  productId: string,
+): Promise<{ id: string; document_number: string } | null> {
+  const supabase = createSupabaseAdmin();
+  const { data, error } = await supabase
+    .from("stock_documents")
+    .select("id, document_number, posting_status, movement_type, stock_lines!inner(product_id)")
+    .eq("movement_type", "outbound")
+    .eq("posting_status", "draft")
+    .eq("stock_lines.product_id", productId)
+    .order("document_date", { ascending: false })
+    .order("created_at", { ascending: false })
+    .limit(20);
+  if (error) throw new Error(error.message);
+
+  for (const r of data ?? []) {
+    const lines = (r["stock_lines"] as { product_id?: string }[] | null) ?? [];
+    if (lines.length !== 1) continue;
+    if (String(lines[0]?.product_id ?? "") !== productId) continue;
+    return {
+      id: r["id"] as string,
+      document_number: r["document_number"] as string,
+    };
+  }
+  return null;
+}
+
+/**
+ * Xóa phiếu xuất nháp gần nhất của sản phẩm, chỉ khi phiếu có duy nhất 1 dòng.
+ */
+export async function deleteLatestSingleLineDraftOutboundByProduct(
+  productId: string,
+): Promise<{ deleted: boolean; document_number?: string }> {
+  const doc = await getLatestSingleLineDraftOutboundByProduct(productId);
+  if (!doc) return { deleted: false };
+  await deleteStockDocument(doc.id);
+  return { deleted: true, document_number: doc.document_number };
+}
+
+const adjustOpeningStockSchema = z.object({
+  product_id: z.string().uuid(),
+  date_from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  desired_opening_quantity: z.coerce.number(),
+  note: z.string().max(500).optional().nullable(),
+});
+
+/**
+ * Điều chỉnh tồn đầu kỳ bằng phiếu kho posted tại ngày trước `date_from`.
+ * - desired > opening hiện tại: tạo phiếu nhập điều chỉnh
+ * - desired < opening hiện tại: tạo phiếu xuất điều chỉnh
+ */
+export async function adjustOpeningQuantityForProduct(input: z.infer<typeof adjustOpeningStockSchema>) {
+  const row = adjustOpeningStockSchema.parse(input);
+  const supabase = createSupabaseAdmin();
+
+  const fromDate = new Date(row.date_from + "T00:00:00");
+  if (Number.isNaN(fromDate.getTime())) throw new Error("Ngày bắt đầu kỳ không hợp lệ.");
+  const prevDate = new Date(fromDate.getTime() - 24 * 60 * 60 * 1000);
+  const prevDateStr = prevDate.toISOString().slice(0, 10);
+
+  const { data: openingLines, error: oe } = await supabase
+    .from("stock_lines")
+    .select("quantity, stock_documents!inner(movement_type, document_date, posting_status)")
+    .eq("product_id", row.product_id)
+    .eq("stock_documents.posting_status", "posted")
+    .lt("stock_documents.document_date", row.date_from);
+  if (oe) throw new Error(oe.message);
+
+  let currentOpening = 0;
+  for (const ln of openingLines ?? []) {
+    const d = (Array.isArray(ln.stock_documents) ? ln.stock_documents[0] : ln.stock_documents) as
+      | { movement_type?: string }
+      | undefined;
+    const qty = Number(ln.quantity ?? 0);
+    if (d?.movement_type === "inbound") currentOpening += qty;
+    else if (d?.movement_type === "outbound") currentOpening -= qty;
+  }
+
+  const desired = Number(row.desired_opening_quantity);
+  const delta = Math.round((desired - currentOpening) * 10000) / 10000;
+  if (!Number.isFinite(delta)) throw new Error("Tồn đầu mới không hợp lệ.");
+  if (Math.abs(delta) < 0.0000001) {
+    return { changed: false, currentOpening, desiredOpening: desired };
+  }
+
+  const movementType: "inbound" | "outbound" = delta > 0 ? "inbound" : "outbound";
+  let documentNumber = "";
+  const { data: genResult, error: genError } = await supabase.rpc("generate_stock_document_number", {
+    p_movement_type: movementType,
+    p_document_date: prevDateStr,
+    p_supplier_id: null,
+  });
+  if (!genError && typeof genResult === "string" && genResult.trim()) {
+    documentNumber = genResult;
+  } else {
+    const suffix = crypto.randomUUID().replace(/-/g, "").slice(0, 8).toUpperCase();
+    documentNumber = (movementType === "inbound" ? "DCN-" : "DCX-") + prevDateStr.replace(/-/g, "") + "-" + suffix;
+  }
+
+  const reason =
+    movementType === "inbound" ? "Điều chỉnh tăng tồn đầu kỳ" : "Điều chỉnh giảm tồn đầu kỳ";
+  const { data: doc, error: de } = await supabase
+    .from("stock_documents")
+    .insert({
+      document_number: documentNumber,
+      document_date: prevDateStr,
+      movement_type: movementType,
+      posting_status: "posted",
+      supplier_id: null,
+      reason,
+      notes: row.note?.trim() || `Điều chỉnh tồn đầu kỳ trước ${row.date_from}`,
+    })
+    .select("id")
+    .single();
+  if (de || !doc) throw new Error(de?.message ?? "Không tạo được phiếu điều chỉnh.");
+
+  const { error: le } = await supabase.from("stock_lines").insert({
+    document_id: doc.id as string,
+    product_id: row.product_id,
+    quantity: Math.abs(delta),
+    unit_price: 0,
+  });
+  if (le) {
+    await supabase.from("stock_documents").delete().eq("id", doc.id as string);
+    throw new Error(le.message);
+  }
+
+  revalidatePath("/inventory/documents");
+  revalidatePath("/inventory/stock");
+
+  return {
+    changed: true,
+    documentId: doc.id as string,
+    documentNumber,
+    movementType,
+    previousOpening: currentOpening,
+    desiredOpening: desired,
+    adjustedQuantity: Math.abs(delta),
+  };
+}
+
 export type ProductStockRow = {
   product_id: string;
   product_code: string;

@@ -967,6 +967,10 @@ export async function getDailyDeliveryNotePayload(
   const supabase = createSupabaseAdmin();
   const date = deliveryDate.trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error("Ngày giao không hợp lệ.");
+  const fromIso = `${date}T00:00:00+07:00`;
+  const toDay = new Date(`${date}T00:00:00+07:00`);
+  toDay.setDate(toDay.getDate() + 1);
+  const toIso = toDay.toISOString();
 
   const { data: partner, error: pErr } = await supabase
     .from("partners")
@@ -978,10 +982,12 @@ export async function getDailyDeliveryNotePayload(
 
   const { data: orders, error: oErr } = await supabase
     .from("lab_orders")
-    .select("id,order_number,patient_name,clinic_name,notes,status")
+    .select("id,order_number,patient_name,clinic_name,notes,status,due_delivery_at")
     .eq("partner_id", partnerId)
-    .eq("received_at", date)
+    .gte("due_delivery_at", fromIso)
+    .lt("due_delivery_at", toIso)
     .neq("status", "cancelled")
+    .order("due_delivery_at", { ascending: true })
     .order("order_number", { ascending: true })
     .limit(500);
   if (oErr) throw new Error(oErr.message);

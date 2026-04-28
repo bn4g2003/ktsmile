@@ -194,6 +194,8 @@ type ExcelDataGridProps<T> = {
   disableListCache?: boolean;
   /** Nội dung modal chỉ đọc khi bấm "Xem" (mở rộng sau này). */
   renderRowDetail?: (row: T) => React.ReactNode;
+  /** Mục menu bổ sung trong cột Thao tác (menu dấu ba chấm). */
+  renderRowActions?: (row: T) => React.ReactNode;
   rowDetailTitle?: (row: T) => string;
   /** Class thêm vào từng dòng (desktop `tr`, mobile `li`). */
   getRowClassName?: (row: T) => string | undefined;
@@ -217,6 +219,7 @@ export function ExcelDataGrid<T>({
   listCacheTtlMs = 60_000,
   disableListCache = false,
   renderRowDetail,
+  renderRowActions,
   rowDetailTitle,
   getRowClassName,
   filters: propsFilters,
@@ -367,6 +370,7 @@ export function ExcelDataGrid<T>({
           cell: ({ row }: CellContext<T, unknown>) => (
             <DataGridRowActionsMenu>
               <DataGridMenuViewItem onSelect={() => setViewRow(row.original)}>Xem</DataGridMenuViewItem>
+              {renderRowActions ? renderRowActions(row.original) : null}
             </DataGridRowActionsMenu>
           ),
         });
@@ -379,6 +383,7 @@ export function ExcelDataGrid<T>({
             cell: (info: CellContext<T, unknown>) => (
               <DataGridRowActionsMenu>
                 <DataGridMenuViewItem onSelect={() => setViewRow(info.row.original)}>Xem</DataGridMenuViewItem>
+                {renderRowActions ? renderRowActions(info.row.original) : null}
                 {prevCell ? flexRender(prevCell, info) : null}
               </DataGridRowActionsMenu>
             ),
@@ -402,7 +407,7 @@ export function ExcelDataGrid<T>({
         maxSize: typeof col.maxSize === "number" ? Math.min(col.maxSize, 80) : 80,
       };
     });
-  }, [columns, renderRowDetail]);
+  }, [columns, renderRowDetail, renderRowActions]);
 
   const hasColumnFilters = React.useMemo(() => {
     return columnsResolved.some((c) => {

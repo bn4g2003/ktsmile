@@ -3,6 +3,7 @@
 import * as React from "react";
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogDescription,
   DialogHeader,
@@ -44,10 +45,19 @@ export function DebtSettlementModal({
       }}
     >
       <DialogContent size="2xl" className="flex max-h-[92vh] flex-col gap-0 overflow-hidden p-5 sm:p-6">
+        <DialogClose asChild>
+          <button
+            type="button"
+            aria-label="Đóng"
+            className="absolute right-3 top-3 inline-flex h-8 w-8 items-center justify-center rounded-full text-lg text-[var(--on-surface-muted)] hover:bg-[var(--surface-muted)] hover:text-[var(--on-surface)]"
+          >
+            ×
+          </button>
+        </DialogClose>
         {state?.kind === "receivable" ? (
           <>
             <DialogHeader className="shrink-0 space-y-1 pb-3">
-              <DialogTitle>Ghi thu công nợ — {state.row.partner_code}</DialogTitle>
+              <DialogTitle>💰 Ghi thu công nợ — {state.row.partner_code}</DialogTitle>
               <DialogDescription className="text-xs sm:text-sm">
                 Tháng đang xem trên lưới: {month}/{year}. Chứng từ ghi vào sổ quỹ; có thể in phiếu thu sau mỗi lần lưu.
               </DialogDescription>
@@ -68,7 +78,7 @@ export function DebtSettlementModal({
         {state?.kind === "payable" ? (
           <>
             <DialogHeader className="shrink-0 space-y-1 pb-3">
-              <DialogTitle>Ghi chi trả NCC — {state.row.supplier_code}</DialogTitle>
+              <DialogTitle>💸 Ghi chi trả NCC — {state.row.supplier_code}</DialogTitle>
               <DialogDescription className="text-xs sm:text-sm">
                 Tháng đang xem trên lưới: {month}/{year}. Chứng từ ghi vào sổ quỹ; có thể in phiếu chi sau mỗi lần lưu.
               </DialogDescription>

@@ -70,7 +70,7 @@ async function computeDashboardCharts(year: number, month: number): Promise<Dash
   const [
     ordersRes,
     stockRes,
-    revenueRes,
+    receiptRes,
     expenseRes,
     cashRes,
     debtOpenRes,
@@ -88,16 +88,17 @@ async function computeDashboardCharts(year: number, month: number): Promise<Dash
       .order("quantity_on_hand", { ascending: false })
       .limit(12),
     supabase
-      .from("v_orders_by_partner_month")
-      .select("month, order_amount")
-      .gte("month", yearStart)
-      .lt("month", yearEnd),
+      .from("cash_transactions")
+      .select("transaction_date, amount")
+      .eq("direction", "receipt")
+      .gte("transaction_date", yearStart)
+      .lt("transaction_date", yearEnd),
     supabase
-      .from("v_cash_by_partner_month")
-      .select("month, direction, total_amount")
+      .from("cash_transactions")
+      .select("transaction_date, amount")
       .eq("direction", "payment")
-      .gte("month", yearStart)
-      .lt("month", yearEnd),
+      .gte("transaction_date", yearStart)
+      .lt("transaction_date", yearEnd),
     supabase.from("cash_transactions").select("payment_channel, direction, amount"),
     supabase
       .from("partner_opening_balances")
@@ -140,7 +141,7 @@ async function computeDashboardCharts(year: number, month: number): Promise<Dash
 
   if (ordersRes.error) throw new Error(ordersRes.error.message);
   if (stockRes.error) throw new Error(stockRes.error.message);
-  if (revenueRes.error) throw new Error(revenueRes.error.message);
+  if (receiptRes.error) throw new Error(receiptRes.error.message);
   if (expenseRes.error) throw new Error(expenseRes.error.message);
   if (cashRes.error) throw new Error(cashRes.error.message);
   if (debtOpenRes.error) throw new Error(debtOpenRes.error.message);
@@ -169,13 +170,13 @@ async function computeDashboardCharts(year: number, month: number): Promise<Dash
 
   const revByMonth = Array.from({ length: 12 }, () => 0);
   const expByMonth = Array.from({ length: 12 }, () => 0);
-  for (const r of revenueRes.data ?? []) {
-    const m = monthIndexFromDate(String((r as { month: string }).month));
-    revByMonth[m] += Number((r as { order_amount: number }).order_amount ?? 0);
+  for (const r of receiptRes.data ?? []) {
+    const m = monthIndexFromDate(String((r as { transaction_date: string }).transaction_date));
+    revByMonth[m] += Number((r as { amount: number }).amount ?? 0);
   }
   for (const r of expenseRes.data ?? []) {
-    const m = monthIndexFromDate(String((r as { month: string }).month));
-    expByMonth[m] += Number((r as { total_amount: number }).total_amount ?? 0);
+    const m = monthIndexFromDate(String((r as { transaction_date: string }).transaction_date));
+    expByMonth[m] += Number((r as { amount: number }).amount ?? 0);
   }
   const monthlyFinance: MonthFinanceRow[] = revByMonth.map((revenue, idx) => {
     const expense = expByMonth[idx] ?? 0;
@@ -287,9 +288,11 @@ const getDashboardChartsCached = unstable_cache(
   { revalidate: 45 },
 );
 
-export async function getDashboardCharts(): Promise<DashboardChartsData> {
+export async function getDashboardCharts(input?: { year?: number; month?: number }): Promise<DashboardChartsData> {
   const now = new Date();
-  const year = now.getUTCFullYear();
-  const month = now.getUTCMonth() + 1;
+  const yearRaw = input?.year ?? now.getUTCFullYear();
+  const monthRaw = input?.month ?? now.getUTCMonth() + 1;
+  const year = Number.isFinite(yearRaw) ? Math.trunc(yearRaw) : now.getUTCFullYear();
+  const month = Number.isFinite(monthRaw) ? Math.min(12, Math.max(1, Math.trunc(monthRaw))) : now.getUTCMonth() + 1;
   return getDashboardChartsCached(year, month);
 }

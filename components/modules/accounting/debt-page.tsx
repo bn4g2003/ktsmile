@@ -4,6 +4,10 @@ import { type ColumnDef } from "@tanstack/react-table";
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { ExcelDataGrid } from "@/components/shared/data-grid/excel-data-grid";
+import {
+  DataGridMenuDeleteItem,
+  DataGridMenuEditItem,
+} from "@/components/shared/data-grid/data-grid-action-buttons";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { DetailTabStrip } from "@/components/ui/detail-tab-strip";
@@ -93,6 +97,23 @@ export function DebtPage({ initialTab = "receivables" }: { initialTab?: DebtTab 
           </Button>
         ),
       },
+      {
+        id: "actions",
+        header: "Thao tác",
+        size: 80,
+        enableHiding: false,
+        meta: { filterType: "none" as const },
+        cell: ({ row }) => (
+          <>
+            <DataGridMenuEditItem onSelect={() => openReceivableSettlement(row.original)}>
+              ✏️ Sửa chứng từ
+            </DataGridMenuEditItem>
+            <DataGridMenuDeleteItem onSelect={() => openReceivableSettlement(row.original)}>
+              🗑️ Xóa chứng từ
+            </DataGridMenuDeleteItem>
+          </>
+        ),
+      },
     ],
     [openReceivableSettlement],
   );
@@ -115,6 +136,23 @@ export function DebtPage({ initialTab = "receivables" }: { initialTab?: DebtTab 
           <Button type="button" variant="secondary" size="sm" onClick={() => openPayableSettlement(row.original)}>
             Trả NCC
           </Button>
+        ),
+      },
+      {
+        id: "actions",
+        header: "Thao tác",
+        size: 80,
+        enableHiding: false,
+        meta: { filterType: "none" as const },
+        cell: ({ row }) => (
+          <>
+            <DataGridMenuEditItem onSelect={() => openPayableSettlement(row.original)}>
+              ✏️ Sửa chứng từ
+            </DataGridMenuEditItem>
+            <DataGridMenuDeleteItem onSelect={() => openPayableSettlement(row.original)}>
+              🗑️ Xóa chứng từ
+            </DataGridMenuDeleteItem>
+          </>
         ),
       },
     ],

@@ -75,6 +75,9 @@ export function EmployeesPage() {
   const [isActive, setIsActive] = React.useState(true);
   const fileImportRef = React.useRef<HTMLInputElement>(null);
   const [importBusy, setImportBusy] = React.useState(false);
+  const [gridFilters, setGridFilters] = React.useState<Record<string, string>>({
+    is_active: "true",
+  });
 
   const reset = () => {
     setEditing(null);
@@ -276,6 +279,8 @@ export function EmployeesPage() {
           columns={columns}
           list={listEmployees}
           reloadSignal={gridReload}
+          filters={gridFilters}
+          onFiltersChange={setGridFilters}
           renderRowDetail={(row) => <EmployeeRowDetailPanel row={row} />}
           rowDetailTitle={(r) => "NV " + r.code}
           toolbarExtra={

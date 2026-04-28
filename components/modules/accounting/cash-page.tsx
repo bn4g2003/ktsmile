@@ -365,20 +365,30 @@ export function CashPage() {
         meta: { filterKey: "business_category", filterType: "text" },
       },
       {
-        accessorKey: "amount",
-        header: "Số tiền",
-        cell: ({ row, getValue }) => (
-          <span
-            className={cn(
-              "block text-right tabular-nums font-semibold",
-              row.original.direction === "receipt"
-                ? "text-emerald-700 dark:text-emerald-400"
-                : "text-rose-700 dark:text-rose-400",
-            )}
-          >
-            {Number(getValue()).toLocaleString("vi-VN")}
-          </span>
-        ),
+        id: "amount_receipt",
+        header: "Thu",
+        accessorFn: (row) => (row.direction === "receipt" ? row.amount : 0),
+        cell: ({ row, getValue }) =>
+          row.original.direction === "receipt" ? (
+            <span className="block text-right tabular-nums font-semibold text-emerald-700 dark:text-emerald-400">
+              {Number(getValue()).toLocaleString("vi-VN")}
+            </span>
+          ) : (
+            <span className="block text-right text-[var(--on-surface-faint)]">—</span>
+          ),
+      },
+      {
+        id: "amount_payment",
+        header: "Chi",
+        accessorFn: (row) => (row.direction === "payment" ? row.amount : 0),
+        cell: ({ row, getValue }) =>
+          row.original.direction === "payment" ? (
+            <span className="block text-right tabular-nums font-semibold text-rose-700 dark:text-rose-400">
+              {Number(getValue()).toLocaleString("vi-VN")}
+            </span>
+          ) : (
+            <span className="block text-right text-[var(--on-surface-faint)]">—</span>
+          ),
       },
       { accessorKey: "partner_code", header: "Mã KH", meta: { filterKey: "partner_code", filterType: "text" } },
       { accessorKey: "partner_name", header: "Khách hàng", meta: { filterKey: "partner_name", filterType: "text" } },
@@ -487,57 +497,71 @@ export function CashPage() {
             </Button>
             {showCharts ? <CashFlowChartsSection /> : null}
           </div>
-          <ExcelDataGrid<CashRow>
-            moduleId="cash_transactions"
-            title="Sổ quỹ thu / chi"
-            columns={columns}
-            list={listCashTransactions}
-            reloadSignal={gridReload}
-            filters={gridFilters}
-            onFiltersChange={setGridFilters}
-            renderRowDetail={renderCashDetail}
-            rowDetailTitle={(r) => "Chứng từ " + r.doc_number}
-            toolbarExtra={
-              <>
-                <div className="flex flex-wrap items-end gap-2 rounded-[var(--radius-md)] border border-[var(--border-ghost)] bg-[var(--surface-muted)] px-2 py-2">
-                  <div className="grid gap-1">
-                    <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--on-surface-muted)]">
-                      Từ ngày
-                    </span>
-                    <Input
-                      type="date"
-                      value={gridFilters.transaction_date_from ?? ""}
-                      onChange={(e) => patchGridFilter("transaction_date_from", e.target.value)}
-                      className="h-9 w-[9.5rem] py-1 text-xs"
-                    />
+          <div className="grid gap-4 xl:grid-cols-2">
+            <ExcelDataGrid<CashRow>
+              moduleId="cash_transactions_receipt"
+              title="Sổ quỹ thu"
+              columns={columns}
+              list={listCashTransactions}
+              reloadSignal={gridReload}
+              filters={gridFilters}
+              onFiltersChange={setGridFilters}
+              prependFilters={{ direction: "receipt" }}
+              renderRowDetail={renderCashDetail}
+              rowDetailTitle={(r) => "Chứng từ " + r.doc_number}
+              toolbarExtra={
+                <>
+                  <div className="flex flex-wrap items-end gap-2 rounded-[var(--radius-md)] border border-[var(--border-ghost)] bg-[var(--surface-muted)] px-2 py-2">
+                    <div className="grid gap-1">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--on-surface-muted)]">
+                        Từ ngày
+                      </span>
+                      <Input
+                        type="date"
+                        value={gridFilters.transaction_date_from ?? ""}
+                        onChange={(e) => patchGridFilter("transaction_date_from", e.target.value)}
+                        className="h-9 w-[9.5rem] py-1 text-xs"
+                      />
+                    </div>
+                    <div className="grid gap-1">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--on-surface-muted)]">
+                        Đến ngày
+                      </span>
+                      <Input
+                        type="date"
+                        value={gridFilters.transaction_date_to ?? ""}
+                        onChange={(e) => patchGridFilter("transaction_date_to", e.target.value)}
+                        className="h-9 w-[9.5rem] py-1 text-xs"
+                      />
+                    </div>
                   </div>
-                  <div className="grid gap-1">
-                    <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--on-surface-muted)]">
-                      Đến ngày
-                    </span>
-                    <Input
-                      type="date"
-                      value={gridFilters.transaction_date_to ?? ""}
-                      onChange={(e) => patchGridFilter("transaction_date_to", e.target.value)}
-                      className="h-9 w-[9.5rem] py-1 text-xs"
-                    />
-                  </div>
-                </div>
-                <Button variant="secondary" type="button" size="sm" onClick={openOpeningDialog} className="mr-2">
-                  Số dư đầu kỳ
-                </Button>
-                <Button variant="primary" type="button" size="sm" onClick={openCreate}>
-                  Thêm chứng từ
-                </Button>
-              </>
-            }
-            getRowId={(r) => r.id}
-            getRowClassName={(r) =>
-              r.direction === "receipt"
-                ? "border-l-[3px] border-l-emerald-600"
-                : "border-l-[3px] border-l-rose-600"
-            }
-          />
+                  <Button variant="secondary" type="button" size="sm" onClick={openOpeningDialog} className="mr-2">
+                    Số dư đầu kỳ
+                  </Button>
+                  <Button variant="primary" type="button" size="sm" onClick={openCreate}>
+                    Thêm chứng từ
+                  </Button>
+                </>
+              }
+              getRowId={(r) => r.id}
+              getRowClassName={() => "border-l-[3px] border-l-emerald-600"}
+            />
+
+            <ExcelDataGrid<CashRow>
+              moduleId="cash_transactions_payment"
+              title="Sổ quỹ chi"
+              columns={columns}
+              list={listCashTransactions}
+              reloadSignal={gridReload}
+              filters={gridFilters}
+              onFiltersChange={setGridFilters}
+              prependFilters={{ direction: "payment" }}
+              renderRowDetail={renderCashDetail}
+              rowDetailTitle={(r) => "Chứng từ " + r.doc_number}
+              getRowId={(r) => r.id}
+              getRowClassName={() => "border-l-[3px] border-l-rose-600"}
+            />
+          </div>
         </>
       ) : (
         <Card className="space-y-4">

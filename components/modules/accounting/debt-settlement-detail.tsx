@@ -10,13 +10,22 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { CashReceiptPrintButton } from "@/components/shared/reports/cash-receipt-print-button";
+import {
+  DataGridMenuDeleteItem,
+  DataGridMenuEditItem,
+  DataGridRowActionsMenu,
+} from "@/components/shared/data-grid/data-grid-action-buttons";
 import type { DebtRow } from "@/lib/actions/debt";
 import type { PayableRow } from "@/lib/actions/payables";
 import {
+  deleteDebtSettlementFromDebtPage,
   listPartnerReceiptsInMonth,
   listSupplierPaymentsInMonth,
   recordPayablePaymentFromDebtPage,
   recordReceivableReceiptFromDebtPage,
+  upsertPayableOpeningFromDebtPage,
+  upsertReceivableOpeningFromDebtPage,
+  updateDebtSettlementFromDebtPage,
   type DebtSettlementLine,
 } from "@/lib/actions/debt-settlements";
 
@@ -59,6 +68,16 @@ export function DebtSettlementDetail(props: Props) {
   const [pending, setPending] = React.useState(false);
   const [formErr, setFormErr] = React.useState<string | null>(null);
   const [lastPrintId, setLastPrintId] = React.useState<string | null>(null);
+  const [openingAmount, setOpeningAmount] = React.useState(() => String(props.row.opening));
+  const [openingPending, setOpeningPending] = React.useState(false);
+  const [editingLineId, setEditingLineId] = React.useState<string | null>(null);
+  const [editDate, setEditDate] = React.useState("");
+  const [editAmount, setEditAmount] = React.useState("");
+  const [editChannel, setEditChannel] = React.useState("cash");
+  const [editPayerName, setEditPayerName] = React.useState("");
+  const [editDesc, setEditDesc] = React.useState("");
+  const [editPending, setEditPending] = React.useState(false);
+  const [deletePendingId, setDeletePendingId] = React.useState<string | null>(null);
 
   const reloadLines = React.useCallback(() => {
     if (!Number.isFinite(y) || m < 1 || m > 12) return;
@@ -76,6 +95,93 @@ export function DebtSettlementDetail(props: Props) {
   React.useEffect(() => {
     reloadLines();
   }, [reloadLines]);
+
+  React.useEffect(() => {
+    setOpeningAmount(String(props.row.opening));
+  }, [props.row.opening]);
+
+  const beginEditLine = React.useCallback((ln: DebtSettlementLine) => {
+    setEditingLineId(ln.id);
+    setEditDate(ln.transaction_date);
+    setEditAmount(String(ln.amount));
+    setEditChannel(ln.payment_channel || "cash");
+    setEditPayerName(ln.payer_name ?? "");
+    setEditDesc(ln.description ?? "");
+    setFormErr(null);
+  }, []);
+
+  const cancelEditLine = React.useCallback(() => {
+    setEditingLineId(null);
+    setEditDate("");
+    setEditAmount("");
+    setEditChannel("cash");
+    setEditPayerName("");
+    setEditDesc("");
+    setEditPending(false);
+  }, []);
+
+  const saveEditedLine = React.useCallback(async () => {
+    if (!editingLineId) return;
+    const amt = Number(editAmount);
+    if (!Number.isFinite(amt) || amt <= 0) {
+      setFormErr("Số tiền sửa không hợp lệ.");
+      return;
+    }
+    setFormErr(null);
+    setEditPending(true);
+    try {
+      await updateDebtSettlementFromDebtPage({
+        id: editingLineId,
+        mode: props.mode,
+        owner_id: props.mode === "receivable" ? props.row.partner_id : props.row.supplier_id,
+        transaction_date: editDate,
+        amount: amt,
+        payment_channel: editChannel,
+        payer_name: props.mode === "receivable" ? editPayerName.trim() || null : null,
+        description: editDesc.trim() || null,
+      });
+      cancelEditLine();
+      props.onRecorded();
+      reloadLines();
+    } catch (e2) {
+      setFormErr(e2 instanceof Error ? e2.message : "Lỗi sửa chứng từ");
+    } finally {
+      setEditPending(false);
+    }
+  }, [
+    cancelEditLine,
+    editAmount,
+    editChannel,
+    editDate,
+    editDesc,
+    editPayerName,
+    editingLineId,
+    props,
+    reloadLines,
+  ]);
+
+  const removeLine = React.useCallback(
+    async (ln: DebtSettlementLine) => {
+      if (!confirm("Xóa chứng từ " + ln.doc_number + "?")) return;
+      setDeletePendingId(ln.id);
+      setFormErr(null);
+      try {
+        await deleteDebtSettlementFromDebtPage({
+          id: ln.id,
+          mode: props.mode,
+          owner_id: props.mode === "receivable" ? props.row.partner_id : props.row.supplier_id,
+        });
+        if (editingLineId === ln.id) cancelEditLine();
+        props.onRecorded();
+        reloadLines();
+      } catch (e2) {
+        setFormErr(e2 instanceof Error ? e2.message : "Lỗi xóa chứng từ");
+      } finally {
+        setDeletePendingId(null);
+      }
+    },
+    [cancelEditLine, editingLineId, props, reloadLines],
+  );
 
   const summaryFields =
     props.mode === "receivable"
@@ -95,6 +201,38 @@ export function DebtSettlementDetail(props: Props) {
           { label: "Đã trả (tháng)", value: props.row.payments_month.toLocaleString("vi-VN") },
           { label: "Nợ cuối kỳ", value: props.row.closing.toLocaleString("vi-VN") },
         ];
+
+  const onSaveOpening = async () => {
+    setFormErr(null);
+    const opening = Number(openingAmount);
+    if (!Number.isFinite(opening)) {
+      setFormErr("Nhập tồn đầu hợp lệ.");
+      return;
+    }
+    setOpeningPending(true);
+    try {
+      if (props.mode === "receivable") {
+        await upsertReceivableOpeningFromDebtPage({
+          partner_id: props.row.partner_id,
+          year: y,
+          month: m,
+          opening_balance: opening,
+        });
+      } else {
+        await upsertPayableOpeningFromDebtPage({
+          supplier_id: props.row.supplier_id,
+          year: y,
+          month: m,
+          opening_balance: opening,
+        });
+      }
+      props.onRecorded();
+    } catch (e2) {
+      setFormErr(e2 instanceof Error ? e2.message : "Lỗi cập nhật tồn đầu");
+    } finally {
+      setOpeningPending(false);
+    }
+  };
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -146,6 +284,23 @@ export function DebtSettlementDetail(props: Props) {
       <DetailPreview fields={summaryFields} />
 
       <div className="rounded-[var(--radius-md)] border border-[var(--border-ghost)] bg-[var(--surface-muted)]/40 p-4">
+        <p className="mb-2 text-sm font-semibold text-[var(--on-surface)]">Điều chỉnh tồn đầu / nợ đầu kỳ</p>
+        <div className="mb-4 flex flex-wrap items-end gap-2">
+          <div className="grid gap-1.5">
+            <Label htmlFor="ds-opening">Tồn đầu tháng {props.month}/{props.year}</Label>
+            <CurrencyInput
+              id="ds-opening"
+              value={openingAmount}
+              onChange={setOpeningAmount}
+              allowDecimal={false}
+              className="h-10 min-w-[14rem]"
+            />
+          </div>
+          <Button type="button" variant="secondary" size="sm" onClick={() => void onSaveOpening()} disabled={openingPending}>
+            {openingPending ? "Đang lưu tồn đầu…" : "Lưu tồn đầu"}
+          </Button>
+        </div>
+
         <p className="mb-3 text-sm font-semibold text-[var(--on-surface)]">
           {props.mode === "receivable" ? "Ghi thu công nợ (khách)" : "Ghi chi trả NCC"}
         </p>
@@ -232,20 +387,88 @@ export function DebtSettlementDetail(props: Props) {
                   <th className="px-3 py-2">Kênh</th>
                   {props.mode === "receivable" ? <th className="px-3 py-2">Người nộp</th> : null}
                   <th className="px-3 py-2 text-right">Số tiền</th>
+                  <th className="px-3 py-2 text-right">Thao tác</th>
                   <th className="px-3 py-2 text-right">In</th>
                 </tr>
               </thead>
               <tbody>
                 {lines.map((ln) => (
                   <tr key={ln.id} className="border-b border-[var(--border-ghost)] last:border-b-0">
-                    <td className="px-3 py-2 tabular-nums text-[var(--on-surface-muted)]">{ln.transaction_date}</td>
+                    <td className="px-3 py-2 tabular-nums text-[var(--on-surface-muted)]">
+                      {editingLineId === ln.id ? (
+                        <Input type="date" value={editDate} onChange={(e) => setEditDate(e.target.value)} className="h-8 w-[9rem]" />
+                      ) : (
+                        ln.transaction_date
+                      )}
+                    </td>
                     <td className="px-3 py-2 font-medium">{ln.doc_number}</td>
-                    <td className="px-3 py-2">{ln.payment_channel}</td>
+                    <td className="px-3 py-2">
+                      {editingLineId === ln.id ? (
+                        <Select value={editChannel} onChange={(e) => setEditChannel(e.target.value)} className="h-8 min-w-[8rem]">
+                          {channelOpts.map((o) => (
+                            <option key={o.value} value={o.value}>
+                              {o.label}
+                            </option>
+                          ))}
+                          {!channelOpts.some((o) => o.value === editChannel) ? (
+                            <option value={editChannel}>{editChannel}</option>
+                          ) : null}
+                        </Select>
+                      ) : (
+                        ln.payment_channel
+                      )}
+                    </td>
                     {props.mode === "receivable" ? (
-                      <td className="max-w-[10rem] truncate px-3 py-2">{ln.payer_name ?? "—"}</td>
+                      <td className="max-w-[10rem] truncate px-3 py-2">
+                        {editingLineId === ln.id ? (
+                          <Input
+                            value={editPayerName}
+                            onChange={(e) => setEditPayerName(e.target.value)}
+                            placeholder="Người nộp"
+                            className="h-8"
+                          />
+                        ) : (
+                          ln.payer_name ?? "—"
+                        )}
+                      </td>
                     ) : null}
                     <td className="px-3 py-2 text-right font-medium tabular-nums">
-                      {ln.amount.toLocaleString("vi-VN")}
+                      {editingLineId === ln.id ? (
+                        <CurrencyInput value={editAmount} onChange={setEditAmount} allowDecimal={false} className="h-8 w-[9rem] ml-auto" />
+                      ) : (
+                        ln.amount.toLocaleString("vi-VN")
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-right">
+                      {editingLineId === ln.id ? (
+                        <div className="inline-flex items-center gap-1">
+                          <Button type="button" size="sm" variant="primary" onClick={() => void saveEditedLine()} disabled={editPending}>
+                            {editPending ? "Đang lưu…" : "Lưu"}
+                          </Button>
+                          <Button type="button" size="sm" variant="ghost" onClick={cancelEditLine} disabled={editPending}>
+                            Hủy
+                          </Button>
+                        </div>
+                      ) : (
+                        <DataGridRowActionsMenu>
+                          <DataGridMenuEditItem
+                            onSelect={() => {
+                              if (deletePendingId === ln.id) return;
+                              beginEditLine(ln);
+                            }}
+                          >
+                            Sửa
+                          </DataGridMenuEditItem>
+                          <DataGridMenuDeleteItem
+                            onSelect={() => {
+                              if (deletePendingId === ln.id) return;
+                              void removeLine(ln);
+                            }}
+                          >
+                            {deletePendingId === ln.id ? "Đang xóa…" : "Xóa"}
+                          </DataGridMenuDeleteItem>
+                        </DataGridRowActionsMenu>
+                      )}
                     </td>
                     <td className="px-3 py-2 text-right">
                       <CashReceiptPrintButton transactionId={ln.id} label="PDF" variant="ghost" size="sm" />

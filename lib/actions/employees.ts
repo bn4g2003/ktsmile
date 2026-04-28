@@ -161,11 +161,42 @@ export async function updateEmployee(id: string, input: z.infer<typeof schema>) 
   revalidatePath("/master/employees");
 }
 
-export async function deleteEmployee(id: string) {
+export async function deleteEmployee(id: string): Promise<{ mode: "hard" | "soft" }> {
   const supabase = createSupabaseAdmin();
+  const { count, error: refErr } = await supabase
+    .from("payroll_lines")
+    .select("id", { count: "exact", head: true })
+    .eq("employee_id", id);
+  if (refErr) throw new Error(refErr.message);
+  if ((count ?? 0) > 0) {
+    const { error: softErr } = await supabase
+      .from("employees")
+      .update({
+        is_active: false,
+        phone: null,
+        email: null,
+        address: null,
+        username: null,
+        password_plain: null,
+        notes: "Đã ngưng hoạt động (xóa mềm vì có dữ liệu bảng lương).",
+      })
+      .eq("id", id);
+    if (softErr) throw new Error(softErr.message);
+    revalidatePath("/master/employees");
+    return { mode: "soft" };
+  }
   const { error } = await supabase.from("employees").delete().eq("id", id);
-  if (error) throw new Error(error.message);
+  if (error) {
+    const msg = (error.message ?? "").toLowerCase();
+    if (msg.includes("foreign key") || msg.includes("violates")) {
+      throw new Error(
+        "Không thể xóa do nhân viên đã phát sinh dữ liệu liên quan. Hãy chuyển trạng thái 'Ngưng hoạt động'.",
+      );
+    }
+    throw new Error(error.message);
+  }
   revalidatePath("/master/employees");
+  return { mode: "hard" };
 }
 
 export type EmployeePickerRow = {

@@ -1,7 +1,10 @@
-import Image from "next/image";
+"use client";
+
+import * as React from "react";
 import { cn } from "@/lib/utils/cn";
 
-const LOGO_SRC = "/logobaocao.png";
+const PRIMARY_LOGO_SRC = "/logobaocao.png";
+const FALLBACK_LOGO_SRC = "/logo.jpg";
 
 type BrandLogoProps = {
   className?: string;
@@ -10,14 +13,19 @@ type BrandLogoProps = {
 };
 
 export function BrandLogo({ className, size = 44, priority }: BrandLogoProps) {
+  const [src, setSrc] = React.useState(PRIMARY_LOGO_SRC);
+
   return (
-    <Image
-      src={LOGO_SRC}
+    <img
+      src={src}
       alt="KT Smile Lab"
       width={size}
       height={size}
-      className={cn("shrink-0 rounded-[var(--radius-lg)] object-cover", className)}
-      priority={priority}
+      loading={priority ? "eager" : "lazy"}
+      onError={() => {
+        if (src !== FALLBACK_LOGO_SRC) setSrc(FALLBACK_LOGO_SRC);
+      }}
+      className={cn("shrink-0 rounded-[var(--radius-lg)] object-contain bg-white", className)}
     />
   );
 }

@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createSupabaseAdmin } from "@/lib/supabase/server";
 import { createCashTransaction, getCashReceiptPrintPayload } from "@/lib/actions/cash";
@@ -150,4 +151,123 @@ export async function recordPayablePaymentFromDebtPage(
   const payload = await getCashReceiptPrintPayload(id);
   const doc_number = payload.doc_number;
   return { id, doc_number };
+}
+
+const updateDebtSettlementSchema = z.object({
+  id: z.string().uuid(),
+  mode: z.enum(["receivable", "payable"]),
+  owner_id: z.string().uuid(),
+  transaction_date: z.string().min(1),
+  amount: z.coerce.number().positive(),
+  payment_channel: z.string().min(1).max(100),
+  payer_name: z.string().max(500).optional().nullable(),
+  description: z.string().max(2000).optional().nullable(),
+});
+
+/** Sửa chứng từ thu/chi tạo từ màn Công nợ. */
+export async function updateDebtSettlementFromDebtPage(
+  input: z.infer<typeof updateDebtSettlementSchema>,
+): Promise<void> {
+  const row = updateDebtSettlementSchema.parse(input);
+  const supabase = createSupabaseAdmin();
+  const matchCol = row.mode === "receivable" ? "partner_id" : "supplier_id";
+  const direction = row.mode === "receivable" ? "receipt" : "payment";
+
+  const { error } = await supabase
+    .from("cash_transactions")
+    .update({
+      transaction_date: row.transaction_date,
+      amount: row.amount,
+      payment_channel: row.payment_channel.trim(),
+      payer_name: row.mode === "receivable" ? row.payer_name?.trim() || null : null,
+      description: row.description?.trim() || null,
+    })
+    .eq("id", row.id)
+    .eq("direction", direction)
+    .eq(matchCol, row.owner_id);
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/accounting/debt");
+  revalidatePath("/accounting/cash");
+}
+
+const deleteDebtSettlementSchema = z.object({
+  id: z.string().uuid(),
+  mode: z.enum(["receivable", "payable"]),
+  owner_id: z.string().uuid(),
+});
+
+/** Xóa chứng từ thu/chi của đúng KH/NCC trên màn Công nợ. */
+export async function deleteDebtSettlementFromDebtPage(
+  input: z.infer<typeof deleteDebtSettlementSchema>,
+): Promise<void> {
+  const row = deleteDebtSettlementSchema.parse(input);
+  const supabase = createSupabaseAdmin();
+  const matchCol = row.mode === "receivable" ? "partner_id" : "supplier_id";
+  const direction = row.mode === "receivable" ? "receipt" : "payment";
+
+  const { error } = await supabase
+    .from("cash_transactions")
+    .delete()
+    .eq("id", row.id)
+    .eq("direction", direction)
+    .eq(matchCol, row.owner_id);
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/accounting/debt");
+  revalidatePath("/accounting/cash");
+}
+
+const updateReceivableOpeningSchema = z.object({
+  partner_id: z.string().uuid(),
+  year: z.coerce.number().int().min(2000).max(2100),
+  month: z.coerce.number().int().min(1).max(12),
+  opening_balance: z.coerce.number(),
+});
+
+/** Cập nhật nợ đầu kỳ KH cho tháng đang xem trên màn công nợ. */
+export async function upsertReceivableOpeningFromDebtPage(
+  input: z.infer<typeof updateReceivableOpeningSchema>,
+): Promise<void> {
+  const row = updateReceivableOpeningSchema.parse(input);
+  const supabase = createSupabaseAdmin();
+  const { error } = await supabase.from("partner_opening_balances").upsert(
+    {
+      partner_id: row.partner_id,
+      year: row.year,
+      month: row.month,
+      opening_balance: row.opening_balance,
+      notes: "Cập nhật từ màn công nợ",
+    },
+    { onConflict: "partner_id,year,month" },
+  );
+  if (error) throw new Error(error.message);
+  revalidatePath("/accounting/debt");
+}
+
+const updatePayableOpeningSchema = z.object({
+  supplier_id: z.string().uuid(),
+  year: z.coerce.number().int().min(2000).max(2100),
+  month: z.coerce.number().int().min(1).max(12),
+  opening_balance: z.coerce.number(),
+});
+
+/** Cập nhật nợ đầu kỳ NCC cho tháng đang xem trên màn công nợ. */
+export async function upsertPayableOpeningFromDebtPage(
+  input: z.infer<typeof updatePayableOpeningSchema>,
+): Promise<void> {
+  const row = updatePayableOpeningSchema.parse(input);
+  const supabase = createSupabaseAdmin();
+  const { error } = await supabase.from("supplier_opening_balances").upsert(
+    {
+      supplier_id: row.supplier_id,
+      year: row.year,
+      month: row.month,
+      opening_balance: row.opening_balance,
+      notes: "Cập nhật từ màn công nợ",
+    },
+    { onConflict: "supplier_id,year,month" },
+  );
+  if (error) throw new Error(error.message);
+  revalidatePath("/accounting/debt");
 }
