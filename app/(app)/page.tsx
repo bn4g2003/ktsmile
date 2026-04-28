@@ -42,7 +42,7 @@ export default async function HomePage({
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const params = await searchParams;
-  
+
   // 1. Kiểm tra quyền Server-side
   const user = await getCurrentUser();
   if (!user) redirect("/login");
