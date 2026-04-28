@@ -36,9 +36,11 @@ import {
   createCashTransaction,
   deleteCashTransaction,
   getCashLedgerSummary,
+  deleteCashFundChannel,
   type CashLedgerChannelRow,
   listCashFundChannels,
   listCashTransactions,
+  renameCashFundChannel,
   updateCashTransaction,
   upsertCashAccountOpeningBalance,
   listCashAccountOpeningBalances,
@@ -79,7 +81,7 @@ export function CashPage() {
   const [refType, setRefType] = React.useState("");
   const [refId, setRefId] = React.useState("");
   const [showCharts, setShowCharts] = React.useState(true);
-  const [activeTab, setActiveTab] = React.useState<"ledger" | "funds">("ledger");
+  const [activeTab, setActiveTab] = React.useState<"ledger" | "funds" | "accounts">("ledger");
   const [openOpening, setOpenOpening] = React.useState(false);
   const [openingYear, setOpeningYear] = React.useState(String(new Date().getFullYear()));
   const [openingMonth, setOpeningMonth] = React.useState(String(new Date().getMonth() + 1));
@@ -95,6 +97,10 @@ export function CashPage() {
   const [fundSummary, setFundSummary] = React.useState<CashLedgerChannelRow | null>(null);
   const [fundSummaryErr, setFundSummaryErr] = React.useState<string | null>(null);
   const [fundSummaryLoading, setFundSummaryLoading] = React.useState(false);
+  const [newAccountCode, setNewAccountCode] = React.useState("");
+  const [accountPending, setAccountPending] = React.useState(false);
+  const [editingAccount, setEditingAccount] = React.useState<string | null>(null);
+  const [editingAccountValue, setEditingAccountValue] = React.useState("");
 
   const patchGridFilter = React.useCallback((key: string, val: string) => {
     setGridFilters((prev) => {
@@ -321,6 +327,88 @@ export function CashPage() {
     }
   };
 
+  const saveNewAccount = async () => {
+    const code = newAccountCode.trim();
+    if (!code) {
+      alert("Nhập mã tài khoản trước khi lưu.");
+      return;
+    }
+    if (fundChannels.some((c) => c.value.toLowerCase() === code.toLowerCase())) {
+      alert("Tài khoản này đã tồn tại.");
+      return;
+    }
+    setAccountPending(true);
+    try {
+      const y = Number(openingYear);
+      const m = Number(openingMonth);
+      await upsertCashAccountOpeningBalance({
+        payment_channel: code,
+        year: y,
+        month: m,
+        opening_balance: 0,
+        notes: "Khởi tạo tài khoản quỹ",
+      });
+      setNewAccountCode("");
+      bumpGrid();
+    } catch (e2) {
+      alert(e2 instanceof Error ? e2.message : "Không tạo được tài khoản.");
+    } finally {
+      setAccountPending(false);
+    }
+  };
+
+  const viewAccount = (code: string) => {
+    setFocusFundChannel(code);
+    setActiveTab("funds");
+  };
+
+  const startEditAccount = (code: string) => {
+    setEditingAccount(code);
+    setEditingAccountValue(code);
+  };
+
+  const cancelEditAccount = () => {
+    setEditingAccount(null);
+    setEditingAccountValue("");
+  };
+
+  const saveEditAccount = async () => {
+    if (!editingAccount) return;
+    const next = editingAccountValue.trim();
+    if (!next) {
+      alert("Nhập mã tài khoản.");
+      return;
+    }
+    setAccountPending(true);
+    try {
+      await renameCashFundChannel({ from: editingAccount, to: next });
+      if (focusFundChannel === editingAccount) setFocusFundChannel(next);
+      cancelEditAccount();
+      bumpGrid();
+    } catch (e2) {
+      alert(e2 instanceof Error ? e2.message : "Không sửa được tài khoản.");
+    } finally {
+      setAccountPending(false);
+    }
+  };
+
+  const removeAccount = async (code: string) => {
+    if (!confirm(`Xoá tài khoản "${code}"?`)) return;
+    setAccountPending(true);
+    try {
+      await deleteCashFundChannel(code);
+      if (focusFundChannel === code && fundChannels.length > 0) {
+        const next = fundChannels.find((ch) => ch.value !== code)?.value ?? "cash";
+        setFocusFundChannel(next);
+      }
+      bumpGrid();
+    } catch (e2) {
+      alert(e2 instanceof Error ? e2.message : "Không xoá được tài khoản.");
+    } finally {
+      setAccountPending(false);
+    }
+  };
+
   const columns = React.useMemo<ColumnDef<CashRow, unknown>[]>(
     () => [
       {
@@ -477,9 +565,10 @@ export function CashPage() {
           items={[
             { id: "ledger", label: "Sổ quỹ thu / chi" },
             { id: "funds", label: "Quản lý sổ quỹ chi tiết" },
+            { id: "accounts", label: "Quản lý tài khoản" },
           ]}
           value={activeTab}
-          onChange={(v) => setActiveTab(v as "ledger" | "funds")}
+          onChange={(v) => setActiveTab(v as "ledger" | "funds" | "accounts")}
         />
       </div>
 
@@ -563,7 +652,7 @@ export function CashPage() {
             />
           </div>
         </>
-      ) : (
+      ) : activeTab === "funds" ? (
         <Card className="space-y-4">
           <div className="flex flex-wrap items-end gap-3">
             <div className="grid gap-1">
@@ -713,6 +802,70 @@ export function CashPage() {
                 : "border-l-[3px] border-l-rose-600"
             }
           />
+        </Card>
+      ) : (
+        <Card className="space-y-4">
+          <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
+            <div className="grid gap-1">
+              <Label htmlFor="new-account-code">Mã tài khoản quỹ</Label>
+              <Input
+                id="new-account-code"
+                value={newAccountCode}
+                onChange={(e) => setNewAccountCode(e.target.value)}
+                placeholder="vd: techcombank, vcb, momo..."
+              />
+            </div>
+            <Button type="button" variant="primary" onClick={() => void saveNewAccount()} disabled={accountPending}>
+              {accountPending ? "Đang lưu..." : "Thêm tài khoản"}
+            </Button>
+          </div>
+          <p className="text-xs text-[var(--on-surface-muted)]">
+            Tài khoản mới sẽ xuất hiện trong danh sách kênh thanh toán và phần số dư đầu kỳ.
+          </p>
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+            {fundChannels.map((ch) => (
+              <div key={ch.value} className="rounded-[var(--radius-md)] border border-[var(--border-ghost)] bg-[var(--surface-muted)] px-3 py-2">
+                <div className="text-xs text-[var(--on-surface-muted)]">Mã</div>
+                {editingAccount === ch.value ? (
+                  <Input value={editingAccountValue} onChange={(e) => setEditingAccountValue(e.target.value)} className="mt-1 h-8" />
+                ) : (
+                  <div className="font-semibold">{ch.value}</div>
+                )}
+                <div className="mt-1 text-xs">{ch.label}</div>
+                <div className="mt-2 flex gap-2">
+                  {editingAccount === ch.value ? (
+                    <>
+                      <Button type="button" size="sm" variant="primary" onClick={() => void saveEditAccount()} disabled={accountPending}>
+                        Lưu
+                      </Button>
+                      <Button type="button" size="sm" variant="ghost" onClick={cancelEditAccount} disabled={accountPending}>
+                        Huỷ
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <Button type="button" size="sm" variant="secondary" onClick={() => viewAccount(ch.value)}>
+                        Xem
+                      </Button>
+                      <Button type="button" size="sm" variant="ghost" onClick={() => startEditAccount(ch.value)}>
+                        Sửa
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="text-rose-600 hover:text-rose-700"
+                        onClick={() => void removeAccount(ch.value)}
+                        disabled={accountPending}
+                      >
+                        Xoá
+                      </Button>
+                    </>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
         </Card>
       )}
       <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) reset(); }}>

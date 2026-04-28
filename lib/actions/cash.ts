@@ -342,6 +342,78 @@ export async function listCashFundChannels(): Promise<{ value: string; label: st
   return listCashFundChannelsCached();
 }
 
+const renameCashFundChannelSchema = z.object({
+  from: z.string().min(1).max(100),
+  to: z.string().min(1).max(100),
+});
+
+/** Đổi mã tài khoản quỹ trên cả chứng từ và số dư đầu kỳ. */
+export async function renameCashFundChannel(input: z.infer<typeof renameCashFundChannelSchema>) {
+  const parsed = renameCashFundChannelSchema.parse(input);
+  const from = parsed.from.trim();
+  const to = parsed.to.trim();
+  if (!from || !to) throw new Error("Thiếu mã tài khoản.");
+  if (from.toLowerCase() === to.toLowerCase()) return;
+  const supabase = createSupabaseAdmin();
+
+  const { data: dupOpen, error: dupOpenErr } = await supabase
+    .from("cash_account_opening_balances")
+    .select("id")
+    .eq("payment_channel", to)
+    .limit(1);
+  if (dupOpenErr) throw new Error(dupOpenErr.message);
+  if ((dupOpen ?? []).length > 0) throw new Error("Mã tài khoản mới đã tồn tại.");
+
+  const { data: dupTx, error: dupTxErr } = await supabase
+    .from("cash_transactions")
+    .select("id")
+    .eq("payment_channel", to)
+    .limit(1);
+  if (dupTxErr) throw new Error(dupTxErr.message);
+  if ((dupTx ?? []).length > 0) throw new Error("Mã tài khoản mới đã tồn tại trong chứng từ.");
+
+  const { error: txErr } = await supabase
+    .from("cash_transactions")
+    .update({ payment_channel: to })
+    .eq("payment_channel", from);
+  if (txErr) throw new Error(txErr.message);
+
+  const { error: openErr } = await supabase
+    .from("cash_account_opening_balances")
+    .update({ payment_channel: to })
+    .eq("payment_channel", from);
+  if (openErr) throw new Error(openErr.message);
+
+  revalidatePath("/accounting/cash");
+  revalidateTag("cash-fund-channels", "max");
+}
+
+/** Xoá tài khoản quỹ nếu chưa phát sinh giao dịch. */
+export async function deleteCashFundChannel(paymentChannel: string) {
+  const channel = paymentChannel.trim();
+  if (!channel) throw new Error("Thiếu mã tài khoản.");
+  const supabase = createSupabaseAdmin();
+
+  const { data: usedTx, error: usedErr } = await supabase
+    .from("cash_transactions")
+    .select("id")
+    .eq("payment_channel", channel)
+    .limit(1);
+  if (usedErr) throw new Error(usedErr.message);
+  if ((usedTx ?? []).length > 0) {
+    throw new Error("Tài khoản đã có chứng từ, không thể xoá.");
+  }
+
+  const { error } = await supabase
+    .from("cash_account_opening_balances")
+    .delete()
+    .eq("payment_channel", channel);
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/accounting/cash");
+  revalidateTag("cash-fund-channels", "max");
+}
+
 export async function createCashTransaction(input: z.infer<typeof cashSchema>): Promise<{ id: string }> {
   const supabase = createSupabaseAdmin();
   const parsed = parseCashPayload(input);

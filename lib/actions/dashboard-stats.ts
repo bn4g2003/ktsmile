@@ -83,8 +83,8 @@ async function computeDashboardCharts(year: number, month: number): Promise<Dash
   ] = await Promise.all([
     supabase.from("lab_orders").select("status"),
     supabase
-      .from("v_products_admin_grid")
-      .select("product_code:code, product_name:name, quantity_on_hand, unit_price")
+      .from("v_material_stock")
+      .select("material_id, product_id, material_code, material_name, quantity_on_hand")
       .order("quantity_on_hand", { ascending: false })
       .limit(12),
     supabase
@@ -161,12 +161,37 @@ async function computeDashboardCharts(year: number, month: number): Promise<Dash
     .map(([status, count]) => ({ status, count }))
     .sort((a, b) => b.count - a.count);
 
-  const topStock: TopStockRow[] = (stockRes.data ?? []).map((r: Record<string, unknown>) => ({
-    product_code: String(r.product_code ?? ""),
-    product_name: String(r.product_name ?? ""),
-    quantity_on_hand: Number(r.quantity_on_hand ?? 0),
-    stock_value: Number(r.quantity_on_hand ?? 0) * Number(r.unit_price ?? 0),
-  }));
+  const materialRows = (stockRes.data ?? []) as Record<string, unknown>[];
+  const materialProductIds = [
+    ...new Set(
+      materialRows
+        .map((r) => (r["product_id"] as string | null | undefined) ?? null)
+        .filter((id): id is string => Boolean(id)),
+    ),
+  ];
+  const materialUnitPriceByProductId = new Map<string, number>();
+  if (materialProductIds.length > 0) {
+    const { data: materialPriceRows, error: materialPriceErr } = await supabase
+      .from("products")
+      .select("id, unit_price")
+      .in("id", materialProductIds);
+    if (materialPriceErr) throw new Error(materialPriceErr.message);
+    for (const row of (materialPriceRows ?? []) as Record<string, unknown>[]) {
+      materialUnitPriceByProductId.set(String(row["id"] ?? ""), Number(row["unit_price"] ?? 0));
+    }
+  }
+
+  const topStock: TopStockRow[] = materialRows.map((r) => {
+    const productId = String(r["product_id"] ?? "");
+    const quantityOnHand = Number(r["quantity_on_hand"] ?? 0);
+    const unitPrice = materialUnitPriceByProductId.get(productId) ?? 0;
+    return {
+      product_code: String(r["material_code"] ?? ""),
+      product_name: String(r["material_name"] ?? ""),
+      quantity_on_hand: quantityOnHand,
+      stock_value: quantityOnHand * unitPrice,
+    };
+  });
 
   const revByMonth = Array.from({ length: 12 }, () => 0);
   const expByMonth = Array.from({ length: 12 }, () => 0);
