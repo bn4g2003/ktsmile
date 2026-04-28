@@ -2,6 +2,9 @@ import Link from "next/link";
 import { getDashboardCharts } from "@/lib/actions/dashboard-stats";
 import { DashboardMiniCharts } from "@/components/modules/dashboard/dashboard-mini-charts";
 import { DashboardPeriodFilter } from "@/components/modules/dashboard/dashboard-period-filter";
+import { getCurrentUser } from "@/lib/auth/current-user";
+import { redirect } from "next/navigation";
+import { resolvePermissionPreset, NAV_PERMISSION_RULES } from "@/lib/auth/permission-presets";
 
 function formatMoney(value: number) {
   return `${Math.round(value || 0).toLocaleString("vi-VN")} đ`;
@@ -39,6 +42,21 @@ export default async function HomePage({
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const params = await searchParams;
+  
+  // 1. Kiểm tra quyền Server-side
+  const user = await getCurrentUser();
+  if (!user) redirect("/login");
+
+  const navPermission = resolvePermissionPreset(user.permissions);
+  const allowedPaths = user.nav_allowed_paths ?? (NAV_PERMISSION_RULES[navPermission] ?? []);
+  const canSeeDashboard = allowedPaths.includes("*") || allowedPaths.includes("/");
+
+  if (!canSeeDashboard) {
+    // Nếu không có quyền xem Dashboard, đẩy sang trang đầu tiên được phép
+    const firstPath = allowedPaths.find(p => p !== "*" && p !== "/");
+    redirect(firstPath || "/login");
+  }
+
   const monthParam = Number(Array.isArray(params.month) ? params.month[0] : params.month);
   const yearParam = Number(Array.isArray(params.year) ? params.year[0] : params.year);
   const now = new Date();

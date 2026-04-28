@@ -54,16 +54,18 @@ export async function getAppRoleNavPaths(roleId: string): Promise<string[]> {
 
 export async function saveAppRoleNavPaths(roleId: string, paths: string[]) {
   const uniq = [...new Set(paths.map((p) => p.trim()).filter(Boolean))];
-  assertNavPaths(uniq);
+  // Tự động lọc bỏ các đường dẫn cũ không còn tồn tại trong catalog để tránh lỗi validation
+  const filtered = uniq.filter((p) => p === SHELL_NAV_STAR || allowedPathSet.has(p));
+  assertNavPaths(filtered);
   const supabase = createSupabaseAdmin();
   const { error: delErr } = await supabase.from("app_role_nav_paths").delete().eq("role_id", roleId);
   if (delErr) throw new Error(delErr.message);
-  if (uniq.length === 0) {
+  if (filtered.length === 0) {
     revalidatePath("/master/employees");
     return;
   }
   const { error: insErr } = await supabase.from("app_role_nav_paths").insert(
-    uniq.map((path) => ({ role_id: roleId, path })),
+    filtered.map((path) => ({ role_id: roleId, path })),
   );
   if (insErr) throw new Error(insErr.message);
   revalidatePath("/master/employees");
