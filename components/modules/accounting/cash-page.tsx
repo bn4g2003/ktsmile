@@ -101,6 +101,7 @@ export function CashPage() {
   const [accountPending, setAccountPending] = React.useState(false);
   const [editingAccount, setEditingAccount] = React.useState<string | null>(null);
   const [editingAccountValue, setEditingAccountValue] = React.useState("");
+  const [showChannels, setShowChannels] = React.useState(false);
 
   const patchGridFilter = React.useCallback((key: string, val: string) => {
     setGridFilters((prev) => {
@@ -112,12 +113,12 @@ export function CashPage() {
   }, []);
 
   React.useEffect(() => {
-    void listCustomerPartnerPicker().then(setPartners).catch(() => {});
-    void listSupplierPicker().then(setSuppliers).catch(() => {});
+    void listCustomerPartnerPicker().then(setPartners).catch(() => { });
+    void listSupplierPicker().then(setSuppliers).catch(() => { });
   }, []);
 
   React.useEffect(() => {
-    void listCashFundChannels().then(setFundChannels).catch(() => {});
+    void listCashFundChannels().then(setFundChannels).catch(() => { });
   }, [gridReload]);
 
   React.useEffect(() => {
@@ -706,9 +707,6 @@ export function CashPage() {
             >
               {fundSummaryLoading ? "Đang tải thống kê…" : "Tải thống kê quỹ"}
             </Button>
-            <Button type="button" variant="primary" size="sm" onClick={() => void saveOpeningBalances()} disabled={savingOpening}>
-              {savingOpening ? "Đang lưu…" : "Lưu số dư"}
-            </Button>
           </div>
 
           {fundSummaryErr ? <p className="text-sm text-[#b91c1c]">{fundSummaryErr}</p> : null}
@@ -737,49 +735,61 @@ export function CashPage() {
             </div>
           ) : null}
 
-          <div className="space-y-2">
-            {openingBalances.map((b, i) => (
-              <div key={i} className="grid gap-2 rounded-[var(--radius-md)] border border-[var(--border-ghost)] p-3 sm:grid-cols-2">
-                <div className="grid gap-1">
-                  <Label htmlFor={`fund-chan-${i}`}>Kênh quỹ</Label>
-                  <Select
-                    id={`fund-chan-${i}`}
-                    value={b.channel}
-                    onChange={(e) => {
-                      const nb = [...openingBalances];
-                      nb[i]!.channel = e.target.value;
-                      setOpeningBalances(nb);
-                    }}
-                  >
-                    {fundChannels.map((ch) => (
-                      <option key={ch.value} value={ch.value}>
-                        {ch.label}
-                      </option>
-                    ))}
-                  </Select>
-                </div>
-                <div className="grid gap-1">
-                  <Label htmlFor={`fund-amt-${i}`}>Số dư đầu kỳ</Label>
-                  <CurrencyInput
-                    id={`fund-amt-${i}`}
-                    value={b.amount}
-                    onChange={(v) => {
-                      const nb = [...openingBalances];
-                      nb[i]!.amount = v;
-                      setOpeningBalances(nb);
-                    }}
-                  />
-                </div>
-              </div>
-            ))}
+          <div className="flex flex-col gap-2">
             <Button
               type="button"
               variant="ghost"
               size="sm"
-              onClick={() => setOpeningBalances([...openingBalances, { channel: fundChannels[0]?.value ?? "cash", amount: "0" }])}
+              className="w-fit px-0 text-blue-600 hover:bg-transparent hover:text-blue-700 dark:text-blue-400"
+              onClick={() => setShowChannels(!showChannels)}
             >
-              + Thêm kênh quỹ
+              {showChannels ? (
+                <>Thu gọn danh sách kênh quỹ ▴</>
+              ) : (
+                <>Cấu hình / Xem danh sách kênh quỹ ▾</>
+              )}
             </Button>
+
+            {showChannels && (
+              <div className="space-y-2 overflow-hidden transition-all duration-300">
+                {openingBalances.map((b, i) => (
+                  <div key={i} className="rounded-[var(--radius-md)] border border-[var(--border-ghost)] p-3">
+                    <div className="grid gap-1">
+                      <Label htmlFor={`fund-chan-${i}`}>Kênh quỹ</Label>
+                      <Select
+                        id={`fund-chan-${i}`}
+                        value={b.channel}
+                        onChange={(e) => {
+                          const nb = [...openingBalances];
+                          nb[i]!.channel = e.target.value;
+                          setOpeningBalances(nb);
+                        }}
+                        className="w-full"
+                      >
+                        {fundChannels.map((ch) => (
+                          <option key={ch.value} value={ch.value}>
+                            {ch.label}
+                          </option>
+                        ))}
+                      </Select>
+                    </div>
+                  </div>
+                ))}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() =>
+                    setOpeningBalances([
+                      ...openingBalances,
+                      { channel: fundChannels[0]?.value ?? "cash", amount: "0" },
+                    ])
+                  }
+                >
+                  + Thêm kênh quỹ
+                </Button>
+              </div>
+            )}
           </div>
 
           <ExcelDataGrid<CashRow>

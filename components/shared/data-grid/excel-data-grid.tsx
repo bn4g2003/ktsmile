@@ -63,12 +63,14 @@ function GridMultiSelectFilter({
   valueRaw,
   onCommit,
   triggerId,
+  renderOption,
 }: {
   filterKey: string;
   options: { value: string; label: string }[];
   valueRaw: string;
   onCommit: (key: string, encoded: string) => void;
   triggerId: string;
+  renderOption?: (option: { value: string; label: string }) => React.ReactNode;
 }) {
   const selected = React.useMemo(() => new Set(decodeMultiFilter(valueRaw)), [valueRaw]);
   const toggle = (val: string, checked: boolean) => {
@@ -124,7 +126,7 @@ function GridMultiSelectFilter({
             onCheckedChange={(c) => toggle(o.value, c === true)}
             onSelect={(e) => e.preventDefault()}
           >
-            {o.label}
+            {renderOption ? renderOption(o) : o.label}
           </DropdownMenuCheckboxItem>
         ))}
       </DropdownMenuContent>
@@ -628,6 +630,7 @@ export function ExcelDataGrid<T>({
                           valueRaw={filters[fk] ?? ""}
                           onCommit={setFilter}
                           triggerId={"dg-filter-" + String(col.id)}
+                          renderOption={col.columnDef.meta?.renderFilterOption}
                         />
                       ) : ft === "date_range" ? (
                         <div className="flex items-center gap-2">
@@ -788,6 +791,7 @@ export function ExcelDataGrid<T>({
                             valueRaw={filters[fk] ?? ""}
                             onCommit={setFilter}
                             triggerId={"dg-th-" + String(col.id)}
+                            renderOption={col.columnDef.meta?.renderFilterOption}
                           />
                         </td>
                       );

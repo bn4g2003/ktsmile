@@ -57,6 +57,7 @@ import { LAB_ORDER_ACCESSORY_DEFS, parseAccessoriesJson } from "@/lib/lab/order-
 import { LabToothPicker } from "@/components/modules/orders/lab-tooth-picker";
 import { LabOrderPrintButton } from "@/components/shared/reports/lab-order-print-button";
 import { DeliveryNotePrintButton } from "@/components/shared/reports/delivery-note-print-button";
+import { cn } from "@/lib/utils/cn";
 import { importLabOrdersFromExcel } from "@/lib/actions/lab-orders-import";
 import { parseToothPositionsToSet, detectArchConnection } from "@/lib/dental/fdi-teeth";
 import { CurrencyInput } from "@/components/ui/currency-input";
@@ -108,6 +109,30 @@ function toDateTimeLocal(iso: string | null | undefined): string {
     ":" +
     pad(d.getMinutes())
   );
+}
+
+function CoordReviewStatusBadge({ status }: { status: string }) {
+  const label = formatCoordReviewStatus(status);
+  const base = "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium";
+  if (status === "pending") {
+    return <span className={cn(base, "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400")}>{label}</span>;
+  }
+  if (status === "verified") {
+    return <span className={cn(base, "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400")}>{label}</span>;
+  }
+  return <span>{label}</span>;
+}
+
+function LabOrderCategoryBadge({ category }: { category: string }) {
+  const label = labOrderCategoryOptions.find((o) => o.value === category)?.label ?? category;
+  const base = "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium";
+  if (category === "new_work") {
+    return <span className={cn(base, "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400")}>{label}</span>;
+  }
+  if (category === "warranty" || category === "repair") {
+    return <span className={cn(base, "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400")}>{label}</span>;
+  }
+  return <span>{label}</span>;
 }
 
 function fromDateTimeLocal(s: string): string | null {
@@ -1150,8 +1175,20 @@ export function OrdersPage() {
           filterKey: "coord_review_status",
           filterType: "select",
           filterOptions: [...coordReviewStatusOptions],
+          renderFilterOption: (o: { value: string; label: string }) => (
+            <div className="flex items-center gap-2">
+              <span className={cn(
+                "h-2 w-2 shrink-0 rounded-full",
+                o.value === "pending" ? "bg-red-500" : o.value === "verified" ? "bg-green-500" : "bg-slate-300"
+              )} />
+              <span className={cn(
+                "font-medium",
+                o.value === "pending" ? "text-red-600" : o.value === "verified" ? "text-green-600" : ""
+              )}>{o.label}</span>
+            </div>
+          ),
         },
-        cell: ({ getValue }) => formatCoordReviewStatus(String(getValue())),
+        cell: ({ getValue }) => <CoordReviewStatusBadge status={String(getValue())} />,
       },
       {
         accessorKey: "prescription_slip_code",
@@ -1197,11 +1234,20 @@ export function OrdersPage() {
           filterKey: "order_category",
           filterType: "select",
           filterOptions: [...labOrderCategoryOptions],
+          renderFilterOption: (o: { value: string; label: string }) => (
+            <div className="flex items-center gap-2">
+              <span className={cn(
+                "h-2 w-2 shrink-0 rounded-full",
+                o.value === "new_work" ? "bg-green-500" : "bg-red-500"
+              )} />
+              <span className={cn(
+                "font-medium",
+                o.value === "new_work" ? "text-green-600" : "text-red-600"
+              )}>{o.label}</span>
+            </div>
+          ),
         },
-        cell: ({ getValue }) => {
-          const val = String(getValue());
-          return labOrderCategoryOptions.find((o) => o.value === val)?.label ?? val;
-        },
+        cell: ({ getValue }) => <LabOrderCategoryBadge category={String(getValue())} />,
       },
       {
         accessorKey: "patient_year_of_birth",
