@@ -735,6 +735,7 @@ export function CashPage() {
             </div>
           ) : null}
 
+          {/* 
           <div className="flex flex-col gap-2">
             <Button
               type="button"
@@ -791,6 +792,7 @@ export function CashPage() {
               </div>
             )}
           </div>
+          */}
 
           <ExcelDataGrid<CashRow>
             moduleId={"cash_transactions_fund_" + focusFundChannel}
