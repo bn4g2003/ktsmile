@@ -1,5 +1,7 @@
 "use client";
 
+import { cn } from "@/lib/utils/cn";
+
 import Link from "next/link";
 import { type ColumnDef } from "@tanstack/react-table";
 import * as React from "react";
@@ -60,6 +62,18 @@ const postingOpts = [
 type NvlFormLine = { key: string; product_id: string; qty: string; price: string };
 type OutboundFormLine = { key: string; product_id: string; qty: string };
 type InventoryDocTab = "inbound" | "outbound";
+
+function InventoryPostingStatusBadge({ status }: { status: string }) {
+  const label = formatPostingStatus(status);
+  const base = "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium";
+  if (status === "draft") {
+    return <span className={cn(base, "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400")}>{label}</span>;
+  }
+  if (status === "posted") {
+    return <span className={cn(base, "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400")}>{label}</span>;
+  }
+  return <span>{label}</span>;
+}
 
 export function InventoryDocumentsPage({ initialTab = "inbound" }: { initialTab?: InventoryDocTab }) {
   const router = useRouter();
@@ -416,8 +430,20 @@ export function InventoryDocumentsPage({ initialTab = "inbound" }: { initialTab?
           filterKey: "posting_status",
           filterType: "select",
           filterOptions: postingOpts,
+          renderFilterOption: (o: { value: string; label: string }) => (
+            <div className="flex items-center gap-2">
+              <span className={cn(
+                "h-2 w-2 shrink-0 rounded-full",
+                o.value === "draft" ? "bg-red-500" : o.value === "posted" ? "bg-green-500" : "bg-slate-300"
+              )} />
+              <span className={cn(
+                "font-medium",
+                o.value === "draft" ? "text-red-600" : o.value === "posted" ? "text-green-600" : ""
+              )}>{o.label}</span>
+            </div>
+          ),
         },
-        cell: ({ getValue }) => formatPostingStatus(String(getValue())),
+        cell: ({ getValue }) => <InventoryPostingStatusBadge status={String(getValue())} />,
       },
       { accessorKey: "supplier_code", header: "Mã NCC", meta: { filterKey: "supplier_code", filterType: "text" } },
       { accessorKey: "supplier_name", header: "Nhà cung cấp", meta: { filterKey: "supplier_name", filterType: "text" } },
