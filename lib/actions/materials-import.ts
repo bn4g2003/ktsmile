@@ -1,9 +1,13 @@
 "use server";
 
 import * as XLSX from "xlsx";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { parseMaterialsPriceSheet } from "@/lib/import/parse-materials-excel";
+import {
+  parseMaterialsPriceSheet,
+  supplierNameMatchKeys,
+} from "@/lib/import/parse-materials-excel";
 import { createSupabaseAdmin } from "@/lib/supabase/server";
 
 export type ImportMaterialsResult = {
@@ -26,10 +30,57 @@ const rowSchema = z.object({
   name: z.string().min(1).max(500),
   unit: z.string().min(1).max(50),
   unit_price: z.coerce.number().min(0),
+  is_active: z.boolean(),
 });
+
+type ValidImportRow = z.infer<typeof rowSchema> & { supplierId: string | null };
 
 function normKey(s: string) {
   return s.trim().toUpperCase();
+}
+
+function buildSupplierLookup(suppliers: { id: string; name: string | null }[]): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const s of suppliers) {
+    for (const k of supplierNameMatchKeys(String(s.name ?? ""))) {
+      if (k && !map.has(k)) map.set(k, s.id);
+    }
+  }
+  return map;
+}
+
+function resolveSupplierId(excelName: string, lookup: Map<string, string>): string | null {
+  for (const k of supplierNameMatchKeys(excelName)) {
+    const id = lookup.get(k);
+    if (id) return id;
+  }
+  return null;
+}
+
+async function applyPrimaryMaterialSupplier(
+  supabase: SupabaseClient,
+  materialId: string,
+  supplierId: string,
+  referencePurchasePrice: number,
+) {
+  const { error: e1 } = await supabase
+    .from("material_suppliers")
+    .update({ is_primary: false })
+    .eq("material_id", materialId);
+  if (e1) throw new Error(e1.message);
+  const { error: e2 } = await supabase.from("material_suppliers").upsert(
+    {
+      material_id: materialId,
+      supplier_id: supplierId,
+      supplier_sku: null,
+      reference_purchase_price: referencePurchasePrice,
+      lead_time_days: null,
+      notes: null,
+      is_primary: true,
+    },
+    { onConflict: "material_id,supplier_id" },
+  );
+  if (e2) throw new Error(e2.message);
 }
 
 export async function importMaterialsFromExcel(formData: FormData): Promise<ImportMaterialsResult> {
@@ -71,16 +122,39 @@ export async function importMaterialsFromExcel(formData: FormData): Promise<Impo
     };
   }
 
+  const supabase = createSupabaseAdmin();
+  const { data: supplierRows, error: supErr } = await supabase.from("suppliers").select("id, name");
+  if (supErr) {
+    return { ok: false, inserted: 0, updated: 0, message: supErr.message };
+  }
+  const supplierLookup = buildSupplierLookup((supplierRows ?? []) as { id: string; name: string | null }[]);
+
   const validationErrors: string[] = [...parsed.errors];
-  const lastByCode = new Map<string, z.infer<typeof rowSchema>>();
+  const lastByCode = new Map<string, ValidImportRow>();
 
   for (const pr of parsed.rows) {
+    let supplierId: string | null = null;
+    if (pr.nccColumnPresent) {
+      supplierId = resolveSupplierId(pr.primary_supplier_trimmed, supplierLookup);
+      if (!supplierId) {
+        validationErrors.push(
+          "Dòng " +
+            pr.sourceRow +
+            ": không tìm thấy NCC «" +
+            pr.primary_supplier_trimmed +
+            "» trong danh mục (bỏ qua).",
+        );
+        continue;
+      }
+    }
+
     const displayName = mergeNotesIntoName(pr.name, pr.notes);
     const vr = rowSchema.safeParse({
       code: pr.code.trim(),
       name: displayName,
       unit: pr.unit.trim(),
       unit_price: pr.unit_price,
+      is_active: pr.is_active,
     });
     if (!vr.success) {
       validationErrors.push(
@@ -94,7 +168,7 @@ export async function importMaterialsFromExcel(formData: FormData): Promise<Impo
         "Dòng " + pr.sourceRow + ": trùng mã " + vr.data.code + " trong file (giữ bản cuối).",
       );
     }
-    lastByCode.set(k, vr.data);
+    lastByCode.set(k, { ...vr.data, supplierId });
   }
 
   const validRows = [...lastByCode.values()];
@@ -111,7 +185,6 @@ export async function importMaterialsFromExcel(formData: FormData): Promise<Impo
     };
   }
 
-  const supabase = createSupabaseAdmin();
   const { data: existing, error: exErr } = await supabase
     .from("materials")
     .select("id, code, legacy_product_id");
@@ -126,9 +199,12 @@ export async function importMaterialsFromExcel(formData: FormData): Promise<Impo
     legacyByMaterialId.set(m.id as string, (m.legacy_product_id as string | null) ?? null);
   }
 
-  const inserts: z.infer<typeof rowSchema>[] = [];
-  const updates: { materialId: string; legacyId: string | null; row: z.infer<typeof rowSchema> }[] =
-    [];
+  const inserts: ValidImportRow[] = [];
+  const updates: {
+    materialId: string;
+    legacyId: string | null;
+    row: ValidImportRow;
+  }[] = [];
 
   for (const row of validRows) {
     const k = normKey(row.code);
@@ -155,7 +231,7 @@ export async function importMaterialsFromExcel(formData: FormData): Promise<Impo
         unit: r.unit.trim(),
         unit_price: r.unit_price,
         warranty_years: null as null,
-        is_active: true,
+        is_active: r.is_active,
         product_usage: "inventory" as const,
       }));
 
@@ -166,7 +242,7 @@ export async function importMaterialsFromExcel(formData: FormData): Promise<Impo
       if (insErr) throw new Error(insErr.message);
       const prods = (newProds ?? []) as { id: string; code: string }[];
 
-      const byNormCode = new Map<string, z.infer<typeof rowSchema>>();
+      const byNormCode = new Map<string, ValidImportRow>();
       for (const r of part) {
         byNormCode.set(normKey(r.code), r);
       }
@@ -179,12 +255,24 @@ export async function importMaterialsFromExcel(formData: FormData): Promise<Impo
           code: src.code.trim(),
           name: src.name.trim(),
           unit: src.unit.trim(),
-          is_active: true,
+          is_active: src.is_active,
         };
       });
 
-      const { error: matErr } = await supabase.from("materials").insert(materialPayloads);
+      const { data: newMats, error: matErr } = await supabase
+        .from("materials")
+        .insert(materialPayloads)
+        .select("id, code");
       if (matErr) throw new Error(matErr.message);
+
+      for (const m of (newMats ?? []) as { id: string; code: string }[]) {
+        const src = byNormCode.get(normKey(m.code));
+        if (!src) throw new Error("Lệch map mã sau khi chèn materials.");
+        if (src.supplierId) {
+          await applyPrimaryMaterialSupplier(supabase, m.id, src.supplierId, src.unit_price);
+        }
+      }
+
       inserted += part.length;
     }
 
@@ -194,7 +282,7 @@ export async function importMaterialsFromExcel(formData: FormData): Promise<Impo
         code: r.code.trim(),
         name: r.name.trim(),
         unit: r.unit.trim(),
-        is_active: true,
+        is_active: r.is_active,
       };
       const { error: me } = await supabase.from("materials").update(patchMat).eq("id", u.materialId);
       if (me) throw new Error(me.message);
@@ -207,11 +295,15 @@ export async function importMaterialsFromExcel(formData: FormData): Promise<Impo
             name: r.name.trim(),
             unit: r.unit.trim(),
             unit_price: r.unit_price,
-            is_active: true,
+            is_active: r.is_active,
             product_usage: "inventory",
           })
           .eq("id", u.legacyId);
         if (pe) throw new Error(pe.message);
+      }
+
+      if (r.supplierId) {
+        await applyPrimaryMaterialSupplier(supabase, u.materialId, r.supplierId, r.unit_price);
       }
       updated += 1;
     }
@@ -228,6 +320,7 @@ export async function importMaterialsFromExcel(formData: FormData): Promise<Impo
   revalidatePath("/master/prices");
   revalidatePath("/inventory/stock");
   revalidatePath("/orders");
+  revalidatePath("/master/suppliers");
 
   const parts = [
     inserted ? "Thêm " + inserted + " NVL" : null,

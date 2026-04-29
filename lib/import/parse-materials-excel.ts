@@ -1,6 +1,7 @@
 /**
- * Bảng giá NVL: STT | [MÃ NVL] | TÊN VẬT TƯ | DVT | GIÁ (VNĐ) | [GHI CHÚ]
- * Có thể dùng cùng khung cột với bảng giá SP (Tên sản phẩm / ĐVT / Giá); không đọc cột bảo hành.
+ * NVL xuất Excel / bảng giá:
+ * - Mẫu đầy đủ: Mã NVL | Tên NVL | ĐVT | Đơn giá | Tồn kho (bỏ qua) | NCC chính | Hoạt động
+ * - Mẫu cũ: STT | [Mã] | Tên vật tư / SP | ĐVT | Giá | [Ghi chú] — không có cột NCC thì nhập không gắn NCC.
  */
 
 import { normalizeHeaderCell } from "@/lib/import/parse-partners-excel";
@@ -14,6 +15,11 @@ export type ParsedMaterialImportRow = {
   unit: string;
   unit_price: number;
   notes: string | null;
+  /** Có cột «NCC chính» trong tiêu đề — bắt buộc điền và khớp danh mục NCC. */
+  nccColumnPresent: boolean;
+  /** Tên NCC từ Excel (đã trim). */
+  primary_supplier_trimmed: string;
+  is_active: boolean;
 };
 
 function cellStr(v: unknown): string {
@@ -22,13 +28,25 @@ function cellStr(v: unknown): string {
   return String(v).trim();
 }
 
+function parseActiveCell(v: unknown, defaultActive: boolean): boolean {
+  if (v == null || cellStr(v) === "") return defaultActive;
+  if (typeof v === "boolean") return v;
+  const s = cellStr(v).toUpperCase().normalize("NFD").replace(/\p{M}/gu, "");
+  if (s === "TRUE" || s === "1" || s === "YES" || s === "Y" || s === "CO") return true;
+  if (s === "FALSE" || s === "0" || s === "NO" || s === "N" || s === "KHONG") return false;
+  return defaultActive;
+}
+
 type MaterialColumnMap = {
   stt?: number;
-  /** Mã NVL ghi rõ trên sheet (tuỳ chọn). */
   code?: number;
   name: number;
   unit: number;
   price: number;
+  /** Tồn kho — chỉ nhận diện, không dùng khi nhập. */
+  stock?: number;
+  ncc?: number;
+  active?: number;
   notes?: number;
 };
 
@@ -44,6 +62,32 @@ function mapMaterialHeaderRow(row: unknown[]): MaterialColumnMap | null {
     }
     if (col.notes === undefined && (n.includes("GHI CHU") || n === "GHICHU")) {
       col.notes = i;
+      continue;
+    }
+    if (
+      col.stock === undefined &&
+      (n.includes("TON KHO") || n.includes("TONKHO") || n === "SL TON" || n.includes("SO LUONG TON"))
+    ) {
+      col.stock = i;
+      continue;
+    }
+    if (
+      col.active === undefined &&
+      (n === "HOAT DONG" ||
+        n.includes("KICH HOAT") ||
+        n === "ACTIVE" ||
+        (n.includes("TRANG") && n.includes("THAI")))
+    ) {
+      col.active = i;
+      continue;
+    }
+    if (
+      col.ncc === undefined &&
+      ((n.includes("NCC") && n.includes("CHINH")) ||
+        n.includes("NHA CUNG CAP CHINH") ||
+        n === "NCC CHINH")
+    ) {
+      col.ncc = i;
       continue;
     }
     if (
@@ -134,6 +178,8 @@ export function parseMaterialsPriceSheet(aoa: unknown[][]): {
   const col = mapMaterialHeaderRow(headerRow);
   if (!col) throw new Error("Không map được cột từ tiêu đề.");
 
+  const nccColumnPresent = col.ncc !== undefined;
+
   const rows: ParsedMaterialImportRow[] = [];
   const errors: string[] = [];
   let ordinal = 0;
@@ -174,6 +220,14 @@ export function parseMaterialsPriceSheet(aoa: unknown[][]): {
     const notesRaw = pick(line, col.notes);
     const notes = notesRaw.trim() ? notesRaw.trim().slice(0, 500) : null;
 
+    const primary_supplier_trimmed = nccColumnPresent ? pick(line, col.ncc).trim() : "";
+    const is_active = col.active !== undefined ? parseActiveCell(line[col.active!], true) : true;
+
+    if (nccColumnPresent && primary_supplier_trimmed === "") {
+      errors.push("Dòng " + (r + 1) + ": thiếu NCC chính (bỏ qua).");
+      continue;
+    }
+
     rows.push({
       sourceRow: r + 1,
       code,
@@ -182,8 +236,21 @@ export function parseMaterialsPriceSheet(aoa: unknown[][]): {
       unit: unit.slice(0, 50),
       unit_price: price,
       notes,
+      nccColumnPresent,
+      primary_supplier_trimmed,
+      is_active,
     });
   }
 
   return { rows, errors };
+}
+
+/** Chuẩn hoá tên NCC để so khớp (giống tiêu đề cột + thêm biến thể không dấu cách). */
+export function supplierNameMatchKeys(label: string): string[] {
+  const n = normalizeHeaderCell(label);
+  const compact = n.replace(/\s+/g, "");
+  const out: string[] = [];
+  if (n) out.push(n);
+  if (compact && compact !== n) out.push(compact);
+  return out;
 }
