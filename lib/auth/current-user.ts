@@ -1,7 +1,5 @@
-"use server";
-
 import { cookies } from "next/headers";
-import { unstable_cache } from "next/cache";
+import { cache } from "react";
 import { createSupabaseAdmin } from "@/lib/supabase/server";
 import { AUTH_SESSION_COOKIE } from "@/lib/auth/session";
 
@@ -17,50 +15,47 @@ export type CurrentUser = {
   app_role_label: string | null;
 };
 
-const getCurrentUserByEmployeeIdCached = unstable_cache(
-  async (employeeId: string): Promise<CurrentUser | null> => {
-    const supabase = createSupabaseAdmin();
-    const { data, error } = await supabase
-      .from("employees")
-      .select("id, code, full_name, email, permissions, is_active, app_role_id")
-      .eq("id", employeeId)
-      .maybeSingle();
-    if (error) return null;
-    if (!data || !Boolean(data["is_active"])) return null;
+/** Gộp truy vấn trong cùng một request RSC (layout + page); không dùng unstable_cache để tránh lệch cache sau refresh/mutation. */
+const loadCurrentUserByEmployeeId = cache(async (employeeId: string): Promise<CurrentUser | null> => {
+  const supabase = createSupabaseAdmin();
+  const { data, error } = await supabase
+    .from("employees")
+    .select("id, code, full_name, email, permissions, is_active, app_role_id")
+    .eq("id", employeeId)
+    .maybeSingle();
+  if (error) return null;
+  if (!data || !Boolean(data["is_active"])) return null;
 
-    let nav_allowed_paths: string[] | null = null;
-    let app_role_label: string | null = null;
-    const appRoleId = (data["app_role_id"] as string | null) ?? null;
-    if (appRoleId) {
-      const [pathsRes, roleRes] = await Promise.all([
-        supabase.from("app_role_nav_paths").select("path").eq("role_id", appRoleId),
-        supabase.from("app_roles").select("name").eq("id", appRoleId).maybeSingle(),
-      ]);
-      if (!pathsRes.error && pathsRes.data) {
-        nav_allowed_paths = pathsRes.data.map((r) => r.path as string);
-      }
-      if (!roleRes.error && roleRes.data) {
-        app_role_label = roleRes.data.name as string;
-      }
+  let nav_allowed_paths: string[] | null = null;
+  let app_role_label: string | null = null;
+  const appRoleId = (data["app_role_id"] as string | null) ?? null;
+  if (appRoleId) {
+    const [pathsRes, roleRes] = await Promise.all([
+      supabase.from("app_role_nav_paths").select("path").eq("role_id", appRoleId),
+      supabase.from("app_roles").select("name").eq("id", appRoleId).maybeSingle(),
+    ]);
+    if (!pathsRes.error && pathsRes.data) {
+      nav_allowed_paths = pathsRes.data.map((r) => r.path as string);
     }
+    if (!roleRes.error && roleRes.data) {
+      app_role_label = roleRes.data.name as string;
+    }
+  }
 
-    return {
-      employee_id: data["id"] as string,
-      code: data["code"] as string,
-      full_name: data["full_name"] as string,
-      email: (data["email"] as string | null) ?? null,
-      permissions: (data["permissions"] as string | null) ?? null,
-      nav_allowed_paths,
-      app_role_label,
-    };
-  },
-  ["current-user-by-id-v1"],
-  { revalidate: 20 },
-);
+  return {
+    employee_id: data["id"] as string,
+    code: data["code"] as string,
+    full_name: data["full_name"] as string,
+    email: (data["email"] as string | null) ?? null,
+    permissions: (data["permissions"] as string | null) ?? null,
+    nav_allowed_paths,
+    app_role_label,
+  };
+});
 
 export async function getCurrentUser(): Promise<CurrentUser | null> {
   const jar = await cookies();
   const employeeId = jar.get(AUTH_SESSION_COOKIE)?.value ?? null;
   if (!employeeId) return null;
-  return getCurrentUserByEmployeeIdCached(employeeId);
+  return loadCurrentUserByEmployeeId(employeeId);
 }
