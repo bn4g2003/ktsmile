@@ -19,6 +19,7 @@ import {
 import { EmployeeRowDetailPanel } from "@/components/modules/master/employee-row-detail-panel";
 import { EmployeesRolesPanel } from "@/components/modules/master/employees-roles-panel";
 import { DetailTabStrip } from "@/components/ui/detail-tab-strip";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
@@ -30,6 +31,7 @@ import {
   createEmployee,
   deleteEmployee,
   listEmployees,
+  suggestNextEmployeeCode,
   updateEmployee,
   type EmployeeRow,
 } from "@/lib/actions/employees";
@@ -66,6 +68,8 @@ export function EmployeesPage() {
   const [fullName, setFullName] = React.useState("");
   const [appRoleId, setAppRoleId] = React.useState("");
   const [salary, setSalary] = React.useState("0");
+  const [suggestingCode, setSuggestingCode] = React.useState(false);
+  const createRequestRef = React.useRef(0);
   const [phone, setPhone] = React.useState("");
   const [email, setEmail] = React.useState("");
   const [address, setAddress] = React.useState("");
@@ -98,9 +102,24 @@ export function EmployeesPage() {
   const openCreate = () => {
     reset();
     setOpen(true);
+    setSuggestingCode(true);
+    const requestId = createRequestRef.current + 1;
+    createRequestRef.current = requestId;
+    void suggestNextEmployeeCode()
+      .then((nextCode) => {
+        if (createRequestRef.current === requestId) setCode(nextCode);
+      })
+      .catch(() => {
+        if (createRequestRef.current === requestId) setCode("");
+      })
+      .finally(() => {
+        if (createRequestRef.current === requestId) setSuggestingCode(false);
+      });
   };
 
   const openEdit = (row: EmployeeRow) => {
+    createRequestRef.current += 1;
+    setSuggestingCode(false);
     setEditing(row);
     setCode(row.code);
     setFullName(row.full_name);
@@ -121,12 +140,18 @@ export function EmployeesPage() {
     e.preventDefault();
     setPending(true);
     setErr(null);
+    const salaryNum = Number(salary);
+    if (!Number.isFinite(salaryNum) || salaryNum < 0) {
+      setErr("Lương cơ bản không hợp lệ.");
+      setPending(false);
+      return;
+    }
     try {
       const payload = {
         code: code.trim(),
         full_name: fullName.trim(),
         app_role_id: appRoleId.trim(),
-        base_salary: Number(salary),
+        base_salary: salaryNum,
         phone: phone.trim() || null,
         email: email.trim() || null,
         address: address.trim() || null,
@@ -319,7 +344,13 @@ export function EmployeesPage() {
             {err ? <p className="text-sm text-[#b91c1c] sm:col-span-2">{err}</p> : null}
             <div className="grid gap-2">
               <Label htmlFor="e-code">Mã NV</Label>
-              <Input id="e-code" value={code} onChange={(e) => setCode(e.target.value)} required />
+              <Input
+                id="e-code"
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                placeholder={suggestingCode ? "Đang tạo mã..." : "VD: NV001"}
+                required
+              />
             </div>
             <div className="grid gap-2">
               <Label htmlFor="e-name">Họ tên</Label>
@@ -346,13 +377,13 @@ export function EmployeesPage() {
             </div>
             <div className="grid gap-2 sm:col-span-2">
               <Label htmlFor="e-sal">Lương cơ bản</Label>
-              <Input
+              <CurrencyInput
                 id="e-sal"
-                type="number"
                 min={0}
                 step={1000}
                 value={salary}
-                onChange={(e) => setSalary(e.target.value)}
+                onChange={setSalary}
+                allowDecimal={false}
                 required
               />
             </div>

@@ -80,6 +80,21 @@ export async function listEmployees(args: ListArgs): Promise<ListResult<Employee
   return { rows: (data ?? []).map((r) => mapEmployeeRow(r as Record<string, unknown>)), total: count ?? 0 };
 }
 
+export async function suggestNextEmployeeCode(): Promise<string> {
+  const supabase = createSupabaseAdmin();
+  const { data, error } = await supabase.from("employees").select("code").ilike("code", "NV%").limit(3000);
+  if (error) throw new Error(error.message);
+
+  let maxSeq = 0;
+  for (const row of data ?? []) {
+    const raw = String((row as { code?: string }).code ?? "").trim().toUpperCase();
+    const m = /^NV(\d+)$/.exec(raw);
+    if (!m) continue;
+    maxSeq = Math.max(maxSeq, Number.parseInt(m[1] ?? "0", 10));
+  }
+  return "NV" + String(maxSeq + 1).padStart(3, "0");
+}
+
 const schema = z.object({
   code: z.string().min(1).max(100),
   full_name: z.string().min(1).max(500),
