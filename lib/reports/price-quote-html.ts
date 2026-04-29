@@ -84,6 +84,7 @@ export function buildPriceQuoteBodyHtml(p: PriceQuotePrintPayload): string {
       <p style="margin:0;font-size:13px;color:#555;line-height:1.6;">
         <strong>Ghi chú:</strong><br/>
         • Giá áp dụng là giá đã bao gồm chiết khấu (nếu có)<br/>
+        • Giá trên đã bao gồm VAT<br/>
         • Giá có thể thay đổi tùy theo số lượng và điều kiện đặt hàng<br/>
         • Báo giá có hiệu lực trong 30 ngày kể từ ngày xuất<br/>
         • Mọi thắc mắc vui lòng liên hệ bộ phận kinh doanh

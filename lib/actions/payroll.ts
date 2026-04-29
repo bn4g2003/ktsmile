@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createSupabaseAdmin } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/auth/current-user";
 import { type AttendanceStatus } from "@/lib/actions/attendance";
 import {
   calculatePayrollLine,
@@ -36,6 +37,39 @@ type Aggregation = {
   ot: number;
 };
 
+type PayrollAccessScope = "self" | "all";
+
+export type PayrollAccessProfile = {
+  employee_id: string;
+  scope: PayrollAccessScope;
+  can_view_all: boolean;
+  can_manage_payroll: boolean;
+};
+
+function resolvePayrollAccessScope(
+  payrollScopeFromRole: "all" | "self" | null | undefined,
+): PayrollAccessScope {
+  if (payrollScopeFromRole === "all") return "all";
+  // Mặc định an toàn: chỉ xem lương của chính mình.
+  return "self";
+}
+
+async function getPayrollAccessContext(): Promise<PayrollAccessProfile> {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("Phiên đăng nhập không hợp lệ.");
+  const scope = resolvePayrollAccessScope(user.payroll_scope);
+  return {
+    employee_id: user.employee_id,
+    scope,
+    can_view_all: scope === "all",
+    can_manage_payroll: scope === "all",
+  };
+}
+
+export async function getPayrollAccessProfile(): Promise<PayrollAccessProfile> {
+  return getPayrollAccessContext();
+}
+
 function monthBounds(year: number, month: number) {
   const y = Math.floor(year);
   const m = Math.floor(month);
@@ -59,21 +93,28 @@ function addByStatus(agg: Aggregation, status: AttendanceStatus) {
 }
 
 export async function calculatePayrollPreview(year: number, month: number, standardDays: number, overtimeRate: number) {
+  const access = await getPayrollAccessContext();
   const supabase = createSupabaseAdmin();
   const { start, end } = monthBounds(year, month);
-  const [{ data: employees, error: empErr }, { data: attendance, error: attErr }] = await Promise.all([
-    supabase
+  let employeesQuery = supabase
       .from("employees")
       .select("id, code, full_name, position, department, base_salary")
       .eq("is_active", true)
       .order("code", { ascending: true })
-      .limit(1000),
-    supabase
+      .limit(1000);
+  if (access.scope === "self") employeesQuery = employeesQuery.eq("id", access.employee_id);
+
+  let attendanceQuery = supabase
       .from("attendance_records")
       .select("employee_id, status, overtime_hours")
       .gte("work_date", start)
       .lte("work_date", end)
-      .limit(10000),
+      .limit(10000);
+  if (access.scope === "self") attendanceQuery = attendanceQuery.eq("employee_id", access.employee_id);
+
+  const [{ data: employees, error: empErr }, { data: attendance, error: attErr }] = await Promise.all([
+    employeesQuery,
+    attendanceQuery,
   ]);
   if (empErr) throw new Error(empErr.message);
   if (attErr) throw new Error(attErr.message);
@@ -139,6 +180,10 @@ const runSchema = z.object({
 });
 
 export async function upsertPayrollRun(input: z.infer<typeof runSchema>) {
+  const access = await getPayrollAccessContext();
+  if (!access.can_manage_payroll) {
+    throw new Error("Bạn chỉ có quyền xem lương của mình.");
+  }
   const supabase = createSupabaseAdmin();
   const payload = runSchema.parse(input);
   const preview = await calculatePayrollPreview(
@@ -297,7 +342,46 @@ export type PayrollRunSettingsRow = PayrollRunSettings & {
 };
 
 export async function listPayrollRuns(limit = 24): Promise<PayrollHistoryRow[]> {
+  const access = await getPayrollAccessContext();
   const supabase = createSupabaseAdmin();
+  if (access.scope === "self") {
+    const { data: ownLines, error: ownErr } = await supabase
+      .from("payroll_lines")
+      .select("run_id, net_salary")
+      .eq("employee_id", access.employee_id)
+      .limit(4000);
+    if (ownErr) throw new Error(ownErr.message);
+    const runIds = [...new Set((ownLines ?? []).map((r) => r["run_id"] as string).filter(Boolean))];
+    if (!runIds.length) return [];
+
+    const ownNetByRun = new Map<string, number>();
+    for (const ln of ownLines ?? []) {
+      const rid = ln["run_id"] as string;
+      ownNetByRun.set(rid, (ownNetByRun.get(rid) ?? 0) + Number(ln["net_salary"] ?? 0));
+    }
+
+    const { data: runs, error } = await supabase
+      .from("payroll_runs")
+      .select("id, year, month, created_at, standard_work_days, overtime_rate_per_hour, family_deduction_amount, dependent_deduction_amount")
+      .in("id", runIds)
+      .order("year", { ascending: false })
+      .order("month", { ascending: false })
+      .limit(limit);
+    if (error) throw new Error(error.message);
+
+    return (runs ?? []).map((r) => ({
+      run_id: r["id"] as string,
+      year: Number(r["year"]),
+      month: Number(r["month"]),
+      created_at: r["created_at"] as string,
+      standard_work_days: Number(r["standard_work_days"] ?? 0),
+      overtime_rate_per_hour: Number(r["overtime_rate_per_hour"] ?? 0),
+      family_deduction_amount: Number(r["family_deduction_amount"] ?? 11_000_000),
+      dependent_deduction_amount: Number(r["dependent_deduction_amount"] ?? 4_400_000),
+      total_net_salary: Math.round(ownNetByRun.get(r["id"] as string) ?? 0),
+    }));
+  }
+
   const { data: runs, error } = await supabase
     .from("payroll_runs")
     .select("id, year, month, created_at, standard_work_days, overtime_rate_per_hour, family_deduction_amount, dependent_deduction_amount")
@@ -333,6 +417,7 @@ export async function listPayrollRuns(limit = 24): Promise<PayrollHistoryRow[]> 
 }
 
 export async function getPayrollRunLines(year: number, month: number): Promise<PayrollRunLineRow[]> {
+  const access = await getPayrollAccessContext();
   const supabase = createSupabaseAdmin();
   const { data: run, error: runErr } = await supabase
     .from("payroll_runs")
@@ -342,7 +427,7 @@ export async function getPayrollRunLines(year: number, month: number): Promise<P
     .maybeSingle();
   if (runErr) throw new Error(runErr.message);
   if (!run) return [];
-  const { data, error } = await supabase
+  let q = supabase
     .from("payroll_lines")
     .select(`
       employee_id,
@@ -360,6 +445,8 @@ export async function getPayrollRunLines(year: number, month: number): Promise<P
     `)
     .eq("run_id", run["id"] as string)
     .limit(2000);
+  if (access.scope === "self") q = q.eq("employee_id", access.employee_id);
+  const { data, error } = await q;
   if (error) throw new Error(error.message);
   return (data ?? []).map((r) => ({
     employee_id: r["employee_id"] as string,
@@ -379,6 +466,7 @@ export async function getPayrollRunLines(year: number, month: number): Promise<P
 export type PayrollRunDetailRow = PayrollComputedLine;
 
 export async function getPayrollRunDetail(year: number, month: number): Promise<PayrollRunDetailRow[]> {
+  const access = await getPayrollAccessContext();
   const supabase = createSupabaseAdmin();
   const { data: run, error: runErr } = await supabase
     .from("payroll_runs")
@@ -389,7 +477,7 @@ export async function getPayrollRunDetail(year: number, month: number): Promise<
   if (runErr) throw new Error(runErr.message);
   if (!run) return [];
 
-  const { data, error } = await supabase
+  let q = supabase
     .from("payroll_lines")
     .select(`
       employee_id,
@@ -414,6 +502,8 @@ export async function getPayrollRunDetail(year: number, month: number): Promise<
     `)
     .eq("run_id", run.id as string)
     .limit(2000);
+  if (access.scope === "self") q = q.eq("employee_id", access.employee_id);
+  const { data, error } = await q;
   if (error) throw new Error(error.message);
 
   return (data ?? [])

@@ -8,7 +8,9 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import {
   deleteAttendance,
+  getAttendanceAccessProfile,
   listAttendanceByMonth,
+  type AttendanceAccessProfile,
   type AttendanceStatus,
   upsertAttendance,
 } from "@/lib/actions/attendance";
@@ -53,6 +55,24 @@ export function AttendancePage() {
   const [ot, setOt] = React.useState("0");
   const [note, setNote] = React.useState("");
   const [err, setErr] = React.useState<string | null>(null);
+  const [access, setAccess] = React.useState<AttendanceAccessProfile | null>(null);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    void getAttendanceAccessProfile()
+      .then((a) => {
+        if (!cancelled) {
+          setAccess(a);
+          if (a.scope === "self") setEmployeeId(a.employee_id);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setAccess(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const reload = React.useCallback(async () => {
     setLoading(true);
@@ -66,13 +86,14 @@ export function AttendancePage() {
       ]);
       setEmployees(empRows);
       setRows(attendanceRows);
-      if (!employeeId && empRows.length > 0) setEmployeeId(empRows[0].id);
+      if (access?.scope === "self") setEmployeeId(access.employee_id);
+      else if (!employeeId && empRows.length > 0) setEmployeeId(empRows[0].id);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Lỗi tải dữ liệu");
     } finally {
       setLoading(false);
     }
-  }, [year, month, employeeId]);
+  }, [year, month, employeeId, access]);
 
   React.useEffect(() => {
     void reload();
@@ -113,6 +134,11 @@ export function AttendancePage() {
         <p className="mt-1 text-sm text-[var(--on-surface-muted)]">
           Nhập theo từng ngày. Nếu cùng nhân sự + ngày đã tồn tại, hệ thống sẽ tự cập nhật bản ghi.
         </p>
+        {access?.can_view_all ? null : (
+          <p className="mt-2 text-sm font-medium text-[var(--on-surface-muted)]">
+            Bạn chỉ có quyền xem/chấm công của chính mình.
+          </p>
+        )}
       </Card>
 
       <Card className="grid gap-4 p-5 sm:grid-cols-4">
@@ -146,16 +172,31 @@ export function AttendancePage() {
       <Card className="p-5">
         <form onSubmit={(e) => void submit(e)} className="grid gap-4 sm:grid-cols-2">
           {err ? <p className="text-sm text-[#b91c1c] sm:col-span-2">{err}</p> : null}
-          <div className="grid gap-2">
-            <Label htmlFor="att-emp">Nhân viên</Label>
-            <Select id="att-emp" value={employeeId} onChange={(e) => setEmployeeId(e.target.value)} required>
-              {employees.map((e) => (
-                <option key={e.id} value={e.id}>
-                  {e.code} - {e.full_name} ({money(e.base_salary)} đ)
-                </option>
-              ))}
-            </Select>
-          </div>
+          {access?.can_manage_all ? (
+            <div className="grid gap-2">
+              <Label htmlFor="att-emp">Nhân viên</Label>
+              <Select id="att-emp" value={employeeId} onChange={(e) => setEmployeeId(e.target.value)} required>
+                {employees.map((e) => (
+                  <option key={e.id} value={e.id}>
+                    {e.code} - {e.full_name} ({money(e.base_salary)} đ)
+                  </option>
+                ))}
+              </Select>
+            </div>
+          ) : (
+            <div className="grid gap-2">
+              <Label>Nhân viên</Label>
+              <Input
+                value={
+                  (() => {
+                    const me = employees.find((e) => e.id === employeeId);
+                    return me ? `${me.code} - ${me.full_name}` : "Tài khoản hiện tại";
+                  })()
+                }
+                readOnly
+              />
+            </div>
+          )}
           <div className="grid gap-2">
             <Label htmlFor="att-date">Ngày công</Label>
             <Input id="att-date" type="date" value={workDate} onChange={(e) => setWorkDate(e.target.value)} required />

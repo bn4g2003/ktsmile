@@ -15,11 +15,13 @@ import {
 } from "@/components/ui/dialog";
 import {
   calculatePayrollPreview,
+  getPayrollAccessProfile,
   getPayrollRunDetail,
   getPayrollRunLines,
   getPayrollRunSettings,
   listPayrollRuns,
   upsertPayrollRun,
+  type PayrollAccessProfile,
   type PayrollPreviewRow,
   type PayrollRunDetailRow,
 } from "@/lib/actions/payroll";
@@ -128,6 +130,11 @@ export function PayrollPage() {
   const [historyDetailLoading, setHistoryDetailLoading] = React.useState(false);
   const [selectedHistoryRun, setSelectedHistoryRun] = React.useState<(typeof history)[0] | null>(null);
   const [selectedHistoryRows, setSelectedHistoryRows] = React.useState<PayrollRunDetailRow[]>([]);
+  const [access, setAccess] = React.useState<PayrollAccessProfile | null>(null);
+  const [selfYear, setSelfYear] = React.useState(String(now.getFullYear()));
+  const [selfMonth, setSelfMonth] = React.useState(String(now.getMonth() + 1));
+  const [selfRows, setSelfRows] = React.useState<PayrollRunDetailRow[]>([]);
+  const [selfLoading, setSelfLoading] = React.useState(false);
 
   const reloadHistory = React.useCallback(async () => {
     try {
@@ -140,6 +147,20 @@ export function PayrollPage() {
   React.useEffect(() => {
     void reloadHistory();
   }, [reloadHistory]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    void getPayrollAccessProfile()
+      .then((r) => {
+        if (!cancelled) setAccess(r);
+      })
+      .catch(() => {
+        if (!cancelled) setAccess(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const runPreview = async () => {
     setLoading(true);
@@ -264,6 +285,118 @@ export function PayrollPage() {
     }
   }, []);
 
+  const loadSelfPayrollDetail = React.useCallback(async () => {
+    setSelfLoading(true);
+    setErr(null);
+    try {
+      const y = Number(selfYear);
+      const m = Number(selfMonth);
+      const selected = new Date(y, m - 1, 1);
+      const current = new Date(now.getFullYear(), now.getMonth(), 1);
+      if (!(selected < current)) {
+        throw new Error("Chỉ được xem kỳ trước tháng hiện tại.");
+      }
+      const rows = await getPayrollRunDetail(y, m);
+      setSelfRows(rows);
+    } catch (e) {
+      setSelfRows([]);
+      setErr(e instanceof Error ? e.message : "Không tải được dữ liệu lương.");
+    } finally {
+      setSelfLoading(false);
+    }
+  }, [now, selfMonth, selfYear]);
+
+  React.useEffect(() => {
+    if (access?.can_manage_payroll) return;
+    const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    setSelfYear(String(prev.getFullYear()));
+    setSelfMonth(String(prev.getMonth() + 1));
+  }, [access, now]);
+
+  if (access && !access.can_manage_payroll) {
+    const years = Array.from({ length: 8 }, (_, i) => String(now.getFullYear() - i));
+    const totalNetSelf = selfRows.reduce((sum, r) => sum + r.net_salary, 0);
+    const row = selfRows[0] ?? null;
+    return (
+      <div className="space-y-5">
+        <Card className="p-5">
+          <h1 className="text-lg font-semibold">Phiếu lương của tôi</h1>
+          <p className="mt-1 text-sm text-[var(--on-surface-muted)]">
+            Chỉ xem được kỳ trước tháng hiện tại.
+          </p>
+        </Card>
+        <Card className="grid gap-4 p-5 sm:grid-cols-4">
+          <div className="grid gap-2">
+            <Label htmlFor="self-payroll-y">Năm</Label>
+            <Select id="self-payroll-y" value={selfYear} onChange={(e) => setSelfYear(e.target.value)}>
+              {years.map((y) => (
+                <option key={y} value={y}>
+                  {y}
+                </option>
+              ))}
+            </Select>
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="self-payroll-m">Tháng</Label>
+            <Select id="self-payroll-m" value={selfMonth} onChange={(e) => setSelfMonth(e.target.value)}>
+              {Array.from({ length: 12 }, (_, i) => String(i + 1)).map((m) => (
+                <option key={m} value={m}>
+                  Tháng {m}
+                </option>
+              ))}
+            </Select>
+          </div>
+          <div className="flex items-end sm:col-span-2">
+            <Button type="button" variant="secondary" onClick={() => void loadSelfPayrollDetail()} disabled={selfLoading}>
+              {selfLoading ? "Đang tải..." : "Xem chi tiết lương"}
+            </Button>
+          </div>
+        </Card>
+        {err ? <p className="text-sm text-[#b91c1c]">{err}</p> : null}
+        <Card className="p-5">
+          {row ? (
+            <div className="space-y-3">
+              <p className="text-sm text-[var(--on-surface-muted)]">
+                Kỳ lương: Tháng {selfMonth}/{selfYear}
+              </p>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="rounded-[var(--radius-md)] bg-[var(--surface-muted)] p-3">
+                  <div className="text-xs text-[var(--on-surface-muted)]">Nhân viên</div>
+                  <div className="font-semibold">{row.employee_name}</div>
+                </div>
+                <div className="rounded-[var(--radius-md)] bg-[var(--surface-muted)] p-3">
+                  <div className="text-xs text-[var(--on-surface-muted)]">Lương gộp</div>
+                  <div className="font-semibold">{money(row.gross_salary)} đ</div>
+                </div>
+                <div className="rounded-[var(--radius-md)] bg-[var(--surface-muted)] p-3">
+                  <div className="text-xs text-[var(--on-surface-muted)]">Thực lĩnh</div>
+                  <div className="font-semibold">{money(totalNetSelf)} đ</div>
+                </div>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-[var(--radius-md)] border border-[var(--border-ghost)] p-3 text-sm">
+                  <div>Ngày công: <strong>{row.worked_days}</strong></div>
+                  <div>Nghỉ phép: <strong>{row.paid_leave_days}</strong></div>
+                  <div>Nghỉ/vắng: <strong>{row.unpaid_leave_days}</strong></div>
+                  <div>OT: <strong>{row.overtime_hours}</strong> giờ</div>
+                </div>
+                <div className="rounded-[var(--radius-md)] border border-[var(--border-ghost)] p-3 text-sm">
+                  <div>Tổng phụ cấp: <strong>{money(row.total_allowance)} đ</strong></div>
+                  <div>Tổng khấu trừ: <strong>{money(row.total_deduction)} đ</strong></div>
+                  <div>Thuế TNCN: <strong>{money(row.personal_income_tax)} đ</strong></div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-[var(--on-surface-muted)]">
+              Chọn kỳ và bấm “Xem chi tiết lương”.
+            </p>
+          )}
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-5">
       <Card className="p-5">
@@ -271,6 +404,11 @@ export function PayrollPage() {
         <p className="mt-1 text-sm text-[var(--on-surface-muted)]">
           Công thức: Lương gộp = Lương cơ bản × (Ngày công quy đổi / Công chuẩn) + OT × đơn giá OT.
         </p>
+        {access?.can_view_all ? null : (
+          <p className="mt-2 text-sm font-medium text-[var(--on-surface-muted)]">
+            Bạn đang ở chế độ chỉ xem lương của chính mình.
+          </p>
+        )}
       </Card>
 
       <Card className="grid gap-4 p-5 sm:grid-cols-7">
@@ -340,9 +478,11 @@ export function PayrollPage() {
             <p className="text-sm">
               Tổng thực lĩnh: <strong>{money(totalNet)} đ</strong>
             </p>
-            <Button type="button" variant="primary" disabled={!preview.length || saving} onClick={() => void savePayroll()}>
-              {saving ? "Đang chốt..." : "Chốt bảng lương tháng"}
-            </Button>
+            {access?.can_manage_payroll ? (
+              <Button type="button" variant="primary" disabled={!preview.length || saving} onClick={() => void savePayroll()}>
+                {saving ? "Đang chốt..." : "Chốt bảng lương tháng"}
+              </Button>
+            ) : null}
           </div>
         </div>
         <div className="overflow-x-auto rounded-[var(--radius-md)] shadow-[inset_0_0_0_1px_var(--border-ghost)]">
@@ -366,8 +506,13 @@ export function PayrollPage() {
               {rowsWithAdjust.map((r) => (
                 <tr 
                   key={r.employee_id} 
-                  className="cursor-pointer border-b border-[var(--border-ghost)] last:border-b-0 hover:bg-[var(--surface-muted)]"
+                  className={
+                    (access?.can_manage_payroll
+                      ? "cursor-pointer hover:bg-[var(--surface-muted)] "
+                      : "") + "border-b border-[var(--border-ghost)] last:border-b-0"
+                  }
                   onClick={() => {
+                    if (!access?.can_manage_payroll) return;
                     setSelectedEmployeeId(r.employee_id);
                     setDetailOpen(true);
                   }}
