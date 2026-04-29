@@ -22,6 +22,7 @@ import { DetailTabStrip } from "@/components/ui/detail-tab-strip";
 import { CurrencyInput } from "@/components/ui/currency-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { importMaterialsFromExcel } from "@/lib/actions/materials-import";
 import { importProductsFromExcel } from "@/lib/actions/products-import";
 import {
   createProduct,
@@ -59,7 +60,8 @@ export function ProductsPage({ initialCatalogTab = "sales" }: { initialCatalogTa
   const [unitPrice, setUnitPrice] = React.useState("0");
   const [warranty, setWarranty] = React.useState("");
   const [isActive, setIsActive] = React.useState(true);
-  const fileImportRef = React.useRef<HTMLInputElement>(null);
+  const fileImportSalesRef = React.useRef<HTMLInputElement>(null);
+  const fileImportNvlRef = React.useRef<HTMLInputElement>(null);
   const [importBusy, setImportBusy] = React.useState(false);
 
   React.useEffect(() => {
@@ -162,9 +164,10 @@ export function ProductsPage({ initialCatalogTab = "sales" }: { initialCatalogTa
     }
   };
 
-  const onPickExcel = () => fileImportRef.current?.click();
+  const onPickExcelSales = () => fileImportSalesRef.current?.click();
+  const onPickExcelNvl = () => fileImportNvlRef.current?.click();
 
-  const onExcelSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const onExcelSelected = async (e: React.ChangeEvent<HTMLInputElement>, kind: CatalogTab) => {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
@@ -172,7 +175,8 @@ export function ProductsPage({ initialCatalogTab = "sales" }: { initialCatalogTa
     try {
       const fd = new FormData();
       fd.set("file", file);
-      const res = await importProductsFromExcel(fd);
+      const res =
+        kind === "sales" ? await importProductsFromExcel(fd) : await importMaterialsFromExcel(fd);
       if (res.ok) {
         const warn = res.errors?.length
           ? "\n\nCảnh báo:\n" + res.errors.slice(0, 40).join("\n") + (res.errors.length > 40 ? "\n…" : "")
@@ -350,18 +354,18 @@ export function ProductsPage({ initialCatalogTab = "sales" }: { initialCatalogTa
           toolbarExtra={
             <div className="flex flex-wrap items-center gap-2">
               <input
-                ref={fileImportRef}
+                ref={fileImportSalesRef}
                 type="file"
                 accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
                 className="hidden"
-                onChange={(ev) => void onExcelSelected(ev)}
+                onChange={(ev) => void onExcelSelected(ev, "sales")}
               />
               <Button
                 variant="secondary"
                 type="button"
                 size="sm"
                 disabled={importBusy}
-                onClick={onPickExcel}
+                onClick={onPickExcelSales}
               >
                 {importBusy ? "Đang nhập…" : "Nhập Excel (bảng giá)"}
               </Button>
@@ -382,9 +386,27 @@ export function ProductsPage({ initialCatalogTab = "sales" }: { initialCatalogTa
           renderRowDetail={(row) => <MaterialRowDetailPanel row={row} />}
           rowDetailTitle={(r) => "NVL " + r.code}
           toolbarExtra={
-            <Button variant="primary" type="button" size="sm" onClick={openCreate}>
-              Thêm NVL
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                ref={fileImportNvlRef}
+                type="file"
+                accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+                className="hidden"
+                onChange={(ev) => void onExcelSelected(ev, "inventory")}
+              />
+              <Button
+                variant="secondary"
+                type="button"
+                size="sm"
+                disabled={importBusy}
+                onClick={onPickExcelNvl}
+              >
+                {importBusy ? "Đang nhập…" : "Nhập Excel (bảng giá NVL)"}
+              </Button>
+              <Button variant="primary" type="button" size="sm" onClick={openCreate}>
+                Thêm NVL
+              </Button>
+            </div>
           }
           getRowId={(r) => r.id}
         />
