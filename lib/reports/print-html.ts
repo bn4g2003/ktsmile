@@ -10,7 +10,7 @@ export function buildPrintShell(title: string, innerBodyHtml: string): string {
   return `<!DOCTYPE html><html lang="vi"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width"/><title>${t}</title><style>
     *,*::before,*::after{box-sizing:border-box;}
     html,body{margin:0;}
-    body{font-family:system-ui,"Segoe UI",Roboto,"Helvetica Neue","Noto Sans",Arial,sans-serif;padding:18px;color:#1a2332;font-size:12px;line-height:1.45;max-width:190mm;margin:0 auto;}
+    body{font-family:"Times New Roman",Times,serif;padding:18px;color:#1a2332;font-size:12px;line-height:1.45;max-width:190mm;margin:0 auto;}
     .print-root{max-width:100%;width:100%;min-width:0;}
     .report-header{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;margin-bottom:24px;padding-bottom:12px;}
     .report-header .logo-box{flex:0 0 160px;min-width:0;}

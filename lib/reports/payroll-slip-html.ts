@@ -197,7 +197,7 @@ export function buildPayrollSlipHtml(
         }
         * { box-sizing: border-box; }
         body {
-          font-family: Arial, Helvetica, sans-serif;
+          font-family: "Times New Roman", Times, serif;
           margin: 0;
           padding: 18px;
           color: #111827;
@@ -403,7 +403,7 @@ export function buildPayrollBatchPrintHtml(
         }
         * { box-sizing: border-box; }
         body {
-          font-family: Arial, Helvetica, sans-serif;
+          font-family: "Times New Roman", Times, serif;
           margin: 0;
           padding: 18px;
           color: #111827;
