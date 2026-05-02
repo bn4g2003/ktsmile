@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createSupabaseAdmin } from "@/lib/supabase/server";
-import { getCurrentUser } from "@/lib/auth/current-user";
+import { getCurrentUser, type CurrentUser } from "@/lib/auth/current-user";
+import { NAV_PERMISSION_RULES, resolvePermissionPreset } from "@/lib/auth/permission-presets";
 import { type AttendanceStatus } from "@/lib/actions/attendance";
 import {
   calculatePayrollLine,
@@ -46,18 +47,27 @@ export type PayrollAccessProfile = {
   can_manage_payroll: boolean;
 };
 
+/** Admin / menu * : xem và chạy lương cho mọi nhân viên (khi description không ép payroll:self). */
+function hasImplicitPayrollManageAll(user: CurrentUser): boolean {
+  if (user.nav_allowed_paths?.includes("*")) return true;
+  if (user.app_role_code?.trim().toLowerCase() === "admin") return true;
+  const preset = resolvePermissionPreset(user.permissions);
+  return NAV_PERMISSION_RULES[preset]?.includes("*") ?? false;
+}
+
 function resolvePayrollAccessScope(
   payrollScopeFromRole: "all" | "self" | null | undefined,
+  user: CurrentUser,
 ): PayrollAccessScope {
   if (payrollScopeFromRole === "all") return "all";
-  // Mặc định an toàn: chỉ xem lương của chính mình.
-  return "self";
+  if (payrollScopeFromRole === "self") return "self";
+  return hasImplicitPayrollManageAll(user) ? "all" : "self";
 }
 
 async function getPayrollAccessContext(): Promise<PayrollAccessProfile> {
   const user = await getCurrentUser();
   if (!user) throw new Error("Phiên đăng nhập không hợp lệ.");
-  const scope = resolvePayrollAccessScope(user.payroll_scope);
+  const scope = resolvePayrollAccessScope(user.payroll_scope, user);
   return {
     employee_id: user.employee_id,
     scope,

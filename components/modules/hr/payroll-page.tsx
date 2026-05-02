@@ -30,11 +30,16 @@ import { PayrollExcelButton } from "@/components/shared/reports/payroll-excel-bu
 import {
   buildPayrollBatchPrintHtml,
   buildPayrollSlipHtml,
+  buildPayrollSlipPrintOptsBatchMerged,
+  buildPayrollSlipPrintOptsDraft,
+  buildPayrollSlipPrintOptsSealed,
+  PAYROLL_SLIP_DEFAULT_COMPANY_NAME,
 } from "@/lib/reports/payroll-slip-html";
 import {
-  openBlankPrintTab,
-  writeAndPrintToWindow,
-} from "@/lib/reports/print-html";
+  downloadPayrollBatchSlipPdfFromTemplate,
+  downloadPayrollSlipPdfFromTemplate,
+} from "@/lib/reports/payroll-pdf";
+import { openPayrollPrintPreview } from "@/lib/reports/payroll-print-preview";
 import {
   calculatePayrollLine,
   type PayrollLineInput,
@@ -45,7 +50,7 @@ function money(n: number) {
   return n.toLocaleString("vi-VN");
 }
 
-const COMPANY_NAME = "CÔNG TY TNHH KTSMILE";
+const COMPANY_NAME = PAYROLL_SLIP_DEFAULT_COMPANY_NAME;
 const DEFAULT_FAMILY_DEDUCTION = 11_000_000;
 const DEFAULT_DEPENDENT_DEDUCTION = 4_400_000;
 
@@ -83,15 +88,24 @@ function emptyAdjustments(): PayrollLineInput {
   };
 }
 
-function printPayrollHtml(html: string) {
-  const w = openBlankPrintTab();
-  if (!w) {
-    window.alert(
-      "Không mở được cửa sổ in. Trình duyệt đã chặn popup — hãy cho phép popup cho trang này rồi thử lại.",
-    );
-    return;
-  }
-  writeAndPrintToWindow(w, html);
+function printPayrollDocument(html: string) {
+  openPayrollPrintPreview(html);
+}
+
+function payrollBatchPdfFilename(month: number, year: number, draft: boolean) {
+  const m = String(month).padStart(2, "0");
+  return draft ? `Bang_luong_tam_T${m}_${year}.pdf` : `Bang_luong_T${m}_${year}.pdf`;
+}
+
+function payrollSlipPdfFilename(employeeCode: string, month: number, year: number) {
+  const code = String(employeeCode).replace(/[^\w.\-]+/g, "_");
+  const m = String(month).padStart(2, "0");
+  return `Phieu_luong_${code}_T${m}_${year}.pdf`;
+}
+
+/** Tải PDF từ mẫu phiếu (`payroll-slip-html`); lỗi hiển thị cho người dùng. */
+function runPayrollPdfDownload(task: () => Promise<void>): void {
+  void task().catch((e) => window.alert(e instanceof Error ? e.message : "Không tải được PDF."));
 }
 
 export function PayrollPage() {
@@ -270,6 +284,14 @@ export function PayrollPage() {
     [rowsWithAdjust, selectedEmployeeId],
   );
 
+  const draftSlipPreviewSrcDoc = React.useMemo(() => {
+    if (!selectedEmployee) return "";
+    return buildPayrollSlipHtml(
+      selectedEmployee,
+      buildPayrollSlipPrintOptsDraft(Number(year), Number(month), COMPANY_NAME),
+    );
+  }, [selectedEmployee, year, month]);
+
   const openHistoryDetail = React.useCallback(async (run: (typeof history)[0]) => {
     setSelectedHistoryRun(run);
     setHistoryDetailOpen(true);
@@ -322,7 +344,8 @@ export function PayrollPage() {
         <Card className="p-5">
           <h1 className="text-lg font-semibold">Phiếu lương của tôi</h1>
           <p className="mt-1 text-sm text-[var(--on-surface-muted)]">
-            Chỉ xem được kỳ trước tháng hiện tại.
+            Chỉ xem được kỳ trước tháng hiện tại. Sau khi tải dữ liệu có thể <strong>Xem trước / In</strong> hoặc{" "}
+            <strong>Tải PDF</strong> phiếu.
           </p>
         </Card>
         <Card className="grid gap-4 p-5 sm:grid-cols-4">
@@ -385,6 +408,39 @@ export function PayrollPage() {
                   <div>Tổng khấu trừ: <strong>{money(row.total_deduction)} đ</strong></div>
                   <div>Thuế TNCN: <strong>{money(row.personal_income_tax)} đ</strong></div>
                 </div>
+              </div>
+              <div className="flex flex-wrap gap-2 border-t border-[var(--border-ghost)] pt-3">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => {
+                    printPayrollDocument(
+                      buildPayrollSlipHtml(
+                        row,
+                        buildPayrollSlipPrintOptsSealed(Number(selfYear), Number(selfMonth), COMPANY_NAME),
+                      ),
+                    );
+                  }}
+                >
+                  Xem trước / In
+                </Button>
+                <Button
+                  type="button"
+                  variant="primary"
+                  size="sm"
+                  onClick={() =>
+                    runPayrollPdfDownload(() =>
+                      downloadPayrollSlipPdfFromTemplate(
+                        row,
+                        buildPayrollSlipPrintOptsSealed(Number(selfYear), Number(selfMonth), COMPANY_NAME),
+                        payrollSlipPdfFilename(row.employee_code, Number(selfMonth), Number(selfYear)),
+                      ),
+                    )
+                  }
+                >
+                  Tải PDF
+                </Button>
               </div>
             </div>
           ) : (
@@ -472,21 +528,63 @@ export function PayrollPage() {
       {err ? <p className="text-sm text-[#b91c1c]">{err}</p> : null}
 
       <Card className="p-5">
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <h2 className="text-base font-semibold">Bảng lương tạm tính</h2>
-          <div className="flex items-center gap-2">
+        <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-base font-semibold">Bảng lương tạm tính</h2>
+            <p className="mt-1 text-xs text-[var(--on-surface-muted)]">
+              <strong>In</strong> = mở tab xem trước (có đường dẫn), rồi bấm «In ngay»;{" "}
+              <strong>Tải PDF</strong> = tải file về (cùng mẫu{" "}
+              <code className="rounded bg-[var(--surface-muted)] px-1">payroll-slip-html.ts</code>).
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
             <p className="text-sm">
               Tổng thực lĩnh: <strong>{money(totalNet)} đ</strong>
             </p>
             {access?.can_manage_payroll ? (
-              <Button type="button" variant="primary" disabled={!preview.length || saving} onClick={() => void savePayroll()}>
-                {saving ? "Đang chốt..." : "Chốt bảng lương tháng"}
-              </Button>
+              <>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  disabled={!rowsWithAdjust.length}
+                  onClick={() => {
+                    printPayrollDocument(
+                      buildPayrollBatchPrintHtml(
+                        rowsWithAdjust,
+                        buildPayrollSlipPrintOptsDraft(Number(year), Number(month), COMPANY_NAME),
+                      ),
+                    );
+                  }}
+                >
+                  In hàng loạt
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  disabled={!rowsWithAdjust.length}
+                  onClick={() => {
+                    runPayrollPdfDownload(() =>
+                      downloadPayrollBatchSlipPdfFromTemplate(
+                        rowsWithAdjust,
+                        buildPayrollSlipPrintOptsDraft(Number(year), Number(month), COMPANY_NAME),
+                        payrollBatchPdfFilename(Number(month), Number(year), true),
+                      ),
+                    );
+                  }}
+                >
+                  Tải PDF
+                </Button>
+                <Button type="button" variant="primary" disabled={!preview.length || saving} onClick={() => void savePayroll()}>
+                  {saving ? "Đang chốt..." : "Chốt bảng lương tháng"}
+                </Button>
+              </>
             ) : null}
           </div>
         </div>
         <div className="overflow-x-auto rounded-[var(--radius-md)] shadow-[inset_0_0_0_1px_var(--border-ghost)]">
-          <table className="w-full min-w-[72rem] border-collapse text-sm">
+          <table className="w-full min-w-[78rem] border-collapse text-sm">
             <thead>
               <tr className="border-b border-[var(--border-ghost)] bg-[var(--surface-muted)] text-left text-[11px] font-bold uppercase tracking-wide text-[var(--on-surface-faint)]">
                 <th className="px-3 py-2">Mã NV</th>
@@ -500,6 +598,9 @@ export function PayrollPage() {
                 <th className="px-3 py-2 text-right">Phụ cấp</th>
                 <th className="px-3 py-2 text-right">Khấu trừ</th>
                 <th className="px-3 py-2 text-right">Thực lĩnh</th>
+                {access?.can_manage_payroll ? (
+                  <th className="px-3 py-2 text-center whitespace-nowrap">Phiếu</th>
+                ) : null}
               </tr>
             </thead>
             <tbody>
@@ -528,11 +629,53 @@ export function PayrollPage() {
                   <td className="px-3 py-2 text-right tabular-nums">{money(r.total_allowance)}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{money(r.total_deduction)}</td>
                   <td className="px-3 py-2 text-right font-semibold tabular-nums">{money(r.net_salary)}</td>
+                  {access?.can_manage_payroll ? (
+                    <td className="px-2 py-2 text-center" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex flex-wrap items-center justify-center gap-1">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 px-2"
+                          onClick={() => {
+                            printPayrollDocument(
+                              buildPayrollSlipHtml(
+                                r,
+                                buildPayrollSlipPrintOptsDraft(Number(year), Number(month), COMPANY_NAME),
+                              ),
+                            );
+                          }}
+                        >
+                          In
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 px-2"
+                          onClick={() => {
+                            runPayrollPdfDownload(() =>
+                              downloadPayrollSlipPdfFromTemplate(
+                                r,
+                                buildPayrollSlipPrintOptsDraft(Number(year), Number(month), COMPANY_NAME),
+                                payrollSlipPdfFilename(r.employee_code, Number(month), Number(year)),
+                              ),
+                            );
+                          }}
+                        >
+                          Tải PDF
+                        </Button>
+                      </div>
+                    </td>
+                  ) : null}
                 </tr>
               ))}
               {rowsWithAdjust.length === 0 ? (
                 <tr>
-                  <td className="px-3 py-6 text-center text-[var(--on-surface-muted)]" colSpan={11}>
+                  <td
+                    className="px-3 py-6 text-center text-[var(--on-surface-muted)]"
+                    colSpan={access?.can_manage_payroll ? 12 : 11}
+                  >
                     Bấm &quot;Tính lương&quot; để tạo bảng tạm tính.
                   </td>
                 </tr>
@@ -553,6 +696,7 @@ export function PayrollPage() {
                 <th className="px-3 py-2">Đơn giá OT/giờ</th>
                 <th className="px-3 py-2 text-right">Tổng thực lĩnh</th>
                 <th className="px-3 py-2">Thời điểm chốt</th>
+                <th className="px-3 py-2 whitespace-nowrap">Excel / phiếu</th>
               </tr>
             </thead>
             <tbody>
@@ -573,6 +717,7 @@ export function PayrollPage() {
                     <PayrollExcelButton year={h.year} month={h.month} label="Excel" size="sm" variant="ghost" />
                     <Button
                       variant="primary"
+                      title="Một bản in gộp phiếu của mọi nhân viên trong kỳ"
                       className="ml-2 shadow-[0_6px_18px_color-mix(in_srgb,var(--primary)_32%,transparent)] ring-1 ring-[color-mix(in_srgb,var(--primary)_25%,transparent)]"
                       onClick={async () => {
                         try {
@@ -582,27 +727,50 @@ export function PayrollPage() {
                             window.alert("Không có dữ liệu.");
                             return;
                           }
-                          printPayrollHtml(
-                            buildPayrollBatchPrintHtml(payload.rows, {
-                              year: h.year,
-                              month: h.month,
-                              companyName: COMPANY_NAME,
-                              title: "PHIẾU LƯƠNG",
-                            }),
+                          printPayrollDocument(
+                            buildPayrollBatchPrintHtml(
+                              payload.rows,
+                              buildPayrollSlipPrintOptsBatchMerged(h.year, h.month, COMPANY_NAME),
+                            ),
                           );
                         } catch (err) {
                           window.alert(err instanceof Error ? err.message : "Lỗi");
                         }
                       }}
                     >
-                      In hàng loạt
+                      In chung
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="ml-1"
+                      title="Tải file PDF phiếu in chung về máy"
+                      onClick={async () => {
+                        try {
+                          const { getPayrollExcelPayload } = await import("@/lib/actions/payroll-excel");
+                          const payload = await getPayrollExcelPayload(h.year, h.month);
+                          if (payload.rows.length === 0) {
+                            window.alert("Không có dữ liệu.");
+                            return;
+                          }
+                          await downloadPayrollBatchSlipPdfFromTemplate(
+                            payload.rows,
+                            buildPayrollSlipPrintOptsBatchMerged(h.year, h.month, COMPANY_NAME),
+                            payrollBatchPdfFilename(h.month, h.year, false),
+                          );
+                        } catch (err) {
+                          window.alert(err instanceof Error ? err.message : "Lỗi");
+                        }
+                      }}
+                    >
+                      Tải PDF
                     </Button>
                   </td>
                 </tr>
               ))}
               {history.length === 0 ? (
                 <tr>
-                  <td className="px-3 py-6 text-center text-[var(--on-surface-muted)]" colSpan={5}>
+                  <td className="px-3 py-6 text-center text-[var(--on-surface-muted)]" colSpan={6}>
                     Chưa có kỳ lương nào được chốt.
                   </td>
                 </tr>
@@ -773,21 +941,44 @@ export function PayrollPage() {
                   <div className="font-semibold">{money(selectedEmployee.net_salary)}</div>
                 </div>
               </div>
+              <div className="overflow-hidden rounded-[var(--radius-md)] border border-[var(--border-ghost)] bg-[var(--surface-muted)]/25 shadow-[inset_0_0_0_1px_var(--border-ghost)]">
+                <div className="border-b border-[var(--border-ghost)] px-3 py-2 text-xs font-medium text-[var(--on-surface-muted)]">
+                  Xem trước trong trang — cùng mẫu <strong>In</strong> (tab xem trước) / <strong>Tải PDF</strong>
+                </div>
+                <iframe
+                  title="Xem trước phiếu lương"
+                  className="h-[min(70vh,840px)] w-full min-h-[420px] border-0 bg-white"
+                  srcDoc={draftSlipPreviewSrcDoc}
+                  sandbox="allow-same-origin"
+                />
+              </div>
               <div className="flex flex-wrap items-center justify-end gap-2">
                 <Button
                   variant="secondary"
                   onClick={() => {
-                    printPayrollHtml(
-                      buildPayrollSlipHtml(selectedEmployee, {
-                        year: Number(year),
-                        month: Number(month),
-                        companyName: COMPANY_NAME,
-                        title: "PHIẾU LƯƠNG",
-                      }),
+                    printPayrollDocument(
+                      buildPayrollSlipHtml(
+                        selectedEmployee,
+                        buildPayrollSlipPrintOptsDraft(Number(year), Number(month), COMPANY_NAME),
+                      ),
                     );
                   }}
                 >
                   In phiếu lương
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    runPayrollPdfDownload(() =>
+                      downloadPayrollSlipPdfFromTemplate(
+                        selectedEmployee,
+                        buildPayrollSlipPrintOptsDraft(Number(year), Number(month), COMPANY_NAME),
+                        payrollSlipPdfFilename(selectedEmployee.employee_code, Number(month), Number(year)),
+                      ),
+                    );
+                  }}
+                >
+                  Tải PDF
                 </Button>
                 <Button variant="primary" onClick={() => setDetailOpen(false)}>
                   Xong
@@ -798,9 +989,9 @@ export function PayrollPage() {
         </DialogContent>
       </Dialog>
       <Dialog open={historyDetailOpen} onOpenChange={setHistoryDetailOpen}>
-        <DialogContent size="2xl" className="max-h-[min(96vh,52rem)]">
+        <DialogContent size="2xl" className="max-h-[96vh] w-[min(99vw,96rem)] p-6 sm:p-8">
           <DialogHeader>
-            <DialogTitle>
+            <DialogTitle className="text-xl sm:text-2xl">
               {selectedHistoryRun ? `Bảng lương đã chốt - Tháng ${selectedHistoryRun.month}/${selectedHistoryRun.year}` : "Bảng lương đã chốt"}
             </DialogTitle>
             <DialogDescription className="sr-only">
@@ -810,63 +1001,169 @@ export function PayrollPage() {
           {historyDetailLoading ? (
             <p className="py-6 text-sm text-[var(--on-surface-muted)]">Đang tải bảng lương...</p>
           ) : selectedHistoryRows.length ? (
-            <div className="space-y-3 py-2">
-              <p className="text-sm text-[var(--on-surface-muted)]">
+            <div className="space-y-4 py-2">
+              <p className="text-base text-[var(--on-surface-muted)]">
                 Kỳ lương: Tháng {selectedHistoryRun?.month}/{selectedHistoryRun?.year}
               </p>
-              <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-5">
-                <div className="rounded-[var(--radius-md)] bg-[var(--surface-muted)] p-3">
-                  <div className="text-[var(--on-surface-muted)]">Tổng thực lĩnh</div>
-                  <div className="font-semibold">{money(selectedHistoryRun?.total_net_salary ?? 0)}</div>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="grid flex-1 grid-cols-2 gap-3 text-base sm:grid-cols-5">
+                <div className="rounded-[var(--radius-md)] bg-[var(--surface-muted)] p-4">
+                  <div className="text-sm text-[var(--on-surface-muted)]">Tổng thực lĩnh</div>
+                  <div className="text-lg font-semibold tabular-nums">{money(selectedHistoryRun?.total_net_salary ?? 0)}</div>
                 </div>
-                <div className="rounded-[var(--radius-md)] bg-[var(--surface-muted)] p-3">
-                  <div className="text-[var(--on-surface-muted)]">Công chuẩn</div>
-                  <div className="font-semibold">{selectedHistoryRun?.standard_work_days ?? "—"}</div>
+                <div className="rounded-[var(--radius-md)] bg-[var(--surface-muted)] p-4">
+                  <div className="text-sm text-[var(--on-surface-muted)]">Công chuẩn</div>
+                  <div className="text-lg font-semibold">{selectedHistoryRun?.standard_work_days ?? "—"}</div>
                 </div>
-                <div className="rounded-[var(--radius-md)] bg-[var(--surface-muted)] p-3">
-                  <div className="text-[var(--on-surface-muted)]">Đơn giá OT</div>
-                  <div className="font-semibold">{money(selectedHistoryRun?.overtime_rate_per_hour ?? 0)}</div>
+                <div className="rounded-[var(--radius-md)] bg-[var(--surface-muted)] p-4">
+                  <div className="text-sm text-[var(--on-surface-muted)]">Đơn giá OT</div>
+                  <div className="text-lg font-semibold tabular-nums">{money(selectedHistoryRun?.overtime_rate_per_hour ?? 0)}</div>
                 </div>
-                <div className="rounded-[var(--radius-md)] bg-[var(--surface-muted)] p-3">
-                  <div className="text-[var(--on-surface-muted)]">Giảm trừ gia cảnh</div>
-                  <div className="font-semibold">{money(selectedHistoryRun?.family_deduction_amount ?? 0)}</div>
+                <div className="rounded-[var(--radius-md)] bg-[var(--surface-muted)] p-4">
+                  <div className="text-sm text-[var(--on-surface-muted)]">Giảm trừ gia cảnh</div>
+                  <div className="text-lg font-semibold tabular-nums">{money(selectedHistoryRun?.family_deduction_amount ?? 0)}</div>
                 </div>
-                <div className="rounded-[var(--radius-md)] bg-[var(--surface-muted)] p-3">
-                  <div className="text-[var(--on-surface-muted)]">Giảm trừ NPT</div>
-                  <div className="font-semibold">{money(selectedHistoryRun?.dependent_deduction_amount ?? 0)}</div>
+                <div className="rounded-[var(--radius-md)] bg-[var(--surface-muted)] p-4">
+                  <div className="text-sm text-[var(--on-surface-muted)]">Giảm trừ NPT</div>
+                  <div className="text-lg font-semibold tabular-nums">{money(selectedHistoryRun?.dependent_deduction_amount ?? 0)}</div>
+                </div>
+                </div>
+                <div className="flex shrink-0 flex-col gap-2 sm:items-end">
+                  <p className="max-w-[18rem] text-right text-[11px] text-[var(--on-surface-muted)]">
+                    In chung hoặc Tải PDF — cùng mẫu phiếu; In mở tab xem trước, sau đó «In ngay» (có thể «Lưu PDF»).
+                  </p>
+                  <div className="flex flex-wrap justify-end gap-2">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      disabled={!selectedHistoryRows.length}
+                      onClick={() => {
+                        if (!selectedHistoryRun) return;
+                        printPayrollDocument(
+                          buildPayrollBatchPrintHtml(
+                            selectedHistoryRows,
+                            buildPayrollSlipPrintOptsBatchMerged(
+                              selectedHistoryRun.year,
+                              selectedHistoryRun.month,
+                              COMPANY_NAME,
+                            ),
+                          ),
+                        );
+                      }}
+                    >
+                      In chung
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      disabled={!selectedHistoryRows.length}
+                      onClick={() => {
+                        if (!selectedHistoryRun) return;
+                        runPayrollPdfDownload(() =>
+                          downloadPayrollBatchSlipPdfFromTemplate(
+                            selectedHistoryRows,
+                            buildPayrollSlipPrintOptsBatchMerged(
+                              selectedHistoryRun.year,
+                              selectedHistoryRun.month,
+                              COMPANY_NAME,
+                            ),
+                            payrollBatchPdfFilename(selectedHistoryRun.month, selectedHistoryRun.year, false),
+                          ),
+                        );
+                      }}
+                    >
+                      Tải PDF
+                    </Button>
+                  </div>
                 </div>
               </div>
-              <div className="max-h-[min(70vh,34rem)] overflow-auto rounded-[var(--radius-md)] shadow-[inset_0_0_0_1px_var(--border-ghost)]">
-                <table className="w-full min-w-[72rem] border-collapse text-sm">
+              <div className="max-h-[min(calc(96vh-11rem),56rem)] overflow-auto rounded-[var(--radius-md)] shadow-[inset_0_0_0_1px_var(--border-ghost)]">
+                <table className="w-full min-w-[76rem] border-collapse text-[15px] leading-snug">
                   <thead>
-                    <tr className="border-b border-[var(--border-ghost)] bg-[var(--surface-muted)] text-left text-[11px] font-bold uppercase tracking-wide text-[var(--on-surface-faint)]">
-                      <th className="sticky top-0 z-[1] bg-[var(--surface-muted)] px-3 py-2">Mã NV</th>
-                      <th className="sticky top-0 z-[1] bg-[var(--surface-muted)] px-3 py-2">Nhân viên</th>
-                      <th className="sticky top-0 z-[1] bg-[var(--surface-muted)] px-3 py-2 text-right">Lương CB</th>
-                      <th className="sticky top-0 z-[1] bg-[var(--surface-muted)] px-3 py-2 text-right">Ngày công</th>
-                      <th className="sticky top-0 z-[1] bg-[var(--surface-muted)] px-3 py-2 text-right">Nghỉ phép</th>
-                      <th className="sticky top-0 z-[1] bg-[var(--surface-muted)] px-3 py-2 text-right">Nghỉ/Vắng</th>
-                      <th className="sticky top-0 z-[1] bg-[var(--surface-muted)] px-3 py-2 text-right">OT</th>
-                      <th className="sticky top-0 z-[1] bg-[var(--surface-muted)] px-3 py-2 text-right">Lương gộp</th>
-                      <th className="sticky top-0 z-[1] bg-[var(--surface-muted)] px-3 py-2 text-right">Phụ cấp</th>
-                      <th className="sticky top-0 z-[1] bg-[var(--surface-muted)] px-3 py-2 text-right">Khấu trừ</th>
-                      <th className="sticky top-0 z-[1] bg-[var(--surface-muted)] px-3 py-2 text-right">Thực lĩnh</th>
+                    <tr className="border-b border-[var(--border-ghost)] bg-[var(--surface-muted)] text-left text-xs font-bold uppercase tracking-wide text-[var(--on-surface-faint)] sm:text-[13px]">
+                      <th className="sticky top-0 z-[1] bg-[var(--surface-muted)] px-3 py-2.5">Mã NV</th>
+                      <th className="sticky top-0 z-[1] bg-[var(--surface-muted)] px-3 py-2.5">Nhân viên</th>
+                      <th className="sticky top-0 z-[1] bg-[var(--surface-muted)] px-3 py-2.5 text-right">Lương CB</th>
+                      <th className="sticky top-0 z-[1] bg-[var(--surface-muted)] px-3 py-2.5 text-right">Ngày công</th>
+                      <th className="sticky top-0 z-[1] bg-[var(--surface-muted)] px-3 py-2.5 text-right">Nghỉ phép</th>
+                      <th className="sticky top-0 z-[1] bg-[var(--surface-muted)] px-3 py-2.5 text-right">Nghỉ/Vắng</th>
+                      <th className="sticky top-0 z-[1] bg-[var(--surface-muted)] px-3 py-2.5 text-right">OT</th>
+                      <th className="sticky top-0 z-[1] bg-[var(--surface-muted)] px-3 py-2.5 text-right">Lương gộp</th>
+                      <th className="sticky top-0 z-[1] bg-[var(--surface-muted)] px-3 py-2.5 text-right">Phụ cấp</th>
+                      <th className="sticky top-0 z-[1] bg-[var(--surface-muted)] px-3 py-2.5 text-right">Khấu trừ</th>
+                      <th className="sticky top-0 z-[1] bg-[var(--surface-muted)] px-3 py-2.5 text-right">Thực lĩnh</th>
+                      <th className="sticky top-0 z-[1] bg-[var(--surface-muted)] px-3 py-2.5 text-center whitespace-nowrap">
+                        Phiếu
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
                     {selectedHistoryRows.map((r) => (
                       <tr key={r.employee_id} className="border-b border-[var(--border-ghost)] last:border-b-0">
-                        <td className="px-3 py-2">{r.employee_code}</td>
-                        <td className="px-3 py-2">{r.employee_name}</td>
-                        <td className="px-3 py-2 text-right tabular-nums">{money(r.base_salary)}</td>
-                        <td className="px-3 py-2 text-right tabular-nums">{r.worked_days}</td>
-                        <td className="px-3 py-2 text-right tabular-nums">{r.paid_leave_days}</td>
-                        <td className="px-3 py-2 text-right tabular-nums">{r.unpaid_leave_days}</td>
-                        <td className="px-3 py-2 text-right tabular-nums">{r.overtime_hours}</td>
-                        <td className="px-3 py-2 text-right tabular-nums">{money(r.gross_salary)}</td>
-                        <td className="px-3 py-2 text-right tabular-nums">{money(r.total_allowance)}</td>
-                        <td className="px-3 py-2 text-right tabular-nums">{money(r.total_deduction)}</td>
-                        <td className="px-3 py-2 text-right font-semibold tabular-nums">{money(r.net_salary)}</td>
+                        <td className="px-3 py-2.5">{r.employee_code}</td>
+                        <td className="px-3 py-2.5">{r.employee_name}</td>
+                        <td className="px-3 py-2.5 text-right tabular-nums">{money(r.base_salary)}</td>
+                        <td className="px-3 py-2.5 text-right tabular-nums">{r.worked_days}</td>
+                        <td className="px-3 py-2.5 text-right tabular-nums">{r.paid_leave_days}</td>
+                        <td className="px-3 py-2.5 text-right tabular-nums">{r.unpaid_leave_days}</td>
+                        <td className="px-3 py-2.5 text-right tabular-nums">{r.overtime_hours}</td>
+                        <td className="px-3 py-2.5 text-right tabular-nums">{money(r.gross_salary)}</td>
+                        <td className="px-3 py-2.5 text-right tabular-nums">{money(r.total_allowance)}</td>
+                        <td className="px-3 py-2.5 text-right tabular-nums">{money(r.total_deduction)}</td>
+                        <td className="px-3 py-2.5 text-right font-semibold tabular-nums">{money(r.net_salary)}</td>
+                        <td className="px-2 py-2.5 text-center">
+                          <div className="flex flex-wrap items-center justify-center gap-1">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 px-2"
+                              onClick={() => {
+                                if (!selectedHistoryRun) return;
+                                printPayrollDocument(
+                                  buildPayrollSlipHtml(
+                                    r,
+                                    buildPayrollSlipPrintOptsSealed(
+                                      selectedHistoryRun.year,
+                                      selectedHistoryRun.month,
+                                      COMPANY_NAME,
+                                    ),
+                                  ),
+                                );
+                              }}
+                            >
+                              In
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 px-2"
+                              onClick={() => {
+                                if (!selectedHistoryRun) return;
+                                runPayrollPdfDownload(() =>
+                                  downloadPayrollSlipPdfFromTemplate(
+                                    r,
+                                    buildPayrollSlipPrintOptsSealed(
+                                      selectedHistoryRun.year,
+                                      selectedHistoryRun.month,
+                                      COMPANY_NAME,
+                                    ),
+                                    payrollSlipPdfFilename(
+                                      r.employee_code,
+                                      selectedHistoryRun.month,
+                                      selectedHistoryRun.year,
+                                    ),
+                                  ),
+                                );
+                              }}
+                            >
+                              Tải PDF
+                            </Button>
+                          </div>
+                        </td>
                       </tr>
                     ))}
                   </tbody>

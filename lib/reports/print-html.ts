@@ -1,3 +1,4 @@
+import { BRAND_LOGO_PUBLIC_PATH } from "@/lib/brand/logo-public-path";
 import { escapeHtml } from "@/lib/reports/escape-html";
 
 /** Thông báo khi `window.open` trả về null (popup bị chặn). */
@@ -58,7 +59,24 @@ export function buildPrintShell(title: string, innerBodyHtml: string): string {
       table{max-width:100%!important;width:100%!important;}
       th,td{overflow:visible;word-break:break-word;}
     }
-  </style></head><body><div class="print-root"><div class="report-header"><div class="logo-box"><img src="/logobaocao.png" alt="Logo" class="logo"/></div><div class="company-box"><div class="company-name">CÔNG TY TNHH KTSMILE MILLING CENTER</div><div class="company-info">Địa chỉ: 447/10 Đường Tân Sơn, Phường An Hội Tây, TP.Hồ Chí Minh</div><div class="company-info">MST: 0318968071 · SĐT: 0906353568</div><div class="company-info">STK: 886978683 Ngân hàng Thương mại cổ phần Quân Đội</div></div></div>${innerBodyHtml}</div></body></html>`;
+  </style></head><body><div class="print-root"><div class="report-header"><div class="logo-box"><img src="${escapeHtml(BRAND_LOGO_PUBLIC_PATH)}" alt="Logo" class="logo"/></div><div class="company-box"><div class="company-name">CÔNG TY TNHH KTSMILE MILLING CENTER</div><div class="company-info">Địa chỉ: 447/10 Đường Tân Sơn, Phường An Hội Tây, TP.Hồ Chí Minh</div><div class="company-info">MST: 0318968071 · SĐT: 0906353568</div><div class="company-info">STK: 886978683 Ngân hàng Thương mại cổ phần Quân Đội</div></div></div>${innerBodyHtml}</div></body></html>`;
+}
+
+/** Ghi toàn bộ tài liệu HTML vào tab đã mở (không gọi in). */
+export function writeHtmlToWindow(w: Window, fullDocumentHtml: string): boolean {
+  try {
+    w.document.open();
+    w.document.write(fullDocumentHtml);
+    w.document.close();
+    return true;
+  } catch {
+    try {
+      w.close();
+    } catch {
+      /* ignore */
+    }
+    return false;
+  }
 }
 
 /**
@@ -66,18 +84,7 @@ export function buildPrintShell(title: string, innerBodyHtml: string): string {
  * (Tách riêng để luồng async vẫn dùng được: mở tab trong cùng lượt click với `window.open`.)
  */
 export function writeAndPrintToWindow(w: Window, fullDocumentHtml: string): void {
-  try {
-    w.document.open();
-    w.document.write(fullDocumentHtml);
-    w.document.close();
-  } catch {
-    try {
-      w.close();
-    } catch {
-      /* ignore */
-    }
-    return;
-  }
+  if (!writeHtmlToWindow(w, fullDocumentHtml)) return;
   let printed = false;
   const runPrint = () => {
     if (printed) return;

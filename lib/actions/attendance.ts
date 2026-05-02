@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createSupabaseAdmin } from "@/lib/supabase/server";
-import { getCurrentUser } from "@/lib/auth/current-user";
+import { getCurrentUser, type CurrentUser } from "@/lib/auth/current-user";
+import { NAV_PERMISSION_RULES, resolvePermissionPreset } from "@/lib/auth/permission-presets";
 
 export type AttendanceStatus = "present" | "half" | "paid_leave" | "unpaid_leave" | "absent";
 
@@ -27,15 +28,27 @@ export type AttendanceAccessProfile = {
   can_manage_all: boolean;
 };
 
-function resolveAttendanceScope(scopeFromRole: "all" | "self" | null | undefined): AttendanceAccessScope {
+/** Admin / vai trò menu * : được chấm công hộ các nhân sự khác (khi description không ép attendance:self). */
+function hasImplicitAttendanceManageAll(user: CurrentUser): boolean {
+  if (user.nav_allowed_paths?.includes("*")) return true;
+  if (user.app_role_code?.trim().toLowerCase() === "admin") return true;
+  const preset = resolvePermissionPreset(user.permissions);
+  return NAV_PERMISSION_RULES[preset]?.includes("*") ?? false;
+}
+
+function resolveAttendanceScope(
+  scopeFromRole: "all" | "self" | null | undefined,
+  user: CurrentUser,
+): AttendanceAccessScope {
   if (scopeFromRole === "all") return "all";
-  return "self";
+  if (scopeFromRole === "self") return "self";
+  return hasImplicitAttendanceManageAll(user) ? "all" : "self";
 }
 
 async function getAttendanceAccessContext(): Promise<AttendanceAccessProfile> {
   const user = await getCurrentUser();
   if (!user) throw new Error("Phiên đăng nhập không hợp lệ.");
-  const scope = resolveAttendanceScope(user.attendance_scope);
+  const scope = resolveAttendanceScope(user.attendance_scope, user);
   return {
     employee_id: user.employee_id,
     scope,

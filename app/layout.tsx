@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Be_Vietnam_Pro } from "next/font/google";
+import { BRAND_LOGO_PUBLIC_PATH } from "@/lib/brand/logo-public-path";
 import "./globals.css";
 
 const beVietnam = Be_Vietnam_Pro({
@@ -15,7 +16,7 @@ export const metadata: Metadata = {
   icons: {
     icon: "/logobaocao.ico",
     shortcut: "/logobaocao.ico",
-    apple: "/logobaocao.png",
+    apple: BRAND_LOGO_PUBLIC_PATH,
   },
 };
 
@@ -25,8 +26,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="vi" className={`${beVietnam.variable} h-full antialiased`}>
-      <body className="min-h-full flex flex-col font-sans">{children}</body>
+    <html lang="vi" className={`${beVietnam.variable} min-h-dvh antialiased`}>
+      {/* suppressHydrationWarning: tiện ích trình duyệt (vd. Bitwarden) hay chèn attribut vào body → tránh báo hydration lệch */}
+      <body className="flex min-h-dvh flex-col font-sans" suppressHydrationWarning>
+        {children}
+      </body>
     </html>
   );
 }
