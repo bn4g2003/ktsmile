@@ -32,6 +32,7 @@ import { formatCashDirection } from "@/lib/format/labels";
 import { formatDate } from "@/lib/format/date";
 import { CashFlowChartsSection } from "@/components/modules/accounting/cash-flow-charts-section";
 import { CashReceiptPrintButton } from "@/components/shared/reports/cash-receipt-print-button";
+import { CashReceiptDownloadButton } from "@/components/shared/reports/cash-receipt-download-button";
 import {
   createCashTransaction,
   deleteCashTransaction,
@@ -508,6 +509,14 @@ export function CashPage() {
               <CashReceiptPrintButton
                 transactionId={row.original.id}
                 label={row.original.direction === "payment" ? "In PC" : "In PT"}
+                variant="ghost"
+                className={dataGridPrintMenuItemButtonClassName}
+              />
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <CashReceiptDownloadButton
+                transactionId={row.original.id}
+                label="Tải PDF"
                 variant="ghost"
                 className={dataGridPrintMenuItemButtonClassName}
               />

@@ -13,6 +13,7 @@ import {
 } from "@/lib/actions/partner-prices";
 import { cn } from "@/lib/utils/cn";
 import { PriceQuotePrintButton } from "@/components/shared/reports/price-quote-print-button";
+import { PriceQuoteDownloadButton } from "@/components/shared/reports/price-quote-download-button";
 
 type MatrixData = {
   partners: { id: string; code: string; name: string }[];
@@ -249,6 +250,12 @@ export function PricesPage() {
                 <PriceQuotePrintButton 
                   partnerId={selectedPartner.id} 
                   label="In báo giá"
+                  variant="secondary"
+                  size="sm"
+                />
+                <PriceQuoteDownloadButton 
+                  partnerId={selectedPartner.id} 
+                  label="Tải PDF"
                   variant="secondary"
                   size="sm"
                 />

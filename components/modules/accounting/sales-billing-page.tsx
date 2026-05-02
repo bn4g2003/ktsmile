@@ -14,6 +14,7 @@ import {
   DataGridRowActionsMenu,
 } from "@/components/shared/data-grid/data-grid-action-buttons";
 import { PaymentNoticePrintButton } from "@/components/shared/reports/payment-notice-print-button";
+import { PaymentNoticeDownloadButton } from "@/components/shared/reports/payment-notice-download-button";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenuItem,
@@ -203,6 +204,14 @@ export function SalesBillingPage() {
               <PaymentNoticePrintButton
                 orderId={row.original.id}
                 label="In GBTT"
+                variant="ghost"
+                className="w-full justify-start rounded-none px-2 py-1.5 text-xs font-normal h-auto ring-0 shadow-none hover:bg-transparent"
+              />
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <PaymentNoticeDownloadButton
+                orderId={row.original.id}
+                label="Tải PDF GBTT"
                 variant="ghost"
                 className="w-full justify-start rounded-none px-2 py-1.5 text-xs font-normal h-auto ring-0 shadow-none hover:bg-transparent"
               />

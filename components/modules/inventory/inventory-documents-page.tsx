@@ -30,6 +30,7 @@ import { DetailTabStrip } from "@/components/ui/detail-tab-strip";
 import { DetailPreview } from "@/components/ui/detail-preview";
 import { Textarea } from "@/components/ui/textarea";
 import { StockVoucherPrintButton } from "@/components/shared/reports/stock-voucher-print-button";
+import { StockVoucherDownloadButton } from "@/components/shared/reports/stock-voucher-download-button";
 import { listSupplierPicker } from "@/lib/actions/suppliers";
 import { formatMovement, formatPostingStatus } from "@/lib/format/labels";
 import { formatDate } from "@/lib/format/date";
@@ -503,7 +504,15 @@ export function InventoryDocumentsPage({ initialTab = "inbound" }: { initialTab?
             <DropdownMenuItem asChild>
               <StockVoucherPrintButton
                 documentId={row.original.id}
-                label="PDF"
+                label="In phiếu"
+                variant="ghost"
+                className={dataGridPrintMenuItemButtonClassName}
+              />
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <StockVoucherDownloadButton
+                documentId={row.original.id}
+                label="Tải PDF"
                 variant="ghost"
                 className={dataGridPrintMenuItemButtonClassName}
               />

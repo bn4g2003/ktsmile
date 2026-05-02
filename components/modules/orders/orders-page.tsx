@@ -56,7 +56,9 @@ import type { LabAccessoryKey } from "@/lib/lab/order-accessories";
 import { LAB_ORDER_ACCESSORY_DEFS, parseAccessoriesJson } from "@/lib/lab/order-accessories";
 import { LabToothPicker } from "@/components/modules/orders/lab-tooth-picker";
 import { LabOrderPrintButton } from "@/components/shared/reports/lab-order-print-button";
+import { LabOrderDownloadButton } from "@/components/shared/reports/lab-order-download-button";
 import { DeliveryNotePrintButton } from "@/components/shared/reports/delivery-note-print-button";
+import { DeliveryNoteDownloadButton } from "@/components/shared/reports/delivery-note-download-button";
 import { cn } from "@/lib/utils/cn";
 import { importLabOrdersFromExcel } from "@/lib/actions/lab-orders-import";
 import { parseToothPositionsToSet, detectArchConnection } from "@/lib/dental/fdi-teeth";
@@ -79,6 +81,7 @@ import { listCashFundChannels } from "@/lib/actions/cash";
 import {
   buildLabOrderListReportHtml,
 } from "@/lib/reports/lab-order-list-html";
+import { downloadLabOrderListPdf } from "@/lib/reports/lab-order-pdf";
 import { buildDeliveryNoteExcelAoa } from "@/lib/reports/delivery-note-excel";
 import { buildPrintShell, openBlankPrintTab, writeAndPrintToWindow } from "@/lib/reports/print-html";
 import { formatDate, formatDateTime } from "@/lib/format/date";
@@ -398,7 +401,7 @@ function OrdersPrintExportMenu({
   partners: CustomerPartnerPickerRow[];
   onOpenDailyDelivery: () => void;
 }) {
-  const [busy, setBusy] = React.useState<null | "list-pdf" | "list-xlsx">(null);
+  const [busy, setBusy] = React.useState<null | "list-pdf" | "list-xlsx" | "list-download-pdf">(null);
 
   const printFilteredListPdf = async () => {
     setBusy("list-pdf");
@@ -424,11 +427,11 @@ function OrdersPrintExportMenu({
       const partner = partners.find((p) => p.id === filters["partner_id"]);
       const customerHeader = partner
         ? {
-            name: partner.name?.trim() || partner.code?.trim() || undefined,
-            address: partner.address?.trim() || undefined,
-            phone: partner.phone?.trim() || undefined,
-            taxCode: partner.tax_id?.trim() || undefined,
-          }
+          name: partner.name?.trim() || partner.code?.trim() || undefined,
+          address: partner.address?.trim() || undefined,
+          phone: partner.phone?.trim() || undefined,
+          taxCode: partner.tax_id?.trim() || undefined,
+        }
         : undefined;
 
       const html = buildLabOrderListReportHtml({
@@ -442,6 +445,48 @@ function OrdersPrintExportMenu({
     } catch (e) {
       win.close();
       alert(e instanceof Error ? e.message : "Lỗi in danh sách");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const downloadFilteredListPdf = async () => {
+    setBusy("list-download-pdf");
+    try {
+      const res = await listLabOrders({
+        page: 1,
+        pageSize: 5000,
+        globalSearch,
+        filters,
+      });
+
+      let filtersDesc = "Tất cả đơn hàng";
+      const parts: string[] = [];
+      if (filters["received_from"]) parts.push("Từ " + formatDate(filters["received_from"]));
+      if (filters["received_to"]) parts.push("Đến " + formatDate(filters["received_to"]));
+      if (parts.length) filtersDesc = "THÁNG / KỲ: " + parts.join(" — ");
+
+      const partner = partners.find((p) => p.id === filters["partner_id"]);
+      const customerHeader = partner
+        ? {
+          name: partner.name?.trim() || partner.code?.trim() || undefined,
+          address: partner.address?.trim() || undefined,
+          phone: partner.phone?.trim() || undefined,
+          taxCode: partner.tax_id?.trim() || undefined,
+        }
+        : undefined;
+
+      const html = buildLabOrderListReportHtml({
+        filtersDesc,
+        rows: res.rows,
+        generatedAt: new Date().toLocaleString("vi-VN"),
+        customerHeader,
+      });
+
+      const filename = `DanhSachDonHang_${new Date().toISOString().slice(0, 10)}.pdf`;
+      await downloadLabOrderListPdf(html, filename);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Lỗi tải PDF");
     } finally {
       setBusy(null);
     }
@@ -579,7 +624,7 @@ function OrdersPrintExportMenu({
               d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"
             />
           </svg>
-          {busy === "list-pdf" ? "Đang in…" : busy === "list-xlsx" ? "Đang xuất…" : "In / xuất"}
+          {busy === "list-pdf" ? "Đang in…" : busy === "list-xlsx" ? "Đang xuất…" : busy === "list-download-pdf" ? "Đang tải…" : "In / xuất"}
           <svg className="ml-1 h-3.5 w-3.5 shrink-0 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden>
             <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
           </svg>
@@ -588,6 +633,9 @@ function OrdersPrintExportMenu({
       <DropdownMenuContent align="end" className="min-w-[15rem]">
         <DropdownMenuItem disabled={!!busy} onSelect={() => void printFilteredListPdf()}>
           In danh sách (PDF)
+        </DropdownMenuItem>
+        <DropdownMenuItem disabled={!!busy} onSelect={() => void downloadFilteredListPdf()}>
+          Tải danh sách (PDF)
         </DropdownMenuItem>
         <DropdownMenuItem disabled={!!busy} onSelect={() => void exportFilteredListExcel()}>
           Xuất danh sách (Excel)
@@ -691,9 +739,9 @@ export function OrdersPage() {
   }, [deliveryPartnerOptions, deliveryPartnerSearch]);
 
   React.useEffect(() => {
-    void listCustomerPartnerPicker().then(setPartners).catch(() => {});
-    void listProductPicker({ forSales: true }).then(setProducts).catch(() => {});
-    void listLabOrderFilterSuggestions().then(setFilterSuggestions).catch(() => {});
+    void listCustomerPartnerPicker().then(setPartners).catch(() => { });
+    void listProductPicker({ forSales: true }).then(setProducts).catch(() => { });
+    void listLabOrderFilterSuggestions().then(setFilterSuggestions).catch(() => { });
   }, []);
 
   React.useEffect(() => {
@@ -706,7 +754,7 @@ export function OrdersPage() {
           return rows.find((r) => r.value === "cash")?.value ?? rows[0]?.value ?? "cash";
         });
       })
-      .catch(() => {});
+      .catch(() => { });
   }, [open, editing]);
 
   const hydrateDraftPrices = React.useCallback(async (key: string, productIdFor: string) => {
@@ -839,7 +887,7 @@ export function OrdersPage() {
           ) as Record<LabAccessoryKey, string>,
         );
       })
-      .catch(() => {});
+      .catch(() => { });
     return () => {
       cancelled = true;
     };
@@ -971,13 +1019,13 @@ export function OrdersPage() {
           }));
         const autoPaymentArg = payNow
           ? {
-              payment_channel: payChannel.trim() || "cash",
-              transaction_date: receivedAt,
-              amount:
-                payAmount.trim() === ""
-                  ? undefined
-                  : Number(payAmount.replace(/\./g, "").replace(/,/g, ".")) || undefined,
-            }
+            payment_channel: payChannel.trim() || "cash",
+            transaction_date: receivedAt,
+            amount:
+              payAmount.trim() === ""
+                ? undefined
+                : Number(payAmount.replace(/\./g, "").replace(/,/g, ".")) || undefined,
+          }
           : null;
         const result = await createLabOrder(
           {
@@ -997,8 +1045,8 @@ export function OrdersPage() {
         if (payNow && result.autoPayment && !result.autoPayment.ok) {
           alert(
             "Đơn đã tạo nhưng không tạo được phiếu thu: " +
-              (result.autoPayment.message ?? "Lỗi không xác định") +
-              "\nVui lòng tạo phiếu thu thủ công ở Sổ quỹ.",
+            (result.autoPayment.message ?? "Lỗi không xác định") +
+            "\nVui lòng tạo phiếu thu thủ công ở Sổ quỹ.",
           );
         }
         setOpen(false);
@@ -1027,8 +1075,8 @@ export function OrdersPage() {
       if (res.ok) {
         const warn = res.errors?.length
           ? "\n\nCảnh báo (dòng bỏ qua):\n" +
-            res.errors.slice(0, 35).join("\n") +
-            (res.errors.length > 35 ? "\n…" : "")
+          res.errors.slice(0, 35).join("\n") +
+          (res.errors.length > 35 ? "\n…" : "")
           : "";
         alert((res.message ?? "Nhập xong.") + warn);
         bumpGrid();
@@ -1369,7 +1417,15 @@ export function OrdersPage() {
             <DropdownMenuItem asChild>
               <LabOrderPrintButton
                 orderId={row.original.id}
-                label="PDF"
+                label="In"
+                variant="ghost"
+                className={dataGridPrintMenuItemButtonClassName}
+              />
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <LabOrderDownloadButton
+                orderId={row.original.id}
+                label="Tải PDF"
                 variant="ghost"
                 className={dataGridPrintMenuItemButtonClassName}
               />
@@ -1409,64 +1465,64 @@ export function OrdersPage() {
         </Button>
       </div>
       {mainTab === "list" ? (
-      <ExcelDataGrid<LabOrderRow>
-        moduleId="lab_orders"
-        title="Đơn hàng phục hình"
-        columns={columns}
-        list={listLabOrders}
-        reloadSignal={gridReload}
-        filters={filters}
-        onFiltersChange={setFilters}
-        globalSearch={globalSearch}
-        onGlobalSearchChange={setGlobalSearch}
-        renderRowDetail={(row) => <LabOrderRowDetailPanel row={row} />}
-        rowDetailTitle={(r) => "Đơn " + r.order_number}
-        toolbarExtra={
-          <>
-            <input
-              ref={fileImportRef}
-              type="file"
-              accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
-              className="hidden"
-              onChange={(ev) => void onExcelSelected(ev)}
-            />
-            <Button
-              variant="secondary"
-              size="sm"
-              type="button"
-              disabled={importBusy}
-              onClick={onPickExcel}
-            >
-              {importBusy ? "Đang nhập…" : "Nhập Excel"}
-            </Button>
-            <OrderFiltersPopover
-              filters={filters}
-              setFilters={setFilters}
-              partners={partners}
-              suggestions={filterSuggestions}
-            />
-            <OrdersPrintExportMenu
-              filters={filters}
-              globalSearch={globalSearch}
-              partners={partners}
-              onOpenDailyDelivery={openDeliveryPrint}
-            />
-            <Button
-              variant="ghost"
-              size="sm"
-              type="button"
-              disabled={selectedOrderIds.size === 0}
-              onClick={() => void deleteSelectedOrders()}
-            >
-              {selectedOrderIds.size > 0 ? `Xóa đã chọn (${selectedOrderIds.size})` : "Xóa đã chọn"}
-            </Button>
-            <Button variant="primary" size="sm" type="button" onClick={openCreate}>
-              Thêm đơn
-            </Button>
-          </>
-        }
-        getRowId={(r) => r.id}
-      />
+        <ExcelDataGrid<LabOrderRow>
+          moduleId="lab_orders"
+          title="Đơn hàng phục hình"
+          columns={columns}
+          list={listLabOrders}
+          reloadSignal={gridReload}
+          filters={filters}
+          onFiltersChange={setFilters}
+          globalSearch={globalSearch}
+          onGlobalSearchChange={setGlobalSearch}
+          renderRowDetail={(row) => <LabOrderRowDetailPanel row={row} />}
+          rowDetailTitle={(r) => "Đơn " + r.order_number}
+          toolbarExtra={
+            <>
+              <input
+                ref={fileImportRef}
+                type="file"
+                accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+                className="hidden"
+                onChange={(ev) => void onExcelSelected(ev)}
+              />
+              <Button
+                variant="secondary"
+                size="sm"
+                type="button"
+                disabled={importBusy}
+                onClick={onPickExcel}
+              >
+                {importBusy ? "Đang nhập…" : "Nhập Excel"}
+              </Button>
+              <OrderFiltersPopover
+                filters={filters}
+                setFilters={setFilters}
+                partners={partners}
+                suggestions={filterSuggestions}
+              />
+              <OrdersPrintExportMenu
+                filters={filters}
+                globalSearch={globalSearch}
+                partners={partners}
+                onOpenDailyDelivery={openDeliveryPrint}
+              />
+              <Button
+                variant="ghost"
+                size="sm"
+                type="button"
+                disabled={selectedOrderIds.size === 0}
+                onClick={() => void deleteSelectedOrders()}
+              >
+                {selectedOrderIds.size > 0 ? `Xóa đã chọn (${selectedOrderIds.size})` : "Xóa đã chọn"}
+              </Button>
+              <Button variant="primary" size="sm" type="button" onClick={openCreate}>
+                Thêm đơn
+              </Button>
+            </>
+          }
+          getRowId={(r) => r.id}
+        />
       ) : (
         <OrdersPrintHub partners={partners} />
       )}
@@ -1554,8 +1610,8 @@ export function OrdersPage() {
               >
                 {(editing
                   ? labOrderStatusOptions.filter((o) =>
-                      allowedLabOrderStatusTargets(editing.status).includes(o.value),
-                    )
+                    allowedLabOrderStatusTargets(editing.status).includes(o.value),
+                  )
                   : labOrderStatusOptions
                 ).map((o) => (
                   <option key={o.value} value={o.value}>
@@ -1870,13 +1926,13 @@ export function OrdersPage() {
                             setDraftLines((prev) =>
                               prev.map((l) =>
                                 l.key === line.key
-                                  ? { 
-                                      ...l, 
-                                      work_type: newWorkType,
-                                      price: newWorkType === "warranty" ? "0" : l.price,
-                                      disc: newWorkType === "warranty" ? "0" : l.disc,
-                                      disc_vnd: newWorkType === "warranty" ? "0" : l.disc_vnd,
-                                    }
+                                  ? {
+                                    ...l,
+                                    work_type: newWorkType,
+                                    price: newWorkType === "warranty" ? "0" : l.price,
+                                    disc: newWorkType === "warranty" ? "0" : l.disc,
+                                    disc_vnd: newWorkType === "warranty" ? "0" : l.disc_vnd,
+                                  }
                                   : l,
                               ),
                             );
@@ -2067,6 +2123,7 @@ export function OrdersPage() {
               >
                 {deliveryExcelBusy ? "Đang xuất…" : "Xuất Excel giao ngày"}
               </Button>
+              <DeliveryNoteDownloadButton partnerId={deliveryPartnerId} deliveryDate={deliveryDate} />
               <DeliveryNotePrintButton partnerId={deliveryPartnerId} deliveryDate={deliveryDate} />
             </div>
           </div>

@@ -117,40 +117,61 @@ export function buildLabOrderListReportHtml(p: LabOrderListReportPayload): strin
     </div>
 
     <style>
-      table.lol-table { border: 1px solid #475569; width: 100%; margin-top: 6px; }
-      .lol-table th.lol-th,
-      .lol-table td.lol-td {
+      /* ── Bảng dữ liệu chính ── */
+      table.lol-table { width: 100% !important; border-collapse: collapse !important; margin-top: 6px; table-layout: fixed !important; }
+
+      /* Header bảng: nền xanh đậm, chữ trắng — KHÔNG override bằng màu xám */
+      .lol-table .lol-th {
+        background-color: #1e3a5f !important;
+        color: #ffffff !important;
+        font-weight: 700 !important;
+        text-transform: uppercase !important;
+        font-size: 10px !important;
+        text-align: center !important;
+        vertical-align: middle !important;
+        border: 1px solid #1e3a5f !important;
+        padding: 6px 4px !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+
+      /* Cell dữ liệu */
+      .lol-table .lol-td {
         border: 1px solid #64748b !important;
         color: #0f172a !important;
+        font-size: 11px !important;
+        vertical-align: top !important;
+        padding: 5px 4px !important;
+        word-wrap: break-word !important;
+      }
+
+      /* Logo: giữ khung card bo góc như bản in */
+      .logo {
+        max-width: 130px !important;
+        max-height: 90px !important;
+        height: auto !important;
+        display: inline-block !important;
+        border: 1px solid #e2e8f0 !important;
+        border-radius: 10px !important;
+        padding: 6px !important;
         background: #fff !important;
-        font-size: 10px;
-        vertical-align: top;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.08) !important;
+        object-fit: contain !important;
       }
-      .lol-table thead .lol-th {
-        background: #e2e8f0 !important;
-        color: #0f172a !important;
-        font-weight: 700;
-        text-transform: uppercase;
-        font-size: 9px;
-        -webkit-print-color-adjust: exact;
-        print-color-adjust: exact;
-      }
-      .lol-table td.lol-td { height: auto; min-height: 18px; }
-      table.dn-kv th { color: #0f172a !important; }
-      .lol-foot td { font-size: 11px; }
+
+      table.dn-kv th { color: #0f172a !important; background: none !important; }
+      .lol-foot td { font-size: 11px !important; }
+
       @media print {
-        .lol-table thead .lol-th {
-          -webkit-print-color-adjust: exact;
-          print-color-adjust: exact;
+        .lol-table .lol-th {
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
         }
         .lol-foot-total td {
-          -webkit-print-color-adjust: exact;
-          print-color-adjust: exact;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
         }
-        /* Không tách một dòng tổng qua hai trang */
-        .lol-table tbody tr.lol-foot {
-          page-break-inside: avoid;
-        }
+        .lol-table tbody tr { page-break-inside: avoid; }
       }
     </style>
   `;

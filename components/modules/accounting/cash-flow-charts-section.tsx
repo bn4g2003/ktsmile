@@ -19,6 +19,7 @@ import {
 import { formatVnd } from "@/lib/format/currency";
 import { escapeHtml } from "@/lib/reports/escape-html";
 import { PrintReportButton } from "@/components/shared/reports/print-report-button";
+import { DownloadReportPdfButton } from "@/components/shared/reports/download-report-pdf-button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -203,10 +204,16 @@ export function CashFlowChartsSection() {
             />
           </div>
         </div>
-        <PrintReportButton
-          title={`Sổ quỹ tổng hợp ${from} — ${to} — KT Smile Lab`}
-          buildBodyHtml={printBody}
-        />
+        <div className="flex gap-2">
+          <PrintReportButton
+            title={`Sổ quỹ tổng hợp ${from} — ${to} — KT Smile Lab`}
+            buildBodyHtml={printBody}
+          />
+          <DownloadReportPdfButton
+            title={`Sổ quỹ tổng hợp ${from} — ${to} — KT Smile Lab`}
+            buildBodyHtml={printBody}
+          />
+        </div>
       </div>
       {err ? (
         <p className="text-sm text-[#b91c1c]">{err}</p>
