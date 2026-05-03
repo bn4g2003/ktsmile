@@ -26,6 +26,7 @@ export type DeliveryNoteLine = {
   shade: string | null;
   /** Chỉ dùng khi in phiếu tháng (bảng phẳng). */
   unit_price?: number;
+  base_unit_price?: number;
   line_amount?: number;
   notes?: string | null;
 };

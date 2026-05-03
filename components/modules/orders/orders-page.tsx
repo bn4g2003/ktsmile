@@ -1957,6 +1957,7 @@ export function OrdersPage() {
                           allowDecimal={false}
                         />
                       </div>
+                      {/* 
                       <div className="grid gap-2">
                         <Label>Chiết khấu %</Label>
                         <Input
@@ -1972,6 +1973,7 @@ export function OrdersPage() {
                           }
                         />
                       </div>
+                      */}
                       <div className="grid gap-2">
                         <Label>Giảm VNĐ (dòng)</Label>
                         <CurrencyInput

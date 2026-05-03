@@ -865,17 +865,20 @@ export async function getSuggestedLinePricing(
 
   const basePrice = Number(pr?.unit_price ?? 0);
   const customPrice = pp?.unit_price != null ? Number(pp.unit_price) : null;
+
+  // 1. Nếu có giá riêng thiết lập cho khách này -> Lấy giá riêng đó làm đơn giá luôn
   if (customPrice != null) {
-    if (basePrice > 0) {
-      const raw = ((basePrice - customPrice) / basePrice) * 100;
-      const clamped = Math.min(100, Math.max(0, raw));
-      const rounded = Math.round(clamped * 100) / 100;
-      return { unit_price: basePrice, discount_percent: rounded };
-    }
     return { unit_price: customPrice, discount_percent: 0 };
   }
 
-  return { unit_price: basePrice, discount_percent: partnerDisc };
+  // 2. Nếu có chiết khấu mặc định cho khách -> Tính giá sau giảm điền vào đơn giá
+  if (partnerDisc > 0 && basePrice > 0) {
+    const netPrice = Math.round(basePrice * (1 - partnerDisc / 100));
+    return { unit_price: netPrice, discount_percent: 0 };
+  }
+
+  // 3. Cuối cùng mới lấy giá gốc
+  return { unit_price: basePrice, discount_percent: 0 };
 }
 
 export async function getLabOrder(id: string) {
@@ -1181,7 +1184,7 @@ export async function getMonthlyDeliveryNotePayload(
     const { data: lineData, error: lErr } = await supabase
       .from("lab_order_lines")
       .select(
-        "order_id,tooth_positions,quantity,shade,unit_price,line_amount,notes,products:product_id(code,name)",
+        "order_id,tooth_positions,quantity,shade,unit_price,line_amount,notes,products:product_id(code,name,unit_price)",
       )
       .in("order_id", orderIds)
       .order("created_at", { ascending: true })
@@ -1198,13 +1201,14 @@ export async function getMonthlyDeliveryNotePayload(
       quantity: number;
       shade: string | null;
       unit_price: number;
+      base_unit_price: number;
       line_amount: number;
       notes: string | null;
     }[]
   >();
   for (const row of lines) {
     const oid = row["order_id"] as string;
-    const pr = row["products"] as { code?: string; name?: string } | null;
+    const pr = row["products"] as { code?: string; name?: string; unit_price?: number } | null;
     const arr = linesByOrder.get(oid) ?? [];
     arr.push({
       product_code: pr?.code ?? "",
@@ -1213,6 +1217,7 @@ export async function getMonthlyDeliveryNotePayload(
       quantity: Number(row["quantity"] ?? 0),
       shade: (row["shade"] as string | null) ?? null,
       unit_price: Number(row["unit_price"] ?? 0),
+      base_unit_price: Number(pr?.unit_price ?? 0),
       line_amount: Number(row["line_amount"] ?? 0),
       notes: (row["notes"] as string | null) ?? null,
     });
@@ -1221,29 +1226,30 @@ export async function getMonthlyDeliveryNotePayload(
 
   const periodHeading = `THÁNG ${String(month).padStart(2, "0")} ${year}`;
 
-  const discountParts: { pct: number; fixedAmt: number }[] = [];
   let subtotalGoods = 0;
-  let discountAmount = 0;
   let otherFeesSum = 0;
+  const partnerDiscPercent = await getPartnerDefaultDiscount(partnerId);
+
   for (const o of orders ?? []) {
     const oid = o["id"] as string;
-    const lines = linesByOrder.get(oid) ?? [];
-    const lineSum = roundMoney2(lines.reduce((s, l) => s + l.line_amount, 0));
-    const pct = Number(o["billing_order_discount_percent"] ?? 0);
-    const fixedAmt = Number(o["billing_order_discount_amount"] ?? 0);
-    const fees = Number(o["billing_other_fees"] ?? 0);
-    subtotalGoods += lineSum;
-    discountAmount += lineSum * (pct / 100) + fixedAmt;
-    otherFeesSum += fees;
-    discountParts.push({ pct, fixedAmt });
+    const oLines = linesByOrder.get(oid) ?? [];
+    
+    // Cộng dồn tiền thực tế của từng dòng (đã bao gồm giá riêng)
+    const orderNet = oLines.reduce((sum, l) => sum + l.line_amount, 0);
+    
+    subtotalGoods += orderNet;
+    otherFeesSum += Number(o["billing_other_fees"] ?? 0);
   }
+
+  // Tính tiền chiết khấu dựa trên tổng tiền hàng và % chiết khấu của khách
+  const finalDiscountAmount = roundMoney2(subtotalGoods * (partnerDiscPercent / 100));
+
   subtotalGoods = roundMoney2(subtotalGoods);
-  discountAmount = roundMoney2(discountAmount);
   otherFeesSum = roundMoney2(otherFeesSum);
 
   const { opening, receipts_month } = await getPartnerMonthOpeningAndReceipts(partnerId, year, month);
   const closingDebt = roundMoney2(
-    opening + subtotalGoods - discountAmount + otherFeesSum - receipts_month,
+    opening + (subtotalGoods - finalDiscountAmount) - receipts_month,
   );
 
   return {
@@ -1259,8 +1265,8 @@ export async function getMonthlyDeliveryNotePayload(
     generated_at: new Date().toLocaleString("vi-VN"),
     monthly_footer: {
       subtotal_goods: subtotalGoods,
-      discount_label: monthlyDeliveryDiscountLabel(discountParts),
-      discount_amount: discountAmount,
+      discount_label: `CHIẾT KHẤU GIẢM ${partnerDiscPercent}%`,
+      discount_amount: finalDiscountAmount,
       other_fees: otherFeesSum,
       opening_debt: opening,
       payments_in_period: receipts_month,
