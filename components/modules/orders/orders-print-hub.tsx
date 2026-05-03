@@ -26,6 +26,8 @@ import {
 import { buildDeliveryNoteBodyHtml, deliveryNotePrintTitle } from "@/lib/reports/delivery-note-html";
 import { buildPaymentNoticeBodyHtml, paymentNoticePrintTitle } from "@/lib/reports/payment-notice-html";
 import { buildDeliveryNoteExcelAoa } from "@/lib/reports/delivery-note-excel";
+import { downloadPdfFromServer } from "@/lib/reports/download-pdf-client";
+import { formatVnd } from "@/lib/format/currency";
 
 type Partner = { id: string; code: string; name: string };
 
@@ -40,15 +42,19 @@ export function OrdersPrintHub({ partners }: { partners: Partner[] }) {
   const [gbttMonth, setGbttMonth] = React.useState(String(def.month));
   const [gbttPartnerId, setGbttPartnerId] = React.useState("");
   const [gbttBusy, setGbttBusy] = React.useState(false);
+  const [gbttDlBusy, setGbttDlBusy] = React.useState(false);
 
   const [shipYear, setShipYear] = React.useState(String(def.year));
   const [shipMonth, setShipMonth] = React.useState(String(def.month));
   const [shipPartnerId, setShipPartnerId] = React.useState("");
   const [shipBusy, setShipBusy] = React.useState(false);
+  const [shipDlBusy, setShipDlBusy] = React.useState(false);
 
   const [orderCode, setOrderCode] = React.useState("");
   const [oneGbttBusy, setOneGbttBusy] = React.useState(false);
+  const [oneGbttDlBusy, setOneGbttDlBusy] = React.useState(false);
   const [oneShipBusy, setOneShipBusy] = React.useState(false);
+  const [oneShipDlBusy, setOneShipDlBusy] = React.useState(false);
 
   const years = React.useMemo(() => {
     const y = new Date().getFullYear();
@@ -105,6 +111,25 @@ export function OrdersPrintHub({ partners }: { partners: Partner[] }) {
     }
   };
 
+  const downloadMonthlyGbttPdf = async () => {
+    const y = Number(gbttYear);
+    const m = Number(gbttMonth);
+    setGbttDlBusy(true);
+    try {
+      const { title, innerHtml, count } = await buildBatchPaymentNoticePrintDocument(
+        y,
+        m,
+        gbttPartnerId.trim() || null,
+      );
+      const fullHtml = buildPrintShell(`${title} (${count} đơn)`, innerHtml);
+      await downloadPdfFromServer(fullHtml, `GBTT_thang_${m}_${y}.pdf`);
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : "Không tải được PDF.");
+    } finally {
+      setGbttDlBusy(false);
+    }
+  };
+
   const printMonthlyDelivery = async () => {
     if (!shipPartnerId.trim()) {
       window.alert("Chọn lab / khách hàng.");
@@ -133,6 +158,31 @@ export function OrdersPrintHub({ partners }: { partners: Partner[] }) {
       window.alert(e instanceof Error ? e.message : "Không in được hóa đơn.");
     } finally {
       setShipBusy(false);
+    }
+  };
+
+  const downloadMonthlyDeliveryPdf = async () => {
+    if (!shipPartnerId.trim()) {
+      window.alert("Chọn lab / khách hàng.");
+      return;
+    }
+    const y = Number(shipYear);
+    const m = Number(shipMonth);
+    setShipDlBusy(true);
+    try {
+      const payload = await getMonthlyDeliveryNotePayload(shipPartnerId.trim(), y, m);
+      if (!payload.orders.length) {
+        window.alert("Không có đơn nào của lab này trong tháng đã chọn (theo ngày nhận).");
+        return;
+      }
+      const title = deliveryNotePrintTitle(payload);
+      const fullHtml = buildPrintShell(title, buildDeliveryNoteBodyHtml(payload));
+      const slug = `${payload.partner_code ?? "giao"}_thang${m}_${y}`.replace(/[^\w.-]+/g, "_");
+      await downloadPdfFromServer(fullHtml, `HoaDonPhongNhaThang_${slug}.pdf`);
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : "Không tải được PDF.");
+    } finally {
+      setShipDlBusy(false);
     }
   };
 
@@ -199,6 +249,23 @@ export function OrdersPrintHub({ partners }: { partners: Partner[] }) {
     }
   };
 
+  const downloadOneGbttPdf = async () => {
+    setOneGbttDlBusy(true);
+    try {
+      const id = await resolveOrderId();
+      if (!id) return;
+      const payload = await getPaymentNoticePrintPayload(id);
+      const title = paymentNoticePrintTitle(payload);
+      const fullHtml = buildPrintShell(title, buildPaymentNoticeBodyHtml(payload));
+      const code = (payload.order_number || "don").replace(/[^\w.-]+/g, "_");
+      await downloadPdfFromServer(fullHtml, `GBTT_don_${code}.pdf`);
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : "Không tải được PDF.");
+    } finally {
+      setOneGbttDlBusy(false);
+    }
+  };
+
   const exportOneGbttExcel = async () => {
     setOneGbttBusy(true);
     try {
@@ -236,6 +303,23 @@ export function OrdersPrintHub({ partners }: { partners: Partner[] }) {
       window.alert(e instanceof Error ? e.message : "Không in được phiếu giao.");
     } finally {
       setOneShipBusy(false);
+    }
+  };
+
+  const downloadOneDeliveryPdf = async () => {
+    setOneShipDlBusy(true);
+    try {
+      const id = await resolveOrderId();
+      if (!id) return;
+      const payload = await getSingleOrderDeliveryNotePayload(id);
+      const title = deliveryNotePrintTitle(payload);
+      const fullHtml = buildPrintShell(title, buildDeliveryNoteBodyHtml(payload));
+      const code = (payload.order_number || "phieu").replace(/[^\w.-]+/g, "_");
+      await downloadPdfFromServer(fullHtml, `PhieuGiao_don_${code}.pdf`);
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : "Không tải được PDF.");
+    } finally {
+      setOneShipDlBusy(false);
     }
   };
 
@@ -305,11 +389,14 @@ export function OrdersPrintHub({ partners }: { partners: Partner[] }) {
           </div>
         </div>
         <div className="mt-4 flex flex-wrap gap-2">
-          <Button type="button" variant="primary" size="sm" disabled={gbttBusy} onClick={() => void printMonthlyGbtt()}>
-            {gbttBusy ? "Đang xử lý…" : "In GBTT theo tháng (PDF)"}
+          <Button type="button" variant="primary" size="sm" disabled={gbttBusy || gbttDlBusy} onClick={() => void printMonthlyGbtt()}>
+            {gbttBusy ? "Đang xử lý…" : "In GBTT (Trình duyệt)"}
           </Button>
-          <Button type="button" variant="secondary" size="sm" disabled={gbttBusy} onClick={() => void exportMonthlyGbttExcel()}>
-            {gbttBusy ? "Đang xử lý…" : "Xuất Excel GBTT theo tháng"}
+          <Button type="button" variant="primary" size="sm" disabled={gbttBusy || gbttDlBusy} onClick={() => void downloadMonthlyGbttPdf()}>
+            {gbttDlBusy ? "Đang tải…" : "Tải PDF GBTT"}
+          </Button>
+          <Button type="button" variant="secondary" size="sm" disabled={gbttBusy || gbttDlBusy} onClick={() => void exportMonthlyGbttExcel()}>
+            {"Xuất Excel"}
           </Button>
         </div>
       </Card>
@@ -358,13 +445,23 @@ export function OrdersPrintHub({ partners }: { partners: Partner[] }) {
             variant="secondary"
             size="sm"
             className="ring-1 ring-[color-mix(in_srgb,var(--primary)_28%,transparent)]"
-            disabled={shipBusy}
+            disabled={shipBusy || shipDlBusy}
             onClick={() => void printMonthlyDelivery()}
           >
-            {shipBusy ? "Đang xử lý…" : "In hóa đơn phòng nha/labo theo tháng (PDF)"}
+            {shipBusy ? "Đang xử lý…" : "In hóa đơn (Trình duyệt)"}
           </Button>
-          <Button type="button" variant="secondary" size="sm" disabled={shipBusy} onClick={() => void exportMonthlyDeliveryExcel()}>
-            {shipBusy ? "Đang xử lý…" : "Xuất Excel hóa đơn theo tháng"}
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            className="ring-1 ring-[color-mix(in_srgb,var(--primary)_28%,transparent)]"
+            disabled={shipBusy || shipDlBusy}
+            onClick={() => void downloadMonthlyDeliveryPdf()}
+          >
+            {shipDlBusy ? "Đang tải…" : "Tải PDF hóa đơn"}
+          </Button>
+          <Button type="button" variant="secondary" size="sm" disabled={shipBusy || shipDlBusy} onClick={() => void exportMonthlyDeliveryExcel()}>
+            {"Xuất Excel"}
           </Button>
         </div>
       </Card>
@@ -387,30 +484,43 @@ export function OrdersPrintHub({ partners }: { partners: Partner[] }) {
           </div>
         </div>
         <div className="mt-4 flex flex-wrap gap-2">
-          <Button type="button" variant="secondary" size="sm" disabled={oneGbttBusy} onClick={() => void printOneGbtt()}>
-            {oneGbttBusy ? "Đang tải…" : "In GBTT (PDF)"}
+          <Button type="button" variant="secondary" size="sm" disabled={oneGbttBusy || oneGbttDlBusy} onClick={() => void printOneGbtt()}>
+            {oneGbttBusy ? "Đang tải…" : "In GBTT"}
           </Button>
-          <Button type="button" variant="secondary" size="sm" disabled={oneGbttBusy} onClick={() => void exportOneGbttExcel()}>
-            {oneGbttBusy ? "Đang tải…" : "Xuất Excel GBTT"}
+          <Button type="button" variant="secondary" size="sm" disabled={oneGbttBusy || oneGbttDlBusy} onClick={() => void downloadOneGbttPdf()}>
+            {oneGbttDlBusy ? "Đang tải…" : "Tải PDF GBTT"}
+          </Button>
+          <Button type="button" variant="secondary" size="sm" disabled={oneGbttBusy || oneGbttDlBusy} onClick={() => void exportOneGbttExcel()}>
+            {"Xuất Excel"}
           </Button>
           <Button
             type="button"
             variant="secondary"
             size="sm"
             className="ring-1 ring-[color-mix(in_srgb,var(--primary)_28%,transparent)]"
-            disabled={oneShipBusy}
+            disabled={oneShipBusy || oneShipDlBusy}
             onClick={() => void printOneDelivery()}
           >
-            {oneShipBusy ? "Đang tải…" : "In phiếu giao (PDF)"}
+            {oneShipBusy ? "Đang tải…" : "In phiếu giao"}
           </Button>
           <Button
             type="button"
             variant="secondary"
             size="sm"
-            disabled={oneShipBusy}
+            className="ring-1 ring-[color-mix(in_srgb,var(--primary)_28%,transparent)]"
+            disabled={oneShipBusy || oneShipDlBusy}
+            onClick={() => void downloadOneDeliveryPdf()}
+          >
+            {oneShipDlBusy ? "Đang tải…" : "Tải PDF phiếu giao"}
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            disabled={oneShipBusy || oneShipDlBusy}
             onClick={() => void exportOneDeliveryExcel()}
           >
-            {oneShipBusy ? "Đang tải…" : "Xuất Excel phiếu giao"}
+            {"Xuất Excel"}
           </Button>
         </div>
       </Card>

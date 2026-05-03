@@ -66,7 +66,7 @@ export function buildLabOrderBodyHtml(p: LabOrderPrintPayload): string {
   const yearG =
     p.patient_year_of_birth != null || p.patient_gender
       ? (p.patient_year_of_birth != null ? String(p.patient_year_of_birth) : "") +
-        (p.patient_gender ? (p.patient_year_of_birth != null ? " · " : "") + formatPatientGender(p.patient_gender) : "")
+      (p.patient_gender ? (p.patient_year_of_birth != null ? " · " : "") + formatPatientGender(p.patient_gender) : "")
       : "—";
   const rows = p.lines
     .map(

@@ -111,13 +111,22 @@ export async function listPayablesReport(args: ListArgs): Promise<ListResult<Pay
   if (nameFilter) rows = rows.filter((r) => r.supplier_name.toLowerCase().includes(nameFilter));
 
   const total = rows.length;
+  const sumOpening = rows.reduce((acc, row) => acc + row.opening, 0);
+  const sumInbound = rows.reduce((acc, row) => acc + row.inbound_month, 0);
+  const sumPayments = rows.reduce((acc, row) => acc + row.payments_month, 0);
   const sumClosing = rows.reduce((acc, row) => acc + row.closing, 0);
+
   const from = (args.page - 1) * args.pageSize;
   const slice = rows.slice(from, from + args.pageSize);
   return {
     rows: slice,
     total,
-    summary: [{ label: "Tổng phải trả cuối kỳ (đã lọc)", value: round2(sumClosing) }],
+    summary: [
+      { label: "Nợ đầu kỳ", value: round2(sumOpening) },
+      { label: "PS nhập (tháng)", value: round2(sumInbound) },
+      { label: "Đã trả (tháng)", value: round2(sumPayments) },
+      { label: "Nợ cuối kỳ", value: round2(sumClosing) },
+    ],
   };
 }
 

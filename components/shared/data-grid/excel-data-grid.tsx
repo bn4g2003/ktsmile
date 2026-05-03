@@ -761,6 +761,10 @@ export function ExcelDataGrid<T>({
                     const fk = col.columnDef.meta?.filterKey;
                     const ft = col.columnDef.meta?.filterType ?? "text";
                     if (!fk || ft === "none") {
+                      const header = col.columnDef.header;
+                      const summaryItem =
+                        typeof header === "string" ? listSummary.find((s) => s.label === header) : null;
+
                       return (
                         <td
                           key={col.id}
@@ -770,7 +774,13 @@ export function ExcelDataGrid<T>({
                               "sticky right-0 z-20 w-[68px] max-w-[68px] !px-2 bg-[var(--surface-muted)] shadow-[-4px_0_8px_rgba(0,0,0,0.05)]",
                           )}
                         >
-                          <span className="sr-only">filter</span>
+                          {summaryItem ? (
+                            <div className="flex h-9 items-center px-1 text-xs font-bold text-[var(--on-surface)] tabular-nums">
+                              {formatSummaryValue(summaryItem.value)}
+                            </div>
+                          ) : (
+                            <span className="sr-only">filter</span>
+                          )}
                         </td>
                       );
                     }

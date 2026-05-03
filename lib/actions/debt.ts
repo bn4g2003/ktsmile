@@ -148,14 +148,23 @@ export async function listDebtReport(args: ListArgs): Promise<ListResult<DebtRow
   if (nameFilter) rows = rows.filter((r) => r.partner_name.toLowerCase().includes(nameFilter));
 
   const total = rows.length;
+  const sumOpening = rows.reduce((s, r) => s + r.opening, 0);
+  const sumOrders = rows.reduce((s, r) => s + r.orders_month, 0);
+  const sumReceipts = rows.reduce((s, r) => s + r.receipts_month, 0);
   const sumClosing = rows.reduce((s, r) => s + r.closing, 0);
+
   const from = (args.page - 1) * args.pageSize;
   const slice = rows.slice(from, from + args.pageSize);
   const round2 = (n: number) => Math.round(n * 100) / 100;
   return {
     rows: slice,
     total,
-    summary: [{ label: "Tổng dư cuối (đã lọc)", value: round2(sumClosing) }],
+    summary: [
+      { label: "Nợ đầu kỳ", value: round2(sumOpening) },
+      { label: "PS bán (tháng)", value: round2(sumOrders) },
+      { label: "Đã thu (tháng)", value: round2(sumReceipts) },
+      { label: "Nợ cuối kỳ", value: round2(sumClosing) },
+    ],
   };
 }
 

@@ -283,9 +283,9 @@ export async function listLabOrders(args: ListArgs): Promise<ListResult<LabOrder
     if (!retry) {
       throw new Error(
         error.message +
-          (isSupabaseSchemaDriftError(error.message)
-            ? " — Chạy các file SQL trong supabase/sql theo thứ tự trên project Supabase (migration đồng bộ schema)."
-            : ""),
+        (isSupabaseSchemaDriftError(error.message)
+          ? " — Chạy các file SQL trong supabase/sql theo thứ tự trên project Supabase (migration đồng bộ schema)."
+          : ""),
       );
     }
   }
@@ -1057,10 +1057,10 @@ export async function getDailyDeliveryNotePayload(
       return dueDate === date || receivedDate === date || receivedDate === prevDate;
     })
     .sort((a, b) => {
-    const dueA = String((a["due_delivery_at"] as string | null) ?? fallbackDueFromReceived(a["received_at"] as string | null) ?? "");
-    const dueB = String((b["due_delivery_at"] as string | null) ?? fallbackDueFromReceived(b["received_at"] as string | null) ?? "");
-    if (dueA !== dueB) return dueA.localeCompare(dueB);
-    return String(a["order_number"] ?? "").localeCompare(String(b["order_number"] ?? ""));
+      const dueA = String((a["due_delivery_at"] as string | null) ?? fallbackDueFromReceived(a["received_at"] as string | null) ?? "");
+      const dueB = String((b["due_delivery_at"] as string | null) ?? fallbackDueFromReceived(b["received_at"] as string | null) ?? "");
+      if (dueA !== dueB) return dueA.localeCompare(dueB);
+      return String(a["order_number"] ?? "").localeCompare(String(b["order_number"] ?? ""));
     });
   if (matchedOrders.length === 0) {
     const sample = ((ordersRaw ?? []) as Record<string, unknown>[])
