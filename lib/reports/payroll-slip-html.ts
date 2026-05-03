@@ -255,13 +255,13 @@ function payrollSlipBaseStylesCss(): string {
           color: #111827;
           text-transform: uppercase;
           letter-spacing: 0.02em;
-          font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+          font-family: "Times New Roman", Times, serif;
         }
         .company-sub {
           font-size: 14px;
           color: #6b7280;
           margin-top: 4px;
-          font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+          font-family: "Times New Roman", Times, serif;
         }
         .title-band {
           text-align: center;
@@ -272,14 +272,14 @@ function payrollSlipBaseStylesCss(): string {
           letter-spacing: 0.06em;
           margin: 0 0 8px;
           color: #111827;
-          font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+          font-family: "Times New Roman", Times, serif;
         }
         .period {
           text-align: center;
           font-size: 14px;
           color: #4b5563;
           margin: 0;
-          font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+          font-family: "Times New Roman", Times, serif;
         }
         .period strong {
           color: #111827;
@@ -412,7 +412,7 @@ function payrollSlipBaseStylesCss(): string {
           font-size: 26px;
           text-transform: uppercase;
           margin-bottom: 6px;
-          font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+          font-family: "Times New Roman", Times, serif;
         }
         .signature-block .note {
           color: #6b7280;

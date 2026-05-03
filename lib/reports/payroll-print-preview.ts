@@ -23,7 +23,7 @@ export function withPayrollPrintPreviewChrome(fullDocumentHtml: string): string 
       padding: 10px 16px;
       background: #0f172a;
       color: #f8fafc;
-      font-family: system-ui, "Segoe UI", Roboto, sans-serif;
+      font-family: "Times New Roman", Times, serif;
       font-size: 13px;
       line-height: 1.35;
       box-shadow: 0 2px 10px rgba(0, 0, 0, 0.22);

@@ -55,7 +55,7 @@ export function buildPriceQuoteBodyHtml(p: PriceQuotePrintPayload): string {
         </tr>
         <tr>
           <th>Mã khách hàng</th>
-          <td><span style="background:#f0f0f0;padding:2px 8px;border-radius:4px;font-family:monospace;font-weight:bold;">${escapeHtml(p.partner_code)}</span></td>
+          <td><span style="background:#f0f0f0;padding:2px 8px;border-radius:4px;font-family:'Times New Roman', Times, serif;font-weight:bold;">${escapeHtml(p.partner_code)}</span></td>
         </tr>
         <tr>
           <th>Ngày xuất báo giá</th>
