@@ -167,9 +167,9 @@ export const PAYROLL_PDF_CAPTURE_STYLE = `
         html.payroll-pdf-capture .info-table td,
         html.payroll-pdf-capture .salary-table th,
         html.payroll-pdf-capture .salary-table td {
-          font-size: 14px !important;
+          font-size: 13px !important;
           line-height: 1.45 !important;
-          padding: 10px 12px !important;
+          padding: 8px 10px !important;
         }
         html.payroll-pdf-capture .signature-block .label {
           font-size: 26px !important;
@@ -186,7 +186,7 @@ function payrollSlipBaseStylesCss(): string {
         * { box-sizing: border-box; }
         body {
           font-family: "Times New Roman", Times, "Noto Serif", serif;
-          font-size: 14px;
+          font-size: 13px;
           margin: 0;
           padding: 24px;
           color: #1f2937;
@@ -295,8 +295,8 @@ function payrollSlipBaseStylesCss(): string {
         }
         .info-table td {
           border: 1px solid #e5e7eb;
-          padding: 10px 14px;
-          font-size: 14px;
+          padding: 8px 12px;
+          font-size: 13px;
           vertical-align: middle;
         }
         .info-table .label-cell {
@@ -331,8 +331,8 @@ function payrollSlipBaseStylesCss(): string {
         .salary-table col.salary-col-amount { width: 50%; }
         .salary-table th, .salary-table td {
           border: 1px solid #e5e7eb;
-          padding: 12px 14px;
-          font-size: 14px;
+          padding: 10px 12px;
+          font-size: 13px;
           vertical-align: middle;
         }
         .salary-table th {

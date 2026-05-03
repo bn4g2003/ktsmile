@@ -58,12 +58,20 @@ export function withPayrollPrintPreviewChrome(fullDocumentHtml: string): string 
       background: #2563eb;
       color: #fff;
     }
+    #ktsmile-payroll-preview-bar .ktsmile-btn-download {
+      background: #10b981;
+      color: #fff;
+    }
     #ktsmile-payroll-preview-bar .ktsmile-btn-close {
       background: #475569;
       color: #fff;
     }
     #ktsmile-payroll-preview-bar button:hover {
       filter: brightness(1.06);
+    }
+    #ktsmile-payroll-preview-bar button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
     }
   </style>`;
 
@@ -72,6 +80,7 @@ export function withPayrollPrintPreviewChrome(fullDocumentHtml: string): string 
       <span class="ktsmile-preview-title">Xem trước</span>
       <code class="ktsmile-preview-path" id="ktsmile-payroll-preview-location">Đang mở…</code>
       <button type="button" class="ktsmile-btn-print" onclick="window.print()">In ngay</button>
+      <button type="button" id="ktsmile-download-pdf-btn" class="ktsmile-btn-download" onclick="downloadAsPdf()">Tải PDF</button>
       <button type="button" class="ktsmile-btn-close" onclick="window.close()">Đóng cửa sổ</button>
     </div>
     <script>
@@ -79,6 +88,54 @@ export function withPayrollPrintPreviewChrome(fullDocumentHtml: string): string 
         var el = document.getElementById("ktsmile-payroll-preview-location");
         if (el) el.textContent = typeof location !== "undefined" ? (location.href || "about:blank") : "";
       })();
+
+      async function downloadAsPdf() {
+        const btn = document.getElementById("ktsmile-download-pdf-btn");
+        const originalText = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = "Đang xử lý…";
+
+        try {
+          // Lấy nội dung gốc, loại bỏ thanh preview chrome để không bị dính vào PDF
+          const styleClone = document.getElementById("ktsmile-payroll-preview-chrome");
+          const barClone = document.getElementById("ktsmile-payroll-preview-bar");
+          
+          if (styleClone) styleClone.remove();
+          if (barClone) barClone.remove();
+          
+          const htmlContent = document.documentElement.outerHTML;
+          
+          // Khôi phục lại giao diện sau khi đã lấy nội dung
+          if (styleClone) document.head.appendChild(styleClone);
+          if (barClone) document.body.prepend(barClone);
+
+          const response = await fetch("/api/pdf", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ 
+              html: htmlContent, 
+              filename: "Phieu_luong_" + new Date().getTime() + ".pdf" 
+            }),
+          });
+
+          if (!response.ok) throw new Error("Lỗi server");
+
+          const blob = await response.blob();
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = "Phieu_luong.pdf";
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+        } catch (err) {
+          console.error(err);
+          alert("Không thể tải PDF. Vui lòng thử lại.");
+        } finally {
+          btn.disabled = false;
+          btn.textContent = originalText;
+        }
+      }
     </script>
   `.trim();
 

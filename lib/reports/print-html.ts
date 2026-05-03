@@ -11,7 +11,7 @@ export function buildPrintShell(title: string, innerBodyHtml: string): string {
   return `<!DOCTYPE html><html lang="vi"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width"/><title>${t}</title><style>
     *,*::before,*::after{box-sizing:border-box;}
     html,body{margin:0;}
-    body{font-family:"Times New Roman",Times,serif;padding:18px;color:#1a2332;font-size:14px;line-height:1.45;max-width:190mm;margin:0 auto;}
+    body{font-family:"Times New Roman",Times,serif;padding:30px;color:#1a2332;font-size:13px;line-height:1.45;max-width:190mm;margin:0 auto;background-color:#fff;}
     .print-root{max-width:100%;width:100%;min-width:0;}
 
     /* Header kiểu Bảng để cố định Chữ trái - Logo phải sát lề */
@@ -29,18 +29,18 @@ export function buildPrintShell(title: string, innerBodyHtml: string): string {
     .muted{color:#64748b;font-size:12px;margin-bottom:10px;}
 
     table{border-collapse:collapse;width:100%;max-width:100%;margin-top:8px;table-layout:fixed;}
-    th,td{border:1px solid #cbd5e1;padding:6px 8px;text-align:left;vertical-align:middle;word-wrap:break-word;overflow-wrap:break-word;overflow:hidden;}
-    th{background:#f1f5f9;font-weight:700;font-size:12px;text-transform:uppercase;color:#475569;height:30px;}
-    td{font-size:13px;}
+    th,td{border:1px solid #94a3b8;padding:6px 8px;text-align:left;vertical-align:middle;word-wrap:break-word;overflow-wrap:break-word;}
+    th{background:#f2f2f2;font-weight:700;font-size:12px;text-transform:uppercase;color:#000;height:30px;}
+    td{font-size:13px;color:#000;}
     .num{text-align:right;font-variant-numeric:tabular-nums;}
 
     table.kv{margin-top:12px;border:none;}
     table.kv th,table.kv td{border:none;padding:3px 0;}
     table.kv th{background:none;width:6rem;font-size:13px;font-weight:700;color:#1e293b;text-align:left;text-transform:uppercase;}
-    table.kv td{font-size:14px;font-weight:500;}
+    table.kv td{font-size:13px;font-weight:500;}
 
     tfoot tr{font-weight:700;background:#f8fafc;}
-    .total-row td{font-size:14px;padding:10px 8px;}
+    .total-row td{font-size:13px;padding:10px 8px;}
 
     @media print{
       html,body{max-width:100%!important;width:100%!important;margin:0!important;padding:0!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}

@@ -3,7 +3,6 @@ import { downloadPDFFromServer } from "@/lib/reports/download-pdf-server";
 
 /**
  * Hàm xuất PDF dùng chung cho các báo cáo dạng bảng biểu/biểu đồ.
- * Dùng Puppeteer phía server — chất lượng y hệt bản in.
  */
 export async function downloadReportPdf(
   html: string,
