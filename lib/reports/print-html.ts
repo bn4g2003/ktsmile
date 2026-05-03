@@ -51,7 +51,7 @@ export function buildPrintShell(title: string, innerBodyHtml: string): string {
     <table class="report-header-table">
       <tr>
         <td class="company-box">
-          <div class="company-name">CÔNG TY TNHH KTSMILE MILLING CENTER</div>
+          <div class="company-name">CÔNG TY TNHH KTSMILE</div>
           <div class="company-info">Địa chỉ: 447/10 Đường Tân Sơn, Phường An Hội Tây, TP.Hồ Chí Minh</div>
           <div class="company-info">MST: 0318968071 · SĐT: 0906353568</div>
           <div class="company-info">STK: 886978683 Ngân hàng Thương mại cổ phần Quân Đội</div>
@@ -179,7 +179,7 @@ export function buildDownloadShell(title: string, innerBodyHtml: string): string
     <table class="report-header-table">
       <tr>
         <td class="company-box">
-          <div class="company-name">CÔNG TY TNHH KTSMILE MILLING CENTER</div>
+          <div class="company-name">CÔNG TY TNHH KTSMILE</div>
           <div class="company-info">Địa chỉ: 447/10 Đường Tân Sơn, Phường An Hội Tây, TP.Hồ Chí Minh</div>
           <div class="company-info">MST: 0318968071 · SĐT: 0906353568</div>
           <div class="company-info">STK: 886978683 Ngân hàng Thương mại cổ phần Quân Đội</div>

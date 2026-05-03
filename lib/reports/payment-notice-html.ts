@@ -175,7 +175,7 @@ export function buildPaymentNoticeBodyHtml(p: PaymentNoticePrintPayload): string
       <div class="pn-bank">
         <p class="pn-bank-title">Thông tin thanh toán</p>
         <p>STK: <strong>886978683</strong> — Ngân hàng MB (Quân đội)</p>
-        <p>Chủ TK: CÔNG TY TNHH KTSMILE MILLING CENTER</p>
+        <p>Chủ TK: CÔNG TY TNHH KTSMILE</p>
         <p class="pn-bank-note">* Vui lòng đối chiếu kỹ trước khi thanh toán. Trân trọng cảm ơn!</p>
       </div>
       <div class="pn-sign">

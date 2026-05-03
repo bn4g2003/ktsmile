@@ -495,7 +495,7 @@ function buildSlipBody(rowData: PayrollSlipRow, opts: PayrollSlipOptions): strin
             <img class="slip-logo" src="${PAYROLL_SLIP_LOGO_PUBLIC_PATH}" alt="Logo" loading="lazy" />
           </div>
           <div class="slip-brand-text">
-            <div class="company-name">${escapeHtml(company.replace(/^CÔNG TY\s*:?\s*/i, ""))}</div>
+            <div class="company-name">${escapeHtml(company)}</div>
             <div class="company-sub">Bộ phận Nhân sự & Tiền lương</div>
           </div>
         </div>
