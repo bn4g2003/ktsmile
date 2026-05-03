@@ -314,7 +314,7 @@ export function OrdersPrintHub({ partners }: { partners: Partner[] }) {
       const payload = await getSingleOrderDeliveryNotePayload(id);
       const title = deliveryNotePrintTitle(payload);
       const fullHtml = buildPrintShell(title, buildDeliveryNoteBodyHtml(payload));
-      const code = (payload.order_number || "phieu").replace(/[^\w.-]+/g, "_");
+      const code = (payload.orders[0]?.order_number || "phieu").replace(/[^\w.-]+/g, "_");
       await downloadPdfFromServer(fullHtml, `PhieuGiao_don_${code}.pdf`);
     } catch (e) {
       window.alert(e instanceof Error ? e.message : "Không tải được PDF.");
