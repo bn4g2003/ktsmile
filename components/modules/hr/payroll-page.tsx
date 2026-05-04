@@ -42,6 +42,8 @@ import {
 import { openPayrollPrintPreview } from "@/lib/reports/payroll-print-preview";
 import {
   calculatePayrollLine,
+  INSURANCE_DEFAULT_RATE_PERCENT,
+  insuranceDeductionsFromBaseSalary,
   type PayrollLineInput,
   type PayrollRunSettings,
 } from "@/lib/payroll/calc";
@@ -72,6 +74,31 @@ function toMoneyInput(value: string) {
   return parseVnMoneyDigits(value);
 }
 
+/** Nhập % (cho phép dấu phẩy thập phân kiểu Việt). */
+function parsePercentInput(s: string): number {
+  const t = s.replace(/%/g, "").trim().replace(/\s/g, "").replace(",", ".");
+  if (t === "" || t === "-" || t === "." || t === "-.") return 0;
+  const n = Number(t);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function formatPercentDisplay(pct: number): string {
+  if (!Number.isFinite(pct) || pct < 0) return "";
+  const r = Math.round(pct * 1e8) / 1e8;
+  return r.toLocaleString("vi-VN", { maximumFractionDigits: 8, useGrouping: false });
+}
+
+function insuranceAmountFromPercent(baseSalary: number, pct: number): number {
+  const base = Math.max(0, Math.round(Number(baseSalary) || 0));
+  return Math.round((base * Math.max(0, pct)) / 100);
+}
+
+function insurancePercentFromAmount(baseSalary: number, amount: number): number {
+  const base = Math.max(0, Math.round(Number(baseSalary) || 0));
+  if (base <= 0) return 0;
+  return ((Math.max(0, Number(amount) || 0) / base) * 100);
+}
+
 function emptyAdjustments(): PayrollLineInput {
   return {
     lunch_allowance: 0,
@@ -82,11 +109,39 @@ function emptyAdjustments(): PayrollLineInput {
     social_insurance: 0,
     health_insurance: 0,
     unemployment_insurance: 0,
+    insurance_use_formula: true,
     dependent_count: 0,
     advance_payment: 0,
     note: null,
   };
 }
+
+/** Ba khoản BH hiện dùng để chỉnh (công thức % lương CB hoặc đã nhập tay). */
+function insuranceTripletForEdit(cur: PayrollLineInput, baseSalary: number) {
+  const auto = insuranceDeductionsFromBaseSalary(baseSalary);
+  if (cur.insurance_use_formula !== false) {
+    return {
+      social_insurance: auto.social_insurance,
+      health_insurance: auto.health_insurance,
+      unemployment_insurance: auto.unemployment_insurance,
+    };
+  }
+  return {
+    social_insurance: Math.max(0, Math.round(Number(cur.social_insurance ?? 0))),
+    health_insurance: Math.max(0, Math.round(Number(cur.health_insurance ?? 0))),
+    unemployment_insurance: Math.max(0, Math.round(Number(cur.unemployment_insurance ?? 0))),
+  };
+}
+
+const BH_EDIT_ROWS: Array<{
+  key: "social_insurance" | "health_insurance" | "unemployment_insurance";
+  label: string;
+  defaultPct: number;
+}> = [
+  { key: "social_insurance", label: "BHXH", defaultPct: INSURANCE_DEFAULT_RATE_PERCENT.social },
+  { key: "health_insurance", label: "BHYT", defaultPct: INSURANCE_DEFAULT_RATE_PERCENT.health },
+  { key: "unemployment_insurance", label: "BHTN", defaultPct: INSURANCE_DEFAULT_RATE_PERCENT.unemployment },
+];
 
 function printPayrollDocument(html: string) {
   openPayrollPrintPreview(html);
@@ -196,9 +251,10 @@ export function PayrollPage() {
           phone_allowance: Number(r.phone_allowance ?? 0),
           holiday_bonus: Number(r.holiday_bonus ?? 0),
           sales_bonus: Number(r.sales_bonus ?? 0),
-          social_insurance: 0,
-          health_insurance: 0,
-          unemployment_insurance: 0,
+          social_insurance: Number(r.social_insurance ?? 0),
+          health_insurance: Number(r.health_insurance ?? 0),
+          unemployment_insurance: Number(r.unemployment_insurance ?? 0),
+          insurance_use_formula: false,
           dependent_count: Number(r.dependent_count ?? 0),
           advance_payment: Number(r.advance_payment ?? 0),
           note: r.note,
@@ -784,7 +840,7 @@ export function PayrollPage() {
           <DialogHeader>
             <DialogTitle>Chi tiết lương nhân viên</DialogTitle>
             <DialogDescription className="sr-only">
-              Nhập phụ cấp, tạm ứng và số người phụ thuộc; bảo hiểm tự tính theo phần trăm lương cơ bản.
+              Nhập phụ cấp, khấu trừ BH, tạm ứng và số người phụ thuộc; có thể khôi phục BH theo phần trăm lương cơ bản.
             </DialogDescription>
           </DialogHeader>
           {selectedEmployee ? (
@@ -843,25 +899,113 @@ export function PayrollPage() {
                   </div>
                 </div>
                 <div className="rounded-[var(--radius-md)] border border-[var(--border-ghost)] p-4">
-                  <h3 className="mb-3 text-sm font-semibold">Cấu trừ</h3>
-                  <div className="mb-3 rounded-[var(--radius-md)] bg-[var(--surface-muted)] p-3">
-                    <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-[var(--on-surface-faint)]">
-                      Bảo hiểm (tự tính theo % lương CB)
-                    </p>
-                    <div className="grid gap-2 text-sm sm:grid-cols-3">
-                      <div>
-                        <span className="text-[var(--on-surface-muted)]">BHXH 8%</span>
-                        <div className="font-semibold tabular-nums">{money(selectedEmployee.social_insurance)} đ</div>
-                      </div>
-                      <div>
-                        <span className="text-[var(--on-surface-muted)]">BHYT 1,5%</span>
-                        <div className="font-semibold tabular-nums">{money(selectedEmployee.health_insurance)} đ</div>
-                      </div>
-                      <div>
-                        <span className="text-[var(--on-surface-muted)]">BHTN 1%</span>
-                        <div className="font-semibold tabular-nums">{money(selectedEmployee.unemployment_insurance)} đ</div>
-                      </div>
-                    </div>
+                  <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <h3 className="text-sm font-semibold">Khấu trừ</h3>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 shrink-0 self-start sm:self-auto"
+                      onClick={() =>
+                        setAdjustmentsByEmp((prev) => ({
+                          ...prev,
+                          [selectedEmployee.employee_id]: {
+                            ...(prev[selectedEmployee.employee_id] ?? emptyAdjustments()),
+                            insurance_use_formula: true,
+                            social_insurance: 0,
+                            health_insurance: 0,
+                            unemployment_insurance: 0,
+                          } as PayrollLineInput,
+                        }))
+                      }
+                    >
+                      BH theo % lương CB
+                    </Button>
+                  </div>
+                  <p className="mb-3 text-xs text-[var(--on-surface-muted)]">
+                    Sửa <strong>%</strong> hoặc <strong>số tiền</strong> — hai ô đồng bộ theo lương cơ bản; mặc định BHXH{" "}
+                    {formatPercentDisplay(INSURANCE_DEFAULT_RATE_PERCENT.social)}%, BHYT{" "}
+                    {formatPercentDisplay(INSURANCE_DEFAULT_RATE_PERCENT.health)}%, BHTN{" "}
+                    {formatPercentDisplay(INSURANCE_DEFAULT_RATE_PERCENT.unemployment)}%.
+                  </p>
+                  <div className="mb-3 space-y-3">
+                    {BH_EDIT_ROWS.map(({ key, label, defaultPct }) => {
+                      const empId = selectedEmployee.employee_id;
+                      const base = selectedEmployee.base_salary;
+                      const adj = adjustmentsByEmp[empId] ?? emptyAdjustments();
+                      const ins = insuranceTripletForEdit(adj, base);
+                      const amt = ins[key];
+                      const useFormula = adj.insurance_use_formula !== false;
+                      const pctValue = useFormula
+                        ? formatPercentDisplay(defaultPct)
+                        : formatPercentDisplay(insurancePercentFromAmount(base, amt));
+                      return (
+                        <div
+                          key={key}
+                          className="grid gap-2 rounded-[var(--radius-md)] border border-[var(--border-ghost)] p-3 sm:grid-cols-[minmax(4.5rem,auto)_minmax(5.5rem,7rem)_1fr] sm:items-end"
+                        >
+                          <Label className="text-xs font-medium leading-snug sm:pb-2 sm:pt-0.5">{label}</Label>
+                          <div className="grid gap-1">
+                            <span className="text-[10px] font-medium uppercase tracking-wide text-[var(--on-surface-faint)]">
+                              % trên lương CB
+                            </span>
+                            <Input
+                              inputMode="decimal"
+                              autoComplete="off"
+                              placeholder={formatPercentDisplay(defaultPct)}
+                              value={pctValue}
+                              onChange={(e) => {
+                                const pct = parsePercentInput(e.target.value);
+                                const newAmt = insuranceAmountFromPercent(base, pct);
+                                setAdjustmentsByEmp((prev) => {
+                                  const cur = prev[empId] ?? emptyAdjustments();
+                                  const t = insuranceTripletForEdit(cur, base);
+                                  return {
+                                    ...prev,
+                                    [empId]: {
+                                      ...cur,
+                                      insurance_use_formula: false,
+                                      social_insurance: key === "social_insurance" ? newAmt : t.social_insurance,
+                                      health_insurance: key === "health_insurance" ? newAmt : t.health_insurance,
+                                      unemployment_insurance:
+                                        key === "unemployment_insurance" ? newAmt : t.unemployment_insurance,
+                                    } as PayrollLineInput,
+                                  };
+                                });
+                              }}
+                            />
+                          </div>
+                          <div className="grid gap-1">
+                            <span className="text-[10px] font-medium uppercase tracking-wide text-[var(--on-surface-faint)]">
+                              Số tiền (đ)
+                            </span>
+                            <Input
+                              inputMode="numeric"
+                              autoComplete="off"
+                              value={formatVnMoneyField(amt)}
+                              onChange={(e) => {
+                                const v = parseVnMoneyDigits(e.target.value);
+                                setAdjustmentsByEmp((prev) => {
+                                  const cur = prev[empId] ?? emptyAdjustments();
+                                  const t = insuranceTripletForEdit(cur, base);
+                                  return {
+                                    ...prev,
+                                    [empId]: {
+                                      ...cur,
+                                      insurance_use_formula: false,
+                                      social_insurance: key === "social_insurance" ? v : t.social_insurance,
+                                      health_insurance: key === "health_insurance" ? v : t.health_insurance,
+                                      unemployment_insurance:
+                                        key === "unemployment_insurance" ? v : t.unemployment_insurance,
+                                    } as PayrollLineInput,
+                                  };
+                                });
+                              }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                   <div className="grid gap-3 sm:grid-cols-2">
                     {(() => {

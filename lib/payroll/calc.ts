@@ -14,6 +14,11 @@ export type PayrollLineInput = {
   social_insurance: number;
   health_insurance: number;
   unemployment_insurance: number;
+  /**
+   * true (mặc định): BHXH/BHYT/BHTN theo % lương CB.
+   * false: dùng đúng ba số `social_insurance` / `health_insurance` / `unemployment_insurance` (đã chỉnh tay hoặc từ DB).
+   */
+  insurance_use_formula?: boolean;
   dependent_count: number;
   advance_payment: number;
   note?: string | null;
@@ -58,6 +63,13 @@ const INSURANCE_ON_BASE = {
   unemployment: 0.01,
 } as const;
 
+/** % mặc định trên lương CB (đồng bộ với `INSURANCE_ON_BASE`). */
+export const INSURANCE_DEFAULT_RATE_PERCENT = {
+  social: INSURANCE_ON_BASE.social * 100,
+  health: INSURANCE_ON_BASE.health * 100,
+  unemployment: INSURANCE_ON_BASE.unemployment * 100,
+} as const;
+
 export function insuranceDeductionsFromBaseSalary(baseSalary: number) {
   const base = Math.max(0, Math.round(toMoney(baseSalary)));
   return {
@@ -100,9 +112,17 @@ export function calculatePayrollLine(
   const phone_allowance = toMoney(input.phone_allowance);
   const holiday_bonus = toMoney(input.holiday_bonus);
   const sales_bonus = toMoney(input.sales_bonus);
-  const { social_insurance, health_insurance, unemployment_insurance } = insuranceDeductionsFromBaseSalary(
-    row.base_salary,
-  );
+  const autoIns = insuranceDeductionsFromBaseSalary(row.base_salary);
+  const useFormula = input.insurance_use_formula !== false;
+  const social_insurance = useFormula
+    ? autoIns.social_insurance
+    : Math.max(0, Math.round(toMoney(input.social_insurance)));
+  const health_insurance = useFormula
+    ? autoIns.health_insurance
+    : Math.max(0, Math.round(toMoney(input.health_insurance)));
+  const unemployment_insurance = useFormula
+    ? autoIns.unemployment_insurance
+    : Math.max(0, Math.round(toMoney(input.unemployment_insurance)));
   const dependent_count = Math.max(0, Math.floor(toMoney(input.dependent_count)));
   const advance_payment = toMoney(input.advance_payment);
   const family_deduction_amount = Math.max(0, toMoney(settings.family_deduction_amount));
