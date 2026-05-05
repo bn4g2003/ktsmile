@@ -146,10 +146,14 @@ function htmlMonthlyDeliveryFooter(f: DeliveryNoteMonthlyFooter): string {
       }),
     );
   }
-  lines.push(
-    row("CỘNG TIỀN HÀNG :", escapeHtml(fmtInt(f.subtotal_goods))),
-    row(`${f.discount_label} :`, escapeHtml(fmtInt(f.discount_amount))),
-  );
+  lines.push(row("CỘNG TIỀN HÀNG :", escapeHtml(fmtInt(f.subtotal_goods))));
+  if (f.discount_amount > 0.005) {
+    lines.push(
+      row(`${f.discount_label} :`, escapeHtml(fmtInt(f.discount_amount)), {
+        valueStyle: "color:#b91c1c;font-weight:700;",
+      }),
+    );
+  }
   if (f.other_fees > 0.005) {
     lines.push(row("PHÍ KHÁC (GBTT) :", escapeHtml(fmtInt(f.other_fees))));
   }

@@ -98,7 +98,9 @@ export function buildDeliveryNoteExcelAoa(p: DeliveryNotePayload): (string | num
         aoa.push(["CHIẾT KHẤU / GIẢM GIÁ (dòng)", fmt(foot.line_discount_from_list)]);
       }
       aoa.push(["CỘNG TIỀN HÀNG", fmt(foot.subtotal_goods)]);
-      aoa.push([foot.discount_label, fmt(foot.discount_amount)]);
+      if (foot.discount_amount > 0.005) {
+        aoa.push([foot.discount_label, fmt(foot.discount_amount)]);
+      }
       if (foot.other_fees > 0.005) {
         aoa.push(["PHÍ KHÁC (GBTT)", fmt(foot.other_fees)]);
       }

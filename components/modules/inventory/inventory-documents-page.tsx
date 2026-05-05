@@ -49,6 +49,7 @@ import {
   type SupplierPurchasableProduct,
 } from "@/lib/actions/product-suppliers";
 import { listCashFundChannels } from "@/lib/actions/cash";
+import { replaceUrlQuietly } from "@/lib/navigation/shallow-url";
 
 const movOpts = [
   { value: "inbound", label: "Nhập kho" },
@@ -125,14 +126,11 @@ export function InventoryDocumentsPage({ initialTab = "inbound" }: { initialTab?
     setTab(initialTab);
   }, [initialTab]);
 
-  const setTabAndUrl = React.useCallback(
-    (next: InventoryDocTab) => {
-      setTab(next);
-      const path = next === "outbound" ? "/inventory/documents?tab=outbound" : "/inventory/documents";
-      router.replace(path, { scroll: false });
-    },
-    [router],
-  );
+  const setTabAndUrl = React.useCallback((next: InventoryDocTab) => {
+    setTab(next);
+    const path = next === "outbound" ? "/inventory/documents?tab=outbound" : "/inventory/documents";
+    replaceUrlQuietly(path);
+  }, []);
 
   React.useEffect(() => {
     void listSupplierPicker().then(setSuppliers).catch(() => { });
@@ -565,7 +563,6 @@ export function InventoryDocumentsPage({ initialTab = "inbound" }: { initialTab?
         />
       </div>
       <ExcelDataGrid<StockDocumentRow>
-        key={tab}
         moduleId={tab === "outbound" ? "stock_documents_outbound" : "stock_documents_inbound"}
         title={tab === "outbound" ? "Phiếu xuất kho Vật tư & Phôi" : "Phiếu nhập kho Vật tư & Phôi"}
         columns={columns}
