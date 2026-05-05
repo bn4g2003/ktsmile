@@ -1,13 +1,15 @@
 /**
- * Hostinger / reverse-proxy: inject PORT (thường khác 3000). Nginx forward tới đúng PORT đó.
+ * Hostinger / reverse-proxy: inject PORT (thường khác 3000).
  *
- * Quan trọng: chạy Next trong **cùng process** (không spawn child). Một số panel chỉ health-check
- * PID chính — nếu chỉ process con `next` listen port thì proxy vẫn trả 503.
+ * Next 16: `next().prepare()` không tự bind TCP — cần `http.createServer` + `getRequestHandler`.
+ * Chạy trong **process chính** (không spawn child) để panel health-check / proxy nhận đúng PID listen.
  *
- * hPanel: "Application startup file" = server.js hoặc "npm run start".
+ * hPanel: "Application startup file" = server.js hoặc `npm run start`.
  */
 const fs = require("fs");
+const http = require("http");
 const path = require("path");
+const { parse } = require("url");
 
 const root = path.resolve(__dirname);
 process.chdir(root);
@@ -30,19 +32,43 @@ if (!fs.existsSync(buildId)) {
 }
 
 console.error(
-  `[start] ktsmile cwd=${root} PORT=${port} NODE_ENV=${process.env.NODE_ENV || "production"} (main process listener)`
+  `[start] ktsmile cwd=${root} PORT=${port} NODE_ENV=${process.env.NODE_ENV || "production"}`
 );
 
 const next = require("next");
 
+const hostname = "0.0.0.0";
 const app = next({
   dev: false,
-  hostname: "0.0.0.0",
+  hostname,
   port,
   dir: root,
 });
 
-app.prepare().catch((err) => {
-  console.error("[start] prepare() failed:", err);
-  process.exit(1);
-});
+app
+  .prepare()
+  .then(() => {
+    const handle = app.getRequestHandler();
+    const server = http.createServer((req, res) => {
+      handle(req, res, parse(req.url, true));
+    });
+
+    server.listen(port, hostname, () => {
+      console.error(`[start] listening http://${hostname}:${port}`);
+    });
+
+    server.on("error", (err) => {
+      console.error("[start] HTTP server error:", err);
+      process.exit(1);
+    });
+
+    const shutdown = () => {
+      server.close(() => process.exit(0));
+    };
+    process.on("SIGTERM", shutdown);
+    process.on("SIGINT", shutdown);
+  })
+  .catch((err) => {
+    console.error("[start] prepare() failed:", err);
+    process.exit(1);
+  });
