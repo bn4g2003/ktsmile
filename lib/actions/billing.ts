@@ -184,17 +184,14 @@ export async function getPaymentNoticePrintPayload(orderId: string): Promise<Pay
   const { data: lineRows, error: le } = await supabase
     .from("lab_order_lines")
     .select(
-      "tooth_positions, shade, tooth_count, work_type, quantity, unit_price, discount_percent, discount_amount, line_amount, notes, products!lab_order_lines_product_id_fkey(code,name,unit,unit_price)",
+      "tooth_positions, shade, tooth_count, work_type, quantity, unit_price, discount_percent, discount_amount, line_amount, notes, products!lab_order_lines_product_id_fkey(code,name,unit)",
     )
     .eq("order_id", orderId)
     .order("created_at", { ascending: true });
   if (le) throw new Error(le.message);
 
   const lines: PaymentNoticeLine[] = (lineRows ?? []).map((r: Record<string, unknown>) => {
-    const pr = r["products"] as { code?: string; name?: string; unit?: string; unit_price?: number | string } | null;
-    const catalog = pr?.unit_price != null ? Number(pr.unit_price) : 0;
-    const unitPrice = Number(r["unit_price"]);
-    const listUnit = catalog > 0 ? catalog : unitPrice;
+    const pr = r["products"] as { code?: string; name?: string; unit?: string } | null;
     return {
       product_code: pr?.code ?? "",
       product_name: pr?.name ?? "",
@@ -207,8 +204,7 @@ export async function getPaymentNoticePrintPayload(orderId: string): Promise<Pay
           : Number(r["tooth_count"]),
       work_type: (r["work_type"] as string) ?? "new_work",
       quantity: Number(r["quantity"]),
-      list_unit_price: listUnit,
-      unit_price: unitPrice,
+      unit_price: Number(r["unit_price"]),
       discount_percent: Number(r["discount_percent"]),
       discount_amount: Number(r["discount_amount"] ?? 0),
       line_amount: Number(r["line_amount"]),
@@ -302,7 +298,6 @@ function buildMonthlyGbttExcelAoaFromPayloads(
     "Răng",
     "Màu",
     "SL",
-    "Giá niêm yết",
     "Đơn giá",
     "%CK dòng",
     "CK VNĐ dòng",
@@ -344,7 +339,6 @@ function buildMonthlyGbttExcelAoaFromPayloads(
         "",
         "",
         "",
-        "",
         p.subtotal_lines,
         p.billing_order_discount_percent,
         p.billing_order_discount_amount,
@@ -373,7 +367,6 @@ function buildMonthlyGbttExcelAoaFromPayloads(
         l.tooth_positions,
         l.shade ?? "",
         l.quantity,
-        l.list_unit_price,
         l.unit_price,
         l.discount_percent,
         l.discount_amount,
