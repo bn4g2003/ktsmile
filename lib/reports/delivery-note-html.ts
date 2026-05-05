@@ -235,6 +235,7 @@ function buildMonthlyFlatDeliveryNoteHtml(p: DeliveryNotePayload): string {
           <td class="num">—</td>
           <td class="num">—</td>
           <td class="num">—</td>
+          <td class="num">—</td>
           <td>${gc}</td>
         </tr>`,
       );
@@ -246,6 +247,7 @@ function buildMonthlyFlatDeliveryNoteHtml(p: DeliveryNotePayload): string {
       const tooth = escapeHtml(toothRaw);
       const gc = escapeHtml(noteCell(l.notes, o.notes));
       const up = monthlyListCatalogUnitPrice(l);
+      const unitApplied = Number(l.unit_price ?? 0);
       const amt = l.line_amount ?? 0;
       rowHtml.push(
         `<tr>
@@ -257,6 +259,7 @@ function buildMonthlyFlatDeliveryNoteHtml(p: DeliveryNotePayload): string {
           <td class="cen">${tooth}</td>
           <td class="num">${escapeHtml(fmtQty(l.quantity))}</td>
           <td class="num">${escapeHtml(fmtMoneyVnd(up))}</td>
+          <td class="num">${escapeHtml(fmtMoneyVnd(unitApplied))}</td>
           <td class="num">${escapeHtml(fmtMoneyVnd(amt))}</td>
           <td>${gc}</td>
         </tr>`,
@@ -276,6 +279,10 @@ function buildMonthlyFlatDeliveryNoteHtml(p: DeliveryNotePayload): string {
 
       ${htmlDeliveryNotePartnerBlock(p)}
 
+      <p class="dn-month-hint" style="margin:6px 0 4px;font-size:9px;color:#475569;line-height:1.4;">
+        <em>Đơn giá</em> là đơn giá áp dụng trên đơn; <em>thành tiền</em> là tiền dòng (thường SL × đơn giá).
+        Chênh với giá niêm yết được gom ở dòng <strong>chiết khấu (dòng)</strong> phía dưới — không trừ hai lần.
+      </p>
       <table class="dn-month-table hd-lines">
       <thead>
         <tr>
@@ -286,8 +293,9 @@ function buildMonthlyFlatDeliveryNoteHtml(p: DeliveryNotePayload): string {
           <th style="min-width:120px;">SẢN PHẨM</th>
           <th class="cen" style="width:100px;">VỊ TRÍ RĂNG</th>
           <th class="num" style="width:44px;">SL</th>
-          <th class="num" style="width:72px;">GIÁ NIÊM YẾT (VNĐ)</th>
-          <th class="num" style="width:80px;">THÀNH TIỀN (VNĐ)</th>
+          <th class="num" style="width:68px;">GIÁ NIÊM YẾT (VNĐ)</th>
+          <th class="num" style="width:68px;">ĐƠN GIÁ (VNĐ)</th>
+          <th class="num" style="width:76px;">THÀNH TIỀN (VNĐ)</th>
           <th style="min-width:72px;">GHI CHÚ</th>
         </tr>
       </thead>

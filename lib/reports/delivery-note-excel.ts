@@ -47,6 +47,7 @@ export function buildDeliveryNoteExcelAoa(p: DeliveryNotePayload): (string | num
       "Vị trí răng",
       "SL",
       "Giá niêm yết (VNĐ)",
+      "Đơn giá (VNĐ)",
       "Thành tiền (VNĐ)",
       "Ghi chú",
     ]);
@@ -56,7 +57,19 @@ export function buildDeliveryNoteExcelAoa(p: DeliveryNotePayload): (string | num
       const ngay = formatDeliveryNoteDayMonth(received);
       const clinic = o.clinic_name ?? "";
       if (!o.lines.length) {
-        aoa.push([stt++, ngay, clinic, o.patient_name, "", "", "", "", "", noteCell(null, o.notes)]);
+        aoa.push([
+          stt++,
+          ngay,
+          clinic,
+          o.patient_name,
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          noteCell(null, o.notes),
+        ]);
         continue;
       }
       for (const l of o.lines) {
@@ -70,6 +83,7 @@ export function buildDeliveryNoteExcelAoa(p: DeliveryNotePayload): (string | num
           tooth,
           l.quantity,
           monthlyListCatalogUnitPrice(l),
+          Number(l.unit_price ?? 0),
           l.line_amount ?? 0,
           noteCell(l.notes, o.notes),
         ]);
