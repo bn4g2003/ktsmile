@@ -337,7 +337,11 @@ export function ExcelDataGrid<T>({
     }
   }, [reloadSignal, moduleId]);
 
+  /** Tăng mỗi lần gọi load; bỏ qua setState nếu đã có request mới hơn (tránh chồng kết quả khi đổi lọc/trang nhanh). */
+  const loadRequestId = React.useRef(0);
+
   const load = React.useCallback(async () => {
+    const reqId = ++loadRequestId.current;
     setFetching(true);
     setError(null);
     const listArgs = {
@@ -352,16 +356,18 @@ export function ExcelDataGrid<T>({
         ttlMs: bypass ? 60_000 : listCacheTtlMs,
         bypassCache: bypass,
       });
+      if (reqId !== loadRequestId.current) return;
       setData(res.rows);
       setTotal(res.total);
       setListSummary(res.summary ?? []);
     } catch (e) {
+      if (reqId !== loadRequestId.current) return;
       setError(e instanceof Error ? e.message : "Lỗi tải dữ liệu");
       setData([]);
       setTotal(0);
       setListSummary([]);
     } finally {
-      setFetching(false);
+      if (reqId === loadRequestId.current) setFetching(false);
     }
   }, [
     list,
@@ -381,7 +387,9 @@ export function ExcelDataGrid<T>({
   }, [load]);
 
   React.useEffect(() => {
-    setPage(1);
+    React.startTransition(() => {
+      setPage(1);
+    });
   }, [debouncedSearch, filters, pageSize]);
 
   const pageCount = Math.max(1, Math.ceil(total / pageSize) || 1);
@@ -397,9 +405,11 @@ export function ExcelDataGrid<T>({
   }, [globalSearch, filters]);
 
   const clearAllFilters = React.useCallback(() => {
-    setFilters({});
-    setGlobalSearch("");
-    setDebouncedSearch("");
+    React.startTransition(() => {
+      setFilters({});
+      setGlobalSearch("");
+      setDebouncedSearch("");
+    });
   }, []);
 
   const columnsResolved = React.useMemo(() => {
@@ -493,10 +503,12 @@ export function ExcelDataGrid<T>({
   });
 
   const setFilter = (key: string, value: string) => {
-    setFilters((prev) => {
-      const next = { ...prev, [key]: value };
-      if (!value) delete next[key];
-      return next;
+    React.startTransition(() => {
+      setFilters((prev) => {
+        const next = { ...prev, [key]: value };
+        if (!value) delete next[key];
+        return next;
+      });
     });
   };
 
@@ -1014,7 +1026,11 @@ export function ExcelDataGrid<T>({
         <div className="flex flex-wrap items-center gap-1.5">
           <Select
             value={String(pageSize)}
-            onChange={(e) => setPageSize(Number(e.target.value))}
+            onChange={(e) =>
+              React.startTransition(() => {
+                setPageSize(Number(e.target.value));
+              })
+            }
             className="h-8 min-h-8 w-auto min-w-[4.5rem] py-0 text-xs"
             aria-label="Số dòng mỗi trang"
           >
@@ -1029,7 +1045,11 @@ export function ExcelDataGrid<T>({
             type="button"
             size="sm"
             disabled={page <= 1}
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            onClick={() =>
+              React.startTransition(() => {
+                setPage((p) => Math.max(1, p - 1));
+              })
+            }
           >
             Trước
           </Button>
@@ -1041,7 +1061,11 @@ export function ExcelDataGrid<T>({
             type="button"
             size="sm"
             disabled={page >= pageCount || total === 0}
-            onClick={() => setPage((p) => p + 1)}
+            onClick={() =>
+              React.startTransition(() => {
+                setPage((p) => p + 1);
+              })
+            }
           >
             Sau
           </Button>
