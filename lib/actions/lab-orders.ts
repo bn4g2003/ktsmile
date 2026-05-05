@@ -1132,17 +1132,6 @@ function roundMoney2(n: number) {
   return Math.round(n * 100) / 100;
 }
 
-function monthlyDeliveryDiscountLabel(
-  parts: { pct: number; fixedAmt: number }[],
-): string {
-  const hasFixed = parts.some((p) => p.fixedAmt > 0);
-  const activePcts = parts.filter((p) => p.pct > 0).map((p) => p.pct);
-  if (!hasFixed && activePcts.length > 0 && activePcts.every((x) => x === activePcts[0])) {
-    return `CHIẾT KHẤU GIẢM ${activePcts[0]}%`;
-  }
-  return "CHIẾT KHẤU GIẢM";
-}
-
 /** Phiếu giao gộp cả tháng theo một lab (ngày nhận trong khoảng tháng). */
 export async function getMonthlyDeliveryNotePayload(
   partnerId: string,
@@ -1228,29 +1217,41 @@ export async function getMonthlyDeliveryNotePayload(
 
   let subtotalGoods = 0;
   let otherFeesSum = 0;
-  const partnerDiscPercent = await getPartnerDefaultDiscount(partnerId);
+  /** Tổng phải thu trong kỳ (đã trừ CK cấp đơn + phí khác) — khớp GBTT / v_orders_by_partner_month. */
+  let monthSalesGrandTotal = 0;
+  /** Tiền giảm ở cấp đơn (billing_order_discount_*), không lấy % CK mặc định partner vì dòng đơn thường đã phản ánh CK (giá net / CK dòng). */
+  let orderLevelDiscountSum = 0;
 
   for (const o of orders ?? []) {
     const oid = o["id"] as string;
     const oLines = linesByOrder.get(oid) ?? [];
-    
-    // Cộng dồn tiền thực tế của từng dòng (đã bao gồm giá riêng)
+
+    // Cộng dồn tiền thực tế của từng dòng (đã gồm CK dòng & đơn giá đã nhập)
     const orderNet = oLines.reduce((sum, l) => sum + l.line_amount, 0);
-    
+    const lineSub = roundMoney2(orderNet);
+    const bPct = finiteNumber(o["billing_order_discount_percent"]);
+    const bAmt = finiteNumber(o["billing_order_discount_amount"]);
+    const fees = finiteNumber(o["billing_other_fees"]);
+
     subtotalGoods += orderNet;
-    otherFeesSum += Number(o["billing_other_fees"] ?? 0);
+    otherFeesSum += fees;
+    monthSalesGrandTotal += computeOrderGrandTotal({
+      subtotal_lines: lineSub,
+      billing_order_discount_percent: bPct,
+      billing_order_discount_amount: bAmt,
+      billing_other_fees: fees,
+    });
+    orderLevelDiscountSum += roundMoney2(lineSub * (bPct / 100) + bAmt);
   }
 
-  // Tính tiền chiết khấu dựa trên tổng tiền hàng và % chiết khấu của khách
-  const finalDiscountAmount = roundMoney2(subtotalGoods * (partnerDiscPercent / 100));
+  const finalDiscountAmount = roundMoney2(orderLevelDiscountSum);
 
   subtotalGoods = roundMoney2(subtotalGoods);
   otherFeesSum = roundMoney2(otherFeesSum);
+  monthSalesGrandTotal = roundMoney2(monthSalesGrandTotal);
 
   const { opening, receipts_month } = await getPartnerMonthOpeningAndReceipts(partnerId, year, month);
-  const closingDebt = roundMoney2(
-    opening + (subtotalGoods - finalDiscountAmount) - receipts_month,
-  );
+  const closingDebt = roundMoney2(opening + monthSalesGrandTotal - receipts_month);
 
   return {
     partner_code: (partner["code"] as string | null) ?? null,
@@ -1265,7 +1266,7 @@ export async function getMonthlyDeliveryNotePayload(
     generated_at: new Date().toLocaleString("vi-VN"),
     monthly_footer: {
       subtotal_goods: subtotalGoods,
-      discount_label: `CHIẾT KHẤU GIẢM ${partnerDiscPercent}%`,
+      discount_label: "CHIẾT KHẤU / GIẢM GIÁ (cấp đơn GBTT)",
       discount_amount: finalDiscountAmount,
       other_fees: otherFeesSum,
       opening_debt: opening,
