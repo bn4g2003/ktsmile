@@ -179,6 +179,49 @@ function GridStatsBar({
   );
 }
 
+function GridTableSkeletonRows({ colCount, rowCount }: { colCount: number; rowCount: number }) {
+  return (
+    <>
+      {Array.from({ length: rowCount }, (_, i) => (
+        <tr key={"sk-" + i} className="border-b border-[var(--border-ghost)] last:border-b-0">
+          {Array.from({ length: colCount }, (_, j) => (
+            <td key={j} className="px-3 py-3 first:pl-4 last:pr-4">
+              <div
+                className={cn(
+                  "h-4 max-w-full rounded-md bg-[var(--surface-muted)] animate-pulse",
+                  j % 3 === 0 ? "w-[70%]" : j % 3 === 1 ? "w-[45%]" : "w-[55%]",
+                )}
+              />
+            </td>
+          ))}
+        </tr>
+      ))}
+    </>
+  );
+}
+
+function GridMobileSkeleton({ cards }: { cards: number }) {
+  return (
+    <ul className="flex list-none flex-col gap-3 p-0" aria-hidden="true">
+      {Array.from({ length: cards }, (_, i) => (
+        <li
+          key={"msk-" + i}
+          className={cn(
+            "rounded-[var(--radius-lg)] p-4 shadow-[inset_0_0_0_1px_var(--border-ghost)]",
+            i % 2 === 1 ? "bg-[var(--surface-row-b)]" : "bg-[var(--surface-card)]",
+          )}
+        >
+          <div className="space-y-3">
+            <div className="h-3 w-1/3 max-w-[8rem] animate-pulse rounded bg-[var(--surface-muted)]" />
+            <div className="h-3 w-2/3 max-w-[12rem] animate-pulse rounded bg-[var(--surface-muted)]" />
+            <div className="h-3 w-1/2 max-w-[10rem] animate-pulse rounded bg-[var(--surface-muted)]" />
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 type ExcelDataGridProps<T> = {
   prependFilters?: Record<string, string>;
   moduleId: string;
@@ -256,7 +299,7 @@ export function ExcelDataGrid<T>({
     }
   };
 
-  const [loading, setLoading] = React.useState(true);
+  const [fetching, setFetching] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   // Bump the key so old hidden-column preferences do not keep columns hidden by default.
   // Users can still hide columns again through the visibility menu.
@@ -274,7 +317,7 @@ export function ExcelDataGrid<T>({
     });
 
   React.useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(globalSearch), 350);
+    const t = setTimeout(() => setDebouncedSearch(globalSearch), 400);
     return () => clearTimeout(t);
   }, [globalSearch]);
 
@@ -295,7 +338,7 @@ export function ExcelDataGrid<T>({
   }, [reloadSignal, moduleId]);
 
   const load = React.useCallback(async () => {
-    setLoading(true);
+    setFetching(true);
     setError(null);
     const listArgs = {
       page,
@@ -318,7 +361,7 @@ export function ExcelDataGrid<T>({
       setTotal(0);
       setListSummary([]);
     } finally {
-      setLoading(false);
+      setFetching(false);
     }
   }, [
     list,
@@ -342,6 +385,9 @@ export function ExcelDataGrid<T>({
   }, [debouncedSearch, filters, pageSize]);
 
   const pageCount = Math.max(1, Math.ceil(total / pageSize) || 1);
+
+  const showInitialSkeleton = fetching && data.length === 0;
+  const showSoftRefresh = fetching && data.length > 0;
 
   const summaryExtra = React.useMemo(() => (listSummary ?? []).slice(0, 2), [listSummary]);
 
@@ -504,7 +550,10 @@ export function ExcelDataGrid<T>({
 
   return (
     <div className="w-full max-w-full overflow-hidden space-y-4 sm:space-y-6">
-      <div className="w-full max-w-full overflow-hidden rounded-[var(--radius-xl)] bg-[var(--surface-card)] p-4 shadow-[var(--shadow-card)] sm:p-6">
+      <div
+        className="w-full max-w-full overflow-hidden rounded-[var(--radius-xl)] bg-[var(--surface-card)] p-4 shadow-[var(--shadow-card)] sm:p-6"
+        aria-busy={fetching}
+      >
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0 flex-1">
@@ -674,17 +723,31 @@ export function ExcelDataGrid<T>({
         ) : null}
 
         <div className="mt-6 space-y-3 md:space-y-0">
-          <div className="md:hidden">
-            {loading ? (
-              <div className="rounded-[var(--radius-lg)] bg-[var(--surface-muted)] px-4 py-10 text-center text-sm text-[var(--on-surface-muted)] shadow-[inset_0_0_0_1px_var(--border-ghost)]">
-                Đang tải…
+          <div className="relative md:hidden">
+            {showSoftRefresh ? (
+              <div
+                className="mb-2 rounded-[var(--radius-md)] bg-[color-mix(in_srgb,var(--primary)_12%,var(--surface-muted))] px-3 py-2 text-center text-xs font-medium text-[var(--on-surface)] shadow-[inset_0_0_0_1px_var(--border-ghost)]"
+                role="status"
+              >
+                Đang cập nhật dữ liệu…
               </div>
+            ) : null}
+            {showInitialSkeleton ? (
+              <>
+                <span className="sr-only">Đang tải dữ liệu lưới</span>
+                <GridMobileSkeleton cards={4} />
+              </>
             ) : data.length === 0 ? (
               <div className="rounded-[var(--radius-lg)] bg-[var(--surface-muted)] px-4 py-10 text-center text-sm text-[var(--on-surface-muted)] shadow-[inset_0_0_0_1px_var(--border-ghost)]">
                 Không có dữ liệu.
               </div>
             ) : (
-              <ul className="flex list-none flex-col gap-3 p-0">
+              <ul
+                className={cn(
+                  "flex list-none flex-col gap-3 p-0 transition-opacity duration-200",
+                  showSoftRefresh && "opacity-80",
+                )}
+              >
                 {table.getRowModel().rows.map((row, i) => {
                   const cells = row.getVisibleCells();
                   const actionCells = cells.filter((c) => c.column.id === "actions");
@@ -734,8 +797,20 @@ export function ExcelDataGrid<T>({
             )}
           </div>
 
-          <div className="w-full overflow-x-auto rounded-[var(--radius-lg)] bg-[var(--surface-card)] shadow-[inset_0_0_0_1px_var(--border-ghost)] md:block scrollbar-thin scrollbar-thumb-[var(--border-ghost)] scrollbar-track-transparent">
+          <div className="relative w-full overflow-x-auto rounded-[var(--radius-lg)] bg-[var(--surface-card)] shadow-[inset_0_0_0_1px_var(--border-ghost)] md:block scrollbar-thin scrollbar-thumb-[var(--border-ghost)] scrollbar-track-transparent">
+            {showSoftRefresh ? (
+              <div
+                className="pointer-events-none absolute inset-x-0 top-0 z-30 h-0.5 overflow-hidden rounded-t-[var(--radius-lg)] bg-[var(--border-ghost)]"
+                role="status"
+                aria-label="Đang cập nhật"
+              >
+                <div className="h-full w-full origin-left motion-safe:animate-pulse bg-[color-mix(in_srgb,var(--primary)_70%,transparent)]" />
+              </div>
+            ) : null}
             <table className="w-full min-w-[1280px] border-collapse text-sm table-fixed">
+              {showInitialSkeleton ? (
+                <caption className="sr-only">Đang tải dữ liệu lưới</caption>
+              ) : null}
               <thead>
                 {table.getHeaderGroups().map((hg) => (
                   <tr key={hg.id} className="border-b border-[var(--border-ghost)]">
@@ -873,16 +948,17 @@ export function ExcelDataGrid<T>({
                   })}
                 </tr>
               </thead>
-              <tbody>
-                {loading ? (
-                  <tr>
-                    <td
-                      colSpan={table.getVisibleLeafColumns().length}
-                      className="px-4 py-10 text-center text-[var(--on-surface-muted)]"
-                    >
-                      Đang tải…
-                    </td>
-                  </tr>
+              <tbody
+                className={cn(
+                  "transition-opacity duration-200",
+                  showSoftRefresh && "opacity-[0.82]",
+                )}
+              >
+                {showInitialSkeleton ? (
+                  <GridTableSkeletonRows
+                    colCount={table.getVisibleLeafColumns().length}
+                    rowCount={Math.min(8, Math.max(4, pageSize))}
+                  />
                 ) : data.length === 0 ? (
                   <tr>
                     <td
