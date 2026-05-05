@@ -38,7 +38,6 @@ import {
   updateMaterial,
   type MaterialRow,
 } from "@/lib/actions/materials";
-import { replaceUrlQuietly } from "@/lib/navigation/shallow-url";
 
 type CatalogTab = "sales" | "inventory";
 
@@ -69,11 +68,14 @@ export function ProductsPage({ initialCatalogTab = "sales" }: { initialCatalogTa
     setCatalogTab(initialCatalogTab);
   }, [initialCatalogTab]);
 
-  const setCatalogTabAndUrl = React.useCallback((t: CatalogTab) => {
-    setCatalogTab(t);
-    const path = t === "inventory" ? "/master/products?tab=inventory" : "/master/products";
-    replaceUrlQuietly(path);
-  }, []);
+  const setCatalogTabAndUrl = React.useCallback(
+    (t: CatalogTab) => {
+      setCatalogTab(t);
+      const path = t === "inventory" ? "/master/products?tab=inventory" : "/master/products";
+      router.replace(path, { scroll: false });
+    },
+    [router],
+  );
 
   const reset = () => {
     setEditingSales(null);

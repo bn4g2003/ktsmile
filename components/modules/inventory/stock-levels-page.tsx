@@ -32,7 +32,6 @@ import {
   listProductStock,
   type ProductStockRow,
 } from "@/lib/actions/stock";
-import { replaceUrlQuietly } from "@/lib/navigation/shallow-url";
 
 type StockTab = "nvl" | "sp";
 
@@ -77,11 +76,14 @@ export function StockLevelsPage({ initialTab = "nvl" }: { initialTab?: StockTab 
     setTab(initialTab);
   }, [initialTab]);
 
-  const setTabAndUrl = React.useCallback((next: StockTab) => {
-    setTab(next);
-    const path = next === "sp" ? "/inventory/stock?tab=sp" : "/inventory/stock";
-    replaceUrlQuietly(path);
-  }, []);
+  const setTabAndUrl = React.useCallback(
+    (next: StockTab) => {
+      setTab(next);
+      const path = next === "sp" ? "/inventory/stock?tab=sp" : "/inventory/stock";
+      router.replace(path, { scroll: false });
+    },
+    [router],
+  );
 
   React.useEffect(() => {
     if (!openRequest) return;
@@ -403,6 +405,7 @@ export function StockLevelsPage({ initialTab = "nvl" }: { initialTab?: StockTab 
         />
       </div>
       <ExcelDataGrid<ProductStockRow>
+        key={tab}
         moduleId={tab === "sp" ? "v_product_stock_sp" : "v_product_stock_nvl"}
         title={gridTitle}
         columns={columns}

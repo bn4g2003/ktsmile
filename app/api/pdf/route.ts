@@ -24,11 +24,7 @@ export async function POST(req: NextRequest) {
 
   // Tự động nhúng logo vào HTML dưới dạng Base64 để tránh lỗi Vercel Auth hoặc lỗi đường dẫn
   try {
-    const logoPath = path.join(
-      /* turbopackIgnore: true */ process.cwd(),
-      "public",
-      "brand-logo.png",
-    );
+    const logoPath = path.join(process.cwd(), "public", "brand-logo.png");
     if (fs.existsSync(logoPath)) {
       const logoBuffer = fs.readFileSync(logoPath);
       const logoBase64 = `data:image/png;base64,${logoBuffer.toString("base64")}`;
@@ -62,18 +58,14 @@ export async function POST(req: NextRequest) {
         "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
         // macOS
         "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-        // Linux: .deb Google Chrome thường ở /opt; Chromium apt ở /usr/bin
-        "/opt/google/chrome/chrome",
+        // Linux (VPS, Docker)
         "/usr/bin/google-chrome",
         "/usr/bin/google-chrome-stable",
-        "/usr/bin/google-chrome-beta",
         "/usr/bin/chromium-browser",
         "/usr/bin/chromium",
         "/snap/bin/chromium",
-        "/var/lib/snapd/snap/bin/chromium",
       ];
       const found = possiblePaths.find((p) => fs.existsSync(p));
-      // Không dùng fromEnv khi file không tồn tại (đã lọc ở possiblePaths).
       executablePath = found ?? "google-chrome";
       launchArgs = ["--no-sandbox", "--disable-setuid-sandbox"];
     }
