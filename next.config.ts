@@ -3,14 +3,17 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   serverExternalPackages: ["@sparticuz/chromium"],
   /**
-   * Không dùng `output: "standalone"` mặc định: nhiều môi trường Hostinger/VPS chỉ chạy
-   * `npm run build` + `npm run start` với cả `.next` + `node_modules`. Standalone bắt buộc
-   * copy `public` + `.next/static` vào thư mục standalone — sai bước dễ 503.
-   * (Docker / image tối giản: bật lại standalone + quy trình copy trong Dockerfile.)
+   * Không bật `output: "standalone"` mặc định (Hostinger/VPS: `next build` + `node server.js`;
+   * standalone cần copy `public` + `.next/static` đúng quy trình — dễ 503 nếu thiếu bước).
+   * Gói Chromium cho `/api/pdf` chỉ nhét thêm vào trace khi build trên Vercel (có VERCEL=1).
    */
-  outputFileTracingIncludes: {
-    "/api/pdf": ["./node_modules/@sparticuz/chromium/bin/**/*"],
-  },
+  ...(process.env.VERCEL
+    ? {
+        outputFileTracingIncludes: {
+          "/api/pdf": ["./node_modules/@sparticuz/chromium/bin/**/*"],
+        },
+      }
+    : {}),
 };
 
 export default nextConfig;
