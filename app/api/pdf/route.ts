@@ -46,20 +46,27 @@ export async function POST(req: NextRequest) {
       executablePath = await chromium.executablePath();
       launchArgs = chromium.args;
     } else {
-      // Môi trường local (Windows, macOS, Linux)
+      // VPS / Hostinger / local: ưu tiên biến môi trường, rồi đường dẫn phổ biến
+      const fromEnv =
+        process.env.PUPPETEER_EXECUTABLE_PATH?.trim() ||
+        process.env.CHROME_PATH?.trim() ||
+        "";
       const possiblePaths = [
+        ...(fromEnv && fs.existsSync(fromEnv) ? [fromEnv] : []),
         // Windows
         "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
         "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
         // macOS
         "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-        // Linux
+        // Linux (VPS, Docker)
         "/usr/bin/google-chrome",
+        "/usr/bin/google-chrome-stable",
         "/usr/bin/chromium-browser",
         "/usr/bin/chromium",
+        "/snap/bin/chromium",
       ];
-      executablePath =
-        possiblePaths.find((p) => fs.existsSync(p)) ?? "google-chrome";
+      const found = possiblePaths.find((p) => fs.existsSync(p));
+      executablePath = found ?? "google-chrome";
       launchArgs = ["--no-sandbox", "--disable-setuid-sandbox"];
     }
 
