@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { type ColumnDef } from "@tanstack/react-table";
-import dynamic from "next/dynamic";
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { ExcelDataGrid } from "@/components/shared/data-grid/excel-data-grid";
@@ -34,6 +33,7 @@ import { Select } from "@/components/ui/select";
 import { Combobox } from "@/components/ui/combobox";
 import { LabOrderRowDetailPanel } from "@/components/modules/orders/lab-order-row-detail-panel";
 import { LabOrderStatusQuickDialog } from "@/components/modules/orders/lab-order-status-quick-dialog";
+import { OrdersPrintHub } from "@/components/modules/orders/orders-print-hub";
 import { Textarea } from "@/components/ui/textarea";
 import {
   listCustomerPartnerPicker,
@@ -77,25 +77,6 @@ import {
   type LabOrderFilterSuggestions,
   type LabOrderRow,
 } from "@/lib/actions/lab-orders";
-
-const OrdersPrintHub = dynamic(
-  () =>
-    import("@/components/modules/orders/orders-print-hub").then((m) => ({
-      default: m.OrdersPrintHub,
-    })),
-  {
-    ssr: false,
-    loading: () => (
-      <div
-        className="flex min-h-[14rem] items-center justify-center rounded-[var(--radius-lg)] bg-[var(--surface-muted)] px-4 text-center text-sm text-[var(--on-surface-muted)] shadow-[inset_0_0_0_1px_var(--border-ghost)]"
-        role="status"
-        aria-busy="true"
-      >
-        Đang tải màn hình in phiếu…
-      </div>
-    ),
-  },
-);
 import { listCashFundChannels } from "@/lib/actions/cash";
 import {
   buildLabOrderListReportHtml,
@@ -1489,7 +1470,6 @@ export function OrdersPage() {
           title="Đơn hàng phục hình"
           columns={columns}
           list={listLabOrders}
-          listCacheTtlMs={120_000}
           reloadSignal={gridReload}
           filters={filters}
           onFiltersChange={setFilters}
