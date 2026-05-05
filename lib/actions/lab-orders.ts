@@ -32,6 +32,8 @@ export type LabOrderRow = {
   updated_at: string;
   partner_code?: string | null;
   partner_name?: string | null;
+  /** Tổng giá niêm yết (giá gốc) = sum(qty * products.unit_price). */
+  list_total_amount?: number;
   total_amount: number;
   coord_review_status: "pending" | "verified";
   doctor_prescription_id: string | null;
@@ -59,15 +61,15 @@ export type LabOrderFilterSuggestions = {
 
 /* Gợi ý FK theo tên constraint (tránh PGRST201 khi PostgREST không chọn đúng quan hệ). */
 const LAB_ORDERS_LIST_SELECT_FULL =
-  "id, order_number, received_at, partner_id, patient_name, clinic_name, contact_phone, status, notes, created_at, updated_at, order_category, patient_year_of_birth, coord_review_status, doctor_prescription_id, billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, payment_notice_doc_number, payment_notice_issued_at, partners!lab_orders_partner_id_fkey(code,name), doctor_prescriptions!lab_orders_doctor_prescription_id_fkey(slip_code), lab_order_lines!lab_order_lines_order_id_fkey(line_amount,tooth_positions,tooth_count,quantity,products!lab_order_lines_product_id_fkey(code,name))";
+  "id, order_number, received_at, partner_id, patient_name, clinic_name, contact_phone, status, notes, created_at, updated_at, order_category, patient_year_of_birth, coord_review_status, doctor_prescription_id, billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, payment_notice_doc_number, payment_notice_issued_at, partners!lab_orders_partner_id_fkey(code,name), doctor_prescriptions!lab_orders_doctor_prescription_id_fkey(slip_code), lab_order_lines!lab_order_lines_order_id_fkey(line_amount,tooth_positions,tooth_count,quantity,products!lab_order_lines_product_id_fkey(code,name,unit_price))";
 
 /** Trước migration 20260420 (order_category, sender_name, …). */
 const LAB_ORDERS_LIST_SELECT_NO_PROD_UI =
-  "id, order_number, received_at, partner_id, patient_name, clinic_name, contact_phone, status, notes, created_at, updated_at, coord_review_status, doctor_prescription_id, billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, payment_notice_doc_number, payment_notice_issued_at, partners!lab_orders_partner_id_fkey(code,name), doctor_prescriptions!lab_orders_doctor_prescription_id_fkey(slip_code), lab_order_lines!lab_order_lines_order_id_fkey(line_amount,tooth_positions,tooth_count,quantity,products!lab_order_lines_product_id_fkey(code,name))";
+  "id, order_number, received_at, partner_id, patient_name, clinic_name, contact_phone, status, notes, created_at, updated_at, coord_review_status, doctor_prescription_id, billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, payment_notice_doc_number, payment_notice_issued_at, partners!lab_orders_partner_id_fkey(code,name), doctor_prescriptions!lab_orders_doctor_prescription_id_fkey(slip_code), lab_order_lines!lab_order_lines_order_id_fkey(line_amount,tooth_positions,tooth_count,quantity,products!lab_order_lines_product_id_fkey(code,name,unit_price))";
 
 /** Trước migration 20260419 (phiếu BS, đối chiếu, GBTT trên đơn). */
 const LAB_ORDERS_LIST_SELECT_LEGACY_CORE =
-  "id, order_number, received_at, partner_id, patient_name, clinic_name, contact_phone, status, notes, created_at, updated_at, partners!lab_orders_partner_id_fkey(code,name), lab_order_lines!lab_order_lines_order_id_fkey(line_amount,tooth_positions,tooth_count,quantity,products!lab_order_lines_product_id_fkey(code,name))";
+  "id, order_number, received_at, partner_id, patient_name, clinic_name, contact_phone, status, notes, created_at, updated_at, partners!lab_orders_partner_id_fkey(code,name), lab_order_lines!lab_order_lines_order_id_fkey(line_amount,tooth_positions,tooth_count,quantity,products!lab_order_lines_product_id_fkey(code,name,unit_price))";
 
 /**
  * Chỉ cột lab_orders (không embed) — khi PostgREST lỗi quan hệ/lồng lab_order_lines hoặc partners.
@@ -82,10 +84,10 @@ const LAB_ORDERS_LIST_SELECT_SCALARS_LEGACY =
 
 /** Khi embed phiếu BS vẫn lỗi — bỏ doctor_prescriptions, giữ tổng dòng. */
 const LAB_ORDERS_LIST_SELECT_NO_RX_EMBED =
-  "id, order_number, received_at, partner_id, patient_name, clinic_name, contact_phone, status, notes, created_at, updated_at, order_category, patient_year_of_birth, coord_review_status, doctor_prescription_id, billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, payment_notice_doc_number, payment_notice_issued_at, partners!lab_orders_partner_id_fkey(code,name), lab_order_lines!lab_order_lines_order_id_fkey(line_amount,tooth_positions,tooth_count,quantity,products!lab_order_lines_product_id_fkey(code,name))";
+  "id, order_number, received_at, partner_id, patient_name, clinic_name, contact_phone, status, notes, created_at, updated_at, order_category, patient_year_of_birth, coord_review_status, doctor_prescription_id, billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, payment_notice_doc_number, payment_notice_issued_at, partners!lab_orders_partner_id_fkey(code,name), lab_order_lines!lab_order_lines_order_id_fkey(line_amount,tooth_positions,tooth_count,quantity,products!lab_order_lines_product_id_fkey(code,name,unit_price))";
 
 const LAB_ORDERS_LIST_SELECT_NO_PROD_UI_NO_RX =
-  "id, order_number, received_at, partner_id, patient_name, clinic_name, contact_phone, status, notes, created_at, updated_at, coord_review_status, doctor_prescription_id, billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, payment_notice_doc_number, payment_notice_issued_at, partners!lab_orders_partner_id_fkey(code,name), lab_order_lines!lab_order_lines_order_id_fkey(line_amount,tooth_positions,tooth_count,quantity,products!lab_order_lines_product_id_fkey(code,name))";
+  "id, order_number, received_at, partner_id, patient_name, clinic_name, contact_phone, status, notes, created_at, updated_at, coord_review_status, doctor_prescription_id, billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, payment_notice_doc_number, payment_notice_issued_at, partners!lab_orders_partner_id_fkey(code,name), lab_order_lines!lab_order_lines_order_id_fkey(line_amount,tooth_positions,tooth_count,quantity,products!lab_order_lines_product_id_fkey(code,name,unit_price))";
 
 function mapLabOrderListRow(r: Record<string, unknown>): LabOrderRow {
   const partners = r["partners"] as { code?: string; name?: string } | null;
@@ -96,9 +98,10 @@ function mapLabOrderListRow(r: Record<string, unknown>): LabOrderRow {
     tooth_positions?: string;
     tooth_count?: number | null;
     quantity?: string | number | null;
-    products?: { code?: string; name?: string } | null;
+    products?: { code?: string; name?: string; unit_price?: string | number } | null;
   }[] | null;
   let total = 0;
+  let listTotal = 0;
   // Tổng hợp vị trí răng và số lượng răng
   const toothPositionsSet = new Set<string>();
   let toothCountTotal = 0;
@@ -109,6 +112,8 @@ function mapLabOrderListRow(r: Record<string, unknown>): LabOrderRow {
     const q = finiteNumber(line.quantity);
     if (q > 0) lineQuantityTotal += q;
     const pr = line.products;
+    const listUnit = finiteNumber(pr?.unit_price);
+    if (q > 0 && listUnit > 0) listTotal += q * listUnit;
     const code = pr?.code?.trim();
     const name = pr?.name?.trim();
     const label = code && name ? `${code} — ${name}` : code || name || "";
@@ -134,6 +139,7 @@ function mapLabOrderListRow(r: Record<string, unknown>): LabOrderRow {
     }).join("; ") || null;
   const crs = r["coord_review_status"] as string | undefined;
   const subtotal = Math.round(total * 100) / 100;
+  const list_total_amount = Math.round(listTotal * 100) / 100;
   const bPct = finiteNumber(r["billing_order_discount_percent"]);
   const bAmt = finiteNumber(r["billing_order_discount_amount"]);
   const bFees = finiteNumber(r["billing_other_fees"]);
@@ -151,6 +157,7 @@ function mapLabOrderListRow(r: Record<string, unknown>): LabOrderRow {
     updated_at: r["updated_at"] as string,
     partner_code: partners?.code,
     partner_name: partners?.name,
+    list_total_amount: list_total_amount > 0 ? list_total_amount : undefined,
     total_amount: subtotal,
     coord_review_status: crs === "pending" ? "pending" : "verified",
     doctor_prescription_id: (r["doctor_prescription_id"] as string | null) ?? null,

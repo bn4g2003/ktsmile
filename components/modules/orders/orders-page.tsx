@@ -1363,7 +1363,7 @@ export function OrdersPage() {
           return (
             <div
               className="text-right tabular-nums text-[13px]"
-              title={`Trung bình ${basis}: cộng tiền hàng ÷ ${div}`}
+              title={`Trung bình ${basis}: cộng chi tiết ÷ ${div}`}
             >
               {Math.round(avg).toLocaleString("vi-VN")}
             </div>
@@ -1371,18 +1371,77 @@ export function OrdersPage() {
         },
       },
       {
+        accessorKey: "list_total_amount",
+        header: "Tổng niêm yết",
+        size: 130,
+        meta: { filterType: "none" },
+        cell: ({ row }) => {
+          const v = (row.original as unknown as { list_total_amount?: number }).list_total_amount;
+          const n = Number(v ?? 0);
+          return (
+            <div
+              className="text-right font-semibold tabular-nums"
+              title="Tổng giá gốc theo bảng giá sản phẩm (sum(qty × giá niêm yết))"
+            >
+              {n > 0 ? n.toLocaleString("vi-VN") : "—"}
+            </div>
+          );
+        },
+      },
+      {
         accessorKey: "total_amount",
-        header: "Cộng tiền hàng",
+        header: "Cộng chi tiết",
         size: 130,
         meta: { filterType: "none" },
         cell: ({ getValue }) => (
           <div
             className="text-right font-semibold tabular-nums"
-            title="Tổng thành tiền các dòng SP (trước chiết khấu %, CK VNĐ và phí khác)"
+            title="Tổng thành tiền các dòng (sau CK theo khách/SP và CK dòng; trước CK đơn và phí khác)"
           >
             {Number(getValue() ?? 0).toLocaleString("vi-VN")}
           </div>
         ),
+      },
+      {
+        id: "total_discount",
+        header: "Tổng CK",
+        size: 110,
+        meta: { filterType: "none" },
+        cell: ({ row }) => {
+          const r = row.original;
+          const list = Number((r as unknown as { list_total_amount?: number }).list_total_amount ?? 0);
+          const baseList = list > 0 ? list : Number(r.total_amount ?? 0);
+          const fees = Number(r.billing_other_fees ?? 0);
+          const netBeforeFees = Number(r.grand_total ?? 0) - fees;
+          const disc = Math.max(0, Math.round((baseList - netBeforeFees) * 100) / 100);
+          const titleParts: string[] = [
+            `Tổng niêm yết: ${Math.round(baseList).toLocaleString("vi-VN")}`,
+            `Phải thu (trước phí): ${Math.round(netBeforeFees).toLocaleString("vi-VN")}`,
+          ];
+          if (fees !== 0) titleParts.push(`Phí khác: ${fees.toLocaleString("vi-VN")}`);
+          return (
+            <div
+              className="text-right font-semibold tabular-nums text-rose-700 dark:text-rose-400"
+              title={titleParts.length ? titleParts.join(" · ") : "—"}
+            >
+              {disc > 0 ? `−${disc.toLocaleString("vi-VN")}` : "0"}
+            </div>
+          );
+        },
+      },
+      {
+        accessorKey: "billing_other_fees",
+        header: "Phí khác",
+        size: 95,
+        meta: { filterType: "none" },
+        cell: ({ getValue }) => {
+          const n = Number(getValue() ?? 0);
+          return (
+            <div className="text-right tabular-nums" title="Phí cộng thêm (có thể âm/dương)">
+              {n !== 0 ? n.toLocaleString("vi-VN") : "0"}
+            </div>
+          );
+        },
       },
       {
         accessorKey: "grand_total",
@@ -1392,7 +1451,7 @@ export function OrdersPage() {
         cell: ({ getValue }) => (
           <div
             className="text-right font-bold text-[color-mix(in_srgb,var(--primary)_60%,var(--on-surface))] tabular-nums"
-            title="Số tiền sau CK đơn và phí khác (công thức GBTT)"
+            title="Số tiền sau tất cả chiết khấu và phí khác (công thức GBTT)"
           >
             {Number(getValue() ?? 0).toLocaleString("vi-VN")}
           </div>

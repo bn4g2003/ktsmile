@@ -47,13 +47,6 @@ function fmtQty(n: number) {
   return new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 4 }).format(n);
 }
 
-function lineDiscountLabel(discountPercent: number, discountAmount: number): string {
-  const parts: string[] = [];
-  if (discountPercent > 0) parts.push(`${discountPercent}%`);
-  if (discountAmount > 0) parts.push(formatVnd(discountAmount));
-  return parts.join(" + ") || "—";
-}
-
 function roundMoney2(n: number): number {
   return Math.round(n * 100) / 100;
 }
@@ -84,7 +77,8 @@ export function buildPaymentNoticeBodyHtml(p: PaymentNoticePrintPayload): string
           <td class="num pn-c-qty">${escapeHtml(fmtQty(l.quantity))}</td>
           <td class="num pn-c-list">${escapeHtml(formatVnd(lineListUnitForGbtt(l)))}</td>
           <td class="num pn-c-price">${escapeHtml(formatVnd(l.unit_price))}</td>
-          <td class="num pn-c-disc">${escapeHtml(lineDiscountLabel(l.discount_percent, l.discount_amount))}</td>
+          <td class="num pn-c-disc-pct">${escapeHtml(l.discount_percent > 0 ? `${l.discount_percent}%` : "—")}</td>
+          <td class="num pn-c-disc-amt">${escapeHtml(l.discount_amount > 0 ? formatVnd(l.discount_amount) : "—")}</td>
           <td class="num pn-c-amt"><strong>${escapeHtml(formatVnd(l.line_amount))}</strong></td>
           <td class="pn-c-note">${escapeHtml(l.notes ?? "—")}</td>
         </tr>`,
@@ -97,6 +91,8 @@ export function buildPaymentNoticeBodyHtml(p: PaymentNoticePrintPayload): string
   );
   const lineDiscountFromList = roundMoney2(Math.max(0, subtotalListCatalog - p.subtotal_lines));
   const showListBreakdown = lineDiscountFromList > 0.005;
+  const netBeforeFees = roundMoney2(p.grand_total - (p.billing_other_fees ?? 0));
+  const mergedTotalDiscount = roundMoney2(Math.max(0, subtotalListCatalog - netBeforeFees));
 
   const docLine = p.payment_notice_doc_number
     ? escapeHtml(p.payment_notice_doc_number)
@@ -138,7 +134,8 @@ export function buildPaymentNoticeBodyHtml(p: PaymentNoticePrintPayload): string
         <col class="pn-col-qty" />
         <col class="pn-col-list" />
         <col class="pn-col-price" />
-        <col class="pn-col-disc" />
+        <col class="pn-col-disc-pct" />
+        <col class="pn-col-disc-amt" />
         <col class="pn-col-amt" />
         <col class="pn-col-note" />
       </colgroup>
@@ -151,54 +148,40 @@ export function buildPaymentNoticeBodyHtml(p: PaymentNoticePrintPayload): string
           <th class="num">SL</th>
           <th class="num">Giá niêm yết</th>
           <th class="num">Đơn giá</th>
-          <th class="num">CK dòng</th>
+          <th class="num">CK %</th>
+          <th class="num">CK (đồng)</th>
           <th class="num">Thành tiền</th>
           <th>Ghi chú</th>
         </tr>
       </thead>
-      <tbody>${rows || `<tr><td colspan="10">Chưa có dòng.</td></tr>`}</tbody>
+      <tbody>${rows || `<tr><td colspan="11">Chưa có dòng.</td></tr>`}</tbody>
       <tfoot>
-        ${showListBreakdown
-          ? `
         <tr class="total-row">
-          <td colspan="8" class="num" style="border:none;">CỘNG GIÁ NIÊM YẾT:</td>
+          <td colspan="9" class="num" style="border:none;">CỘNG GIÁ NIÊM YẾT:</td>
           <td class="num" style="background:#f8fafc;">${escapeHtml(formatVnd(subtotalListCatalog))}</td>
           <td style="border:none;"></td>
         </tr>
+        ${mergedTotalDiscount > 0 ? `
         <tr class="total-row">
-          <td colspan="8" class="num" style="border:none;color:#b91c1c;">TRỪ CHIẾT KHẤU / GIẢM GIÁ (dòng):</td>
-          <td class="num" style="color:#b91c1c;">−${escapeHtml(formatVnd(lineDiscountFromList))}</td>
-          <td style="border:none;"></td>
-        </tr>`
-          : ""}
-        <tr class="total-row">
-          <td colspan="8" class="num" style="border:none;">${showListBreakdown ? "CỘNG CHI TIẾT (sau CK dòng):" : "CỘNG CHI TIẾT:"}</td>
-          <td class="num" style="background:#f1f5f9;">${escapeHtml(formatVnd(p.subtotal_lines))}</td>
-          <td style="border:none;"></td>
-        </tr>
-        ${p.billing_order_discount_percent > 0 ? `
-        <tr class="total-row">
-          <td colspan="8" class="num" style="border:none;">CHIẾT KHẤU TỔNG (${escapeHtml(String(p.billing_order_discount_percent))}%):</td>
-          <td class="num" style="color:#b91c1c;">−${escapeHtml(formatVnd(p.subtotal_lines * (p.billing_order_discount_percent / 100)))}</td>
+          <td colspan="9" class="num" style="border:none;color:#b91c1c;">TỔNG CHIẾT KHẤU / GIẢM (gộp):</td>
+          <td class="num" style="color:#b91c1c;">−${escapeHtml(formatVnd(mergedTotalDiscount))}</td>
           <td style="border:none;"></td>
         </tr>
         ` : ""}
-        ${p.billing_order_discount_amount > 0 ? `
         <tr class="total-row">
-          <td colspan="8" class="num" style="border:none;">GIẢM GIÁ VNĐ:</td>
-          <td class="num" style="color:#b91c1c;">−${escapeHtml(formatVnd(p.billing_order_discount_amount))}</td>
+          <td colspan="9" class="num" style="border:none;">PHẢI THU (TRƯỚC PHÍ KHÁC):</td>
+          <td class="num" style="background:#f1f5f9;">${escapeHtml(formatVnd(netBeforeFees))}</td>
           <td style="border:none;"></td>
         </tr>
-        ` : ""}
         ${p.billing_other_fees !== 0 ? `
         <tr class="total-row">
-          <td colspan="8" class="num" style="border:none;">CHI PHÍ KHÁC:</td>
+          <td colspan="9" class="num" style="border:none;">PHÍ KHÁC:</td>
           <td class="num">${escapeHtml(formatVnd(p.billing_other_fees))}</td>
           <td style="border:none;"></td>
         </tr>
         ` : ""}
         <tr class="total-row">
-          <td colspan="8" class="num" style="border:none;font-weight:800;font-size:13px;">TỔNG THANH TOÁN:</td>
+          <td colspan="9" class="num" style="border:none;font-weight:800;font-size:13px;">TỔNG THANH TOÁN:</td>
           <td class="num" style="background:#2563eb;color:#fff;font-weight:800;font-size:14px;">${escapeHtml(formatVnd(p.grand_total))}</td>
           <td style="border:none;"></td>
         </tr>
@@ -252,7 +235,8 @@ export function buildPaymentNoticeBodyHtml(p: PaymentNoticePrintPayload): string
       .pn-lines .pn-col-qty { width: 5%; }
       .pn-lines .pn-col-list { width: 8%; }
       .pn-lines .pn-col-price { width: 8%; }
-      .pn-lines .pn-col-disc { width: 9%; }
+      .pn-lines .pn-col-disc-pct { width: 5%; }
+      .pn-lines .pn-col-disc-amt { width: 7%; }
       .pn-lines .pn-col-amt { width: 11%; }
       .pn-lines .pn-col-note { width: 11%; }
       .pn-lines thead .pn-head th {
