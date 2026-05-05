@@ -53,22 +53,11 @@ function fmtQty(n: number) {
   return new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 4 }).format(n);
 }
 
-function lineDiscountLabel(l: LabOrderPrintLine): string {
+function lineDiscountLabel(discountPercent: number, discountAmount: number): string {
   const parts: string[] = [];
-  const pct = Number(l.discount_percent ?? 0);
-  const amt = Number(l.discount_amount ?? 0);
-  if (pct > 0) parts.push(`${pct}%`);
-  if (amt > 0) parts.push(formatVnd(amt));
-  if (parts.length) return parts.join(" + ");
-
-  // Fallback: nếu CK theo KH/SP được “ngầm” đưa vào unit_price thì suy ra % từ giá niêm yết.
-  const list = Number(l.list_unit_price ?? 0);
-  const unit = Number(l.unit_price ?? 0);
-  if (list > 0 && unit > 0 && unit < list) {
-    const inferred = Math.round((1 - unit / list) * 10_000) / 100; // 2 decimals
-    if (inferred > 0) return `${inferred}%`;
-  }
-  return "—";
+  if (discountPercent > 0) parts.push(`${discountPercent}%`);
+  if (discountAmount > 0) parts.push(formatVnd(discountAmount));
+  return parts.join(" + ") || "—";
 }
 
 function roundMoney2(n: number): number {
@@ -105,8 +94,8 @@ export function buildLabOrderBodyHtml(p: LabOrderPrintPayload): string {
           </td>
           <td class="r">${escapeHtml(fmtQty(l.quantity))}</td>
           <td class="r">${escapeHtml(formatVnd(lineListUnitPrice(l)))}</td>
-          <td class="c">${escapeHtml(lineDiscountLabel(l))}</td>
-          <td class="r"><strong>${escapeHtml(formatVnd(roundMoney2(l.quantity * lineListUnitPrice(l))))}</strong></td>
+          <td class="c">${escapeHtml(lineDiscountLabel(l.discount_percent, l.discount_amount))}</td>
+          <td class="r"><strong>${escapeHtml(formatVnd(l.line_amount))}</strong></td>
         </tr>`,
     )
     .join("");
@@ -114,8 +103,6 @@ export function buildLabOrderBodyHtml(p: LabOrderPrintPayload): string {
   const subtotalList = p.lines.reduce((s, l) => s + roundMoney2(l.quantity * lineListUnitPrice(l)), 0);
   const lineDiscountFromList = roundMoney2(Math.max(0, subtotalList - total));
   const showListBreakdown = lineDiscountFromList > 0.005;
-  const discountPctFromList =
-    subtotalList > 0 ? Math.round((lineDiscountFromList / subtotalList) * 10_000) / 100 : 0;
   const words = amountInWordsVietnamese(Math.round(total));
   const now = new Date();
   const dayLine = `TP. HCM, ngày ${String(now.getDate()).padStart(2, "0")} tháng ${String(now.getMonth() + 1).padStart(2, "0")} năm ${now.getFullYear()}`;
@@ -167,7 +154,7 @@ export function buildLabOrderBodyHtml(p: LabOrderPrintPayload): string {
             <th class="r" style="width:50px;">SL</th>
             <th class="r" style="width:96px;">Đơn giá niêm yết</th>
             <th class="c" style="width:86px;">CK</th>
-            <th class="r" style="width:105px;">Giá gốc</th>
+            <th class="r" style="width:105px;">Thành tiền</th>
           </tr>
         </thead>
         <tbody>${rows || `<tr><td colspan="8" class="c">Chưa có dòng sản phẩm.</td></tr>`}</tbody>
@@ -179,7 +166,7 @@ export function buildLabOrderBodyHtml(p: LabOrderPrintPayload): string {
             <td class="r val">${escapeHtml(formatVnd(subtotalList))}</td>
           </tr>
           <tr>
-            <td colspan="7" class="r lbl ocf-disc-lbl">Trừ chiết khấu / giảm giá (dòng)${discountPctFromList > 0 ? ` (${escapeHtml(String(discountPctFromList))}%)` : ""}:</td>
+            <td colspan="7" class="r lbl ocf-disc-lbl">Trừ chiết khấu / giảm giá (dòng):</td>
             <td class="r val ocf-disc-val">−${escapeHtml(formatVnd(lineDiscountFromList))}</td>
           </tr>`
             : ""}

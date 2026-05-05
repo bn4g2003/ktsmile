@@ -11,7 +11,6 @@ export type LabOrderListReportPayload = {
   customerHeader?: PartnerTaxDisplay;
   stats?: {
     prevBalance?: number;
-    /** Tổng CK/giảm giá (VNĐ) trong kỳ (nếu có). Nếu không truyền, sẽ tự tính từ dữ liệu đơn. */
     discount?: number;
     paid?: number;
   };
@@ -40,26 +39,18 @@ export function buildLabOrderListReportHtml(p: LabOrderListReportPayload): strin
       <td class="lol-td">${escapeHtml(r.products_summary ?? "") || "—"}</td>
       <td class="lol-td" style="width:80px;">${escapeHtml(r.tooth_positions_summary || "") || "—"}</td>
       <td class="num lol-td" style="width:36px;">${escapeHtml(formatQuantityCell(r))}</td>
-      <td class="num lol-td" style="width:88px;"><strong>${Number(r.list_total_amount ?? r.total_amount ?? 0).toLocaleString("vi-VN")}</strong></td>
+      <td class="num lol-td" style="width:88px;"><strong>${r.grand_total.toLocaleString("vi-VN")}</strong></td>
       <td class="lol-td">${escapeHtml(r.notes || "")}</td>
     </tr>
   `,
     )
     .join("");
 
-  const listTotal = p.rows.reduce((sum, r) => sum + Number(r.list_total_amount ?? 0), 0);
-  const subtotalDetail = p.rows.reduce((sum, r) => sum + r.total_amount, 0);
-  const feesTotal = p.rows.reduce((sum, r) => sum + Number(r.billing_other_fees ?? 0), 0);
-  const subtotalAfterDiscount = p.rows.reduce((sum, r) => sum + r.grand_total, 0);
-  const netBeforeFees = subtotalAfterDiscount - feesTotal;
-  const computedMergedDiscount = Math.max(0, listTotal > 0 ? listTotal - netBeforeFees : 0);
-  const mergedDiscountPct =
-    listTotal > 0 ? Math.round((computedMergedDiscount / listTotal) * 10_000) / 100 : 0;
-  // p.stats.discount: giảm/điều chỉnh khác ngoài công thức đơn (nếu có)
-  const extraDiscount = p.stats?.discount ?? 0;
+  const subtotal = p.rows.reduce((sum, r) => sum + r.grand_total, 0);
+  const discount = p.stats?.discount ?? 0;
   const prevBalance = p.stats?.prevBalance ?? 0;
   const paid = p.stats?.paid ?? 0;
-  const finalBalance = prevBalance + subtotalAfterDiscount - extraDiscount - paid;
+  const finalBalance = prevBalance + subtotal - discount - paid;
 
   return `
     <h1 style="color:#0f172a;margin-bottom:8px;">HOÁ ĐƠN PHÒNG NHA / LABO</h1>
@@ -81,29 +72,22 @@ export function buildLabOrderListReportHtml(p: LabOrderListReportPayload): strin
           <th class="lol-th">Sản phẩm</th>
           <th class="lol-th">Vị trí răng</th>
           <th class="lol-th num">SL</th>
-          <th class="lol-th num">Giá gốc</th>
+          <th class="lol-th num">Thành tiền</th>
           <th class="lol-th">Ghi chú</th>
         </tr>
       </thead>
       <tbody>
         ${rowsHtml || '<tr><td colspan="10" style="text-align:center;padding:20px;">Không có dữ liệu.</td></tr>'}
         <tr class="lol-foot">
-          <td colspan="8" class="num" style="border:none;color:#0f172a;">CỘNG GIÁ NIÊM YẾT :</td>
-          <td class="num" style="border:1px solid #64748b;background:#f1f5f9;color:#0f172a;">${(listTotal > 0 ? listTotal : subtotalDetail).toLocaleString("vi-VN")}</td>
+          <td colspan="8" class="num" style="border:none;color:#0f172a;">CỘNG TIỀN HÀNG :</td>
+          <td class="num" style="border:1px solid #64748b;background:#f1f5f9;color:#0f172a;">${subtotal.toLocaleString("vi-VN")}</td>
           <td style="border:none;"></td>
         </tr>
         <tr class="lol-foot">
-          <td colspan="8" class="num" style="border:none;color:#0f172a;">TỔNG CHIẾT KHẤU / GIẢM (gộp)${mergedDiscountPct > 0 ? ` (${mergedDiscountPct}%)` : ""} :</td>
-          <td class="num" style="border:1px solid #64748b;color:#b91c1c;">${computedMergedDiscount.toLocaleString("vi-VN")}</td>
+          <td colspan="8" class="num" style="border:none;color:#0f172a;">CHIẾT KHẤU GIẢM :</td>
+          <td class="num" style="border:1px solid #64748b;color:#0f172a;">${discount.toLocaleString("vi-VN")}</td>
           <td style="border:none;"></td>
         </tr>
-        ${extraDiscount > 0 ? `
-        <tr class="lol-foot">
-          <td colspan="8" class="num" style="border:none;color:#0f172a;">GIẢM KHÁC (điều chỉnh) :</td>
-          <td class="num" style="border:1px solid #64748b;color:#b91c1c;">${extraDiscount.toLocaleString("vi-VN")}</td>
-          <td style="border:none;"></td>
-        </tr>
-        ` : ""}
         <tr class="lol-foot">
           <td colspan="8" class="num" style="border:none;color:#0f172a;">NỢ ĐẦU KỲ :</td>
           <td class="num" style="border:1px solid #64748b;color:#0f172a;">${prevBalance.toLocaleString("vi-VN")}</td>
@@ -121,7 +105,7 @@ export function buildLabOrderListReportHtml(p: LabOrderListReportPayload): strin
         </tr>
       </tbody>
     </table>
-    ${htmlBangChu((listTotal > 0 ? listTotal : subtotalDetail), "Bằng chữ (cộng giá niêm yết)")}
+    ${htmlBangChu(subtotal, "Bằng chữ (cộng tiền hàng)")}
     ${htmlBangChu(finalBalance, "Bằng chữ (nợ cuối kỳ)")}
 
     <div style="margin-top:20px;display:flex;justify-content:flex-end;align-items:flex-start;">
