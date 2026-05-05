@@ -69,6 +69,7 @@ import {
   fetchLabOrderLinesForExport,
   getDailyDeliveryNotePayload,
   getLabOrder,
+  repriceLabOrdersByIds,
   getSuggestedLinePricing,
   listLabOrderFilterSuggestions,
   listLabOrders,
@@ -713,6 +714,7 @@ export function OrdersPage() {
   const [deliveryPartnerSearch, setDeliveryPartnerSearch] = React.useState("");
   const [deliveryDate, setDeliveryDate] = React.useState(new Date().toISOString().slice(0, 10));
   const [deliveryExcelBusy, setDeliveryExcelBusy] = React.useState(false);
+  const [repriceAllBusy, setRepriceAllBusy] = React.useState(false);
 
   const [payNow, setPayNow] = React.useState(false);
   const [payChannel, setPayChannel] = React.useState("cash");
@@ -1159,7 +1161,34 @@ export function OrdersPage() {
     () => [
       {
         id: "bulk_tick",
-        header: "Tick xóa",
+        header: ({ table }) => {
+          const visibleRows = table.getRowModel().rows;
+          const visibleIds = visibleRows.map((r) => r.original.id);
+          const checkedCount = visibleIds.filter((id) => selectedOrderIds.has(id)).length;
+          const allChecked = visibleIds.length > 0 && checkedCount === visibleIds.length;
+          const someChecked = checkedCount > 0 && checkedCount < visibleIds.length;
+          return (
+            <input
+              type="checkbox"
+              aria-label="Chọn tất cả đơn đang hiển thị"
+              checked={allChecked}
+              ref={(el) => {
+                if (el) el.indeterminate = someChecked;
+              }}
+              onChange={(e) => {
+                const checked = e.target.checked;
+                setSelectedOrderIds((prev) => {
+                  const next = new Set(prev);
+                  for (const id of visibleIds) {
+                    if (checked) next.add(id);
+                    else next.delete(id);
+                  }
+                  return next;
+                });
+              }}
+            />
+          );
+        },
         size: 70,
         meta: { filterType: "none" },
         cell: ({ row }) => (
@@ -1501,6 +1530,32 @@ export function OrdersPage() {
                 partners={partners}
                 suggestions={filterSuggestions}
               />
+              <Button
+                variant="secondary"
+                size="sm"
+                type="button"
+                disabled={repriceAllBusy || selectedOrderIds.size === 0}
+                onClick={() => {
+                  const ids = [...selectedOrderIds];
+                  if (!ids.length) return;
+                  if (!confirm(`Chạy lại ${ids.length} đơn đã tick theo công thức giá mới?`)) return;
+                  setRepriceAllBusy(true);
+                  void repriceLabOrdersByIds(ids)
+                    .then((res) => {
+                      clearSelectedOrders();
+                      bumpGrid();
+                      alert(`Đã cập nhật ${res.updated_lines} dòng thuộc ${res.touched_orders} đơn.`);
+                    })
+                    .catch((e) => alert(e instanceof Error ? e.message : "Không chạy lại được đơn."))
+                    .finally(() => setRepriceAllBusy(false));
+                }}
+              >
+                {repriceAllBusy
+                  ? "Đang chạy lại đơn…"
+                  : selectedOrderIds.size > 0
+                    ? `Chạy lại giá đơn đã tick (${selectedOrderIds.size})`
+                    : "Chạy lại giá đơn đã tick"}
+              </Button>
               <OrdersPrintExportMenu
                 filters={filters}
                 globalSearch={globalSearch}

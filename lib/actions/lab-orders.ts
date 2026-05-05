@@ -881,6 +881,139 @@ export async function getSuggestedLinePricing(
   return { unit_price: basePrice, discount_percent: 0 };
 }
 
+async function repriceLabOrdersByCurrentFormulaInternal(targetOrderIds?: string[]): Promise<{
+  updated_lines: number;
+  touched_orders: number;
+}> {
+  const supabase = createSupabaseAdmin();
+  const normalizedOrderIds = targetOrderIds?.map((id) => id.trim()).filter(Boolean) ?? [];
+  const uniqueTargetOrderIds = [...new Set(normalizedOrderIds)];
+
+  let ordersQuery = supabase
+    .from("lab_orders")
+    .select("id,partner_id,status")
+    .neq("status", "cancelled")
+    .limit(20000);
+  if (uniqueTargetOrderIds.length > 0) {
+    ordersQuery = ordersQuery.in("id", uniqueTargetOrderIds);
+  }
+  const { data: orders, error: oErr } = await ordersQuery;
+  if (oErr) throw new Error(oErr.message);
+
+  const orderPartnerById = new Map<string, string>();
+  for (const o of orders ?? []) {
+    orderPartnerById.set(String(o.id), String(o.partner_id));
+  }
+  if (orderPartnerById.size === 0) {
+    return { updated_lines: 0, touched_orders: 0 };
+  }
+
+  const partnerIds = [...new Set([...orderPartnerById.values()])];
+  const activeOrderIds = [...orderPartnerById.keys()];
+  if (activeOrderIds.length === 0) {
+    return { updated_lines: 0, touched_orders: 0 };
+  }
+
+  const { data: lines, error: lErr } = await supabase
+    .from("lab_order_lines")
+    .select("id,order_id,product_id,quantity,work_type")
+    .in("order_id", activeOrderIds)
+    .limit(200000);
+  if (lErr) throw new Error(lErr.message);
+
+  const productIds = [...new Set((lines ?? []).map((l) => String(l.product_id)).filter(Boolean))];
+
+  const [{ data: partners, error: pErr }, { data: products, error: prErr }, { data: overrides, error: ppErr }] =
+    await Promise.all([
+      supabase
+        .from("partners")
+        .select("id,default_discount_percent")
+        .in("id", partnerIds),
+      supabase
+        .from("products")
+        .select("id,unit_price")
+        .in("id", productIds),
+      supabase
+        .from("partner_product_prices")
+        .select("partner_id,product_id,unit_price")
+        .in("partner_id", partnerIds),
+    ]);
+  if (pErr) throw new Error(pErr.message);
+  if (prErr) throw new Error(prErr.message);
+  if (ppErr) throw new Error(ppErr.message);
+
+  const partnerDefaultDiscById = new Map<string, number>();
+  for (const p of partners ?? []) {
+    partnerDefaultDiscById.set(String(p.id), Number(p.default_discount_percent ?? 0));
+  }
+  const productBasePriceById = new Map<string, number>();
+  for (const p of products ?? []) {
+    productBasePriceById.set(String(p.id), Number(p.unit_price ?? 0));
+  }
+  const partnerProductPriceByKey = new Map<string, number>();
+  for (const r of overrides ?? []) {
+    partnerProductPriceByKey.set(`${String(r.partner_id)}:${String(r.product_id)}`, Number(r.unit_price ?? 0));
+  }
+
+  let updatedLines = 0;
+  const touchedOrderIds = new Set<string>();
+
+  for (const ln of lines ?? []) {
+    const orderId = String(ln.order_id ?? "");
+    const partnerId = orderPartnerById.get(orderId);
+    if (!partnerId) continue;
+    const productId = String(ln.product_id ?? "");
+    if (!productId) continue;
+
+    let unitPrice = 0;
+    if (String(ln.work_type ?? "") === "warranty") {
+      unitPrice = 0;
+    } else {
+      const overridePrice = partnerProductPriceByKey.get(`${partnerId}:${productId}`);
+      if (overridePrice != null) {
+        unitPrice = overridePrice;
+      } else {
+        const basePrice = Number(productBasePriceById.get(productId) ?? 0);
+        const partnerDisc = Number(partnerDefaultDiscById.get(partnerId) ?? 0);
+        unitPrice =
+          partnerDisc > 0 && basePrice > 0
+            ? Math.round(basePrice * (1 - partnerDisc / 100))
+            : basePrice;
+      }
+    }
+
+    const { error: upErr } = await supabase
+      .from("lab_order_lines")
+      .update({
+        unit_price: unitPrice,
+        discount_percent: 0,
+        discount_amount: 0,
+      })
+      .eq("id", String(ln.id));
+    if (upErr) throw new Error(upErr.message);
+    updatedLines += 1;
+    touchedOrderIds.add(orderId);
+  }
+
+  revalidatePath("/orders");
+  revalidatePath("/orders/review");
+  return { updated_lines: updatedLines, touched_orders: touchedOrderIds.size };
+}
+
+export async function repriceAllLabOrdersByCurrentFormula(): Promise<{
+  updated_lines: number;
+  touched_orders: number;
+}> {
+  return repriceLabOrdersByCurrentFormulaInternal();
+}
+
+export async function repriceLabOrdersByIds(orderIds: string[]): Promise<{
+  updated_lines: number;
+  touched_orders: number;
+}> {
+  return repriceLabOrdersByCurrentFormulaInternal(orderIds);
+}
+
 export async function getLabOrder(id: string) {
   const supabase = createSupabaseAdmin();
   const { data, error } = await supabase
