@@ -66,17 +66,10 @@ export function buildPrintShell(title: string, innerBodyHtml: string): string {
 }
 
 /**
- * Khung HTML tối ưu cho html2canvas / html2pdf.js.
- * Khác buildPrintShell: width cố định 794px (A4 @96dpi), không dùng @media print,
- * ép màu nền và viền bằng !important để html2canvas chụp đúng.
+ * CSS dùng chung cho html2canvas / html2pdf (width cố định, màu ép, không @media print).
  */
-export function buildDownloadShell(title: string, innerBodyHtml: string): string {
-  const t = escapeHtml(title);
-  return `<!DOCTYPE html><html lang="vi"><head><meta charset="utf-8"/><title>${t}</title><style>
-    /* ── Reset ── */
+const HTML2CANVAS_SHELL_CSS = `
     *,*::before,*::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-    /* ── Body: cố định 794px = A4 tại 96dpi ── */
     html, body {
       width: 794px !important;
       margin: 0 !important;
@@ -86,7 +79,7 @@ export function buildDownloadShell(title: string, innerBodyHtml: string): string
       print-color-adjust: exact !important;
     }
     body {
-      font-family: "Times New Roman", Times, serif !important;
+      font-family: "Times New Roman", Times, "Liberation Serif", serif !important;
       font-size: 13px !important;
       color: #111 !important;
       line-height: 1.45 !important;
@@ -94,7 +87,6 @@ export function buildDownloadShell(title: string, innerBodyHtml: string): string
     }
     .print-root { width: 100% !important; }
 
-    /* ── Header: table-layout fixed để logo không đè lên chữ ── */
     .report-header-table {
       width: 100% !important;
       table-layout: fixed !important;
@@ -111,12 +103,10 @@ export function buildDownloadShell(title: string, innerBodyHtml: string): string
     .company-name { font-size: 16px !important; font-weight: 800 !important; color: #1d4ed8 !important; text-transform: uppercase !important; margin-bottom: 4px !important; }
     .company-info { font-size: 11.5px !important; color: #1e293b !important; line-height: 1.55 !important; }
 
-    /* ── Tiêu đề ── */
     h1 { font-size: 22px !important; font-weight: 900 !important; text-align: center !important; text-transform: uppercase !important; color: #0f172a !important; margin: 16px 0 8px !important; }
     h2 { font-size: 14px !important; font-weight: 700 !important; color: #1e293b !important; margin: 14px 0 8px !important; }
     .muted { font-size: 11px !important; color: #64748b !important; margin-bottom: 8px !important; }
 
-    /* ── Bảng dữ liệu: không dùng overflow:hidden để tránh mất chữ dài ── */
     table:not(.report-header-table) {
       width: 100% !important;
       table-layout: fixed !important;
@@ -124,7 +114,6 @@ export function buildDownloadShell(title: string, innerBodyHtml: string): string
       margin-top: 8px !important;
       margin-bottom: 8px !important;
     }
-    /* Chỉ áp dụng border cho bảng DỮ LIỆU, không áp dụng cho header table */
     table:not(.report-header-table) th,
     table:not(.report-header-table) td {
       border: 1px solid #475569 !important;
@@ -134,7 +123,6 @@ export function buildDownloadShell(title: string, innerBodyHtml: string): string
       word-wrap: break-word !important;
       overflow-wrap: break-word !important;
     }
-    /* Nền đậm + chữ trắng — ép màu để html2canvas chụp đúng */
     table:not(.report-header-table) th {
       background-color: #1e3a5f !important;
       color: #ffffff !important;
@@ -147,35 +135,39 @@ export function buildDownloadShell(title: string, innerBodyHtml: string): string
     table:not(.report-header-table) td { font-size: 12px !important; color: #111 !important; }
     .num { text-align: right !important; font-variant-numeric: tabular-nums !important; }
 
-    /* ── Width từng cột hoá đơn Labo (tổng ≈ 730px = 794 - 64px padding) ── */
-    table:not(.report-header-table) th:nth-child(1),  table:not(.report-header-table) td:nth-child(1)  { width: 28px !important;  text-align: center !important; } /* STT */
-    table:not(.report-header-table) th:nth-child(2),  table:not(.report-header-table) td:nth-child(2)  { width: 72px !important;  text-align: center !important; } /* Ngày nhận */
-    table:not(.report-header-table) th:nth-child(3),  table:not(.report-header-table) td:nth-child(3)  { width: 78px !important; }                                  /* Nha khoa */
-    table:not(.report-header-table) th:nth-child(4),  table:not(.report-header-table) td:nth-child(4)  { width: 88px !important;  font-weight: 700 !important; }    /* Bệnh nhân */
-    table:not(.report-header-table) th:nth-child(5),  table:not(.report-header-table) td:nth-child(5)  { width: 92px !important; }                                  /* Số đơn */
-    table:not(.report-header-table) th:nth-child(6),  table:not(.report-header-table) td:nth-child(6)  { width: 105px !important; }                                 /* Sản phẩm */
-    table:not(.report-header-table) th:nth-child(7),  table:not(.report-header-table) td:nth-child(7)  { width: 105px !important; }                                 /* Vị trí răng */
-    table:not(.report-header-table) th:nth-child(8),  table:not(.report-header-table) td:nth-child(8)  { width: 28px !important;  text-align: center !important; } /* SL */
-    table:not(.report-header-table) th:nth-child(9),  table:not(.report-header-table) td:nth-child(9)  { width: 82px !important;  text-align: right !important; font-weight: 700 !important; } /* Thành tiền */
-    table:not(.report-header-table) th:nth-child(10), table:not(.report-header-table) td:nth-child(10) { width: 52px !important; }                                  /* Ghi chú */
+    table:not(.report-header-table) th:nth-child(1),  table:not(.report-header-table) td:nth-child(1)  { width: 28px !important;  text-align: center !important; }
+    table:not(.report-header-table) th:nth-child(2),  table:not(.report-header-table) td:nth-child(2)  { width: 72px !important;  text-align: center !important; }
+    table:not(.report-header-table) th:nth-child(3),  table:not(.report-header-table) td:nth-child(3)  { width: 78px !important; }
+    table:not(.report-header-table) th:nth-child(4),  table:not(.report-header-table) td:nth-child(4)  { width: 88px !important;  font-weight: 700 !important; }
+    table:not(.report-header-table) th:nth-child(5),  table:not(.report-header-table) td:nth-child(5)  { width: 92px !important; }
+    table:not(.report-header-table) th:nth-child(6),  table:not(.report-header-table) td:nth-child(6)  { width: 105px !important; }
+    table:not(.report-header-table) th:nth-child(7),  table:not(.report-header-table) td:nth-child(7)  { width: 105px !important; }
+    table:not(.report-header-table) th:nth-child(8),  table:not(.report-header-table) td:nth-child(8)  { width: 28px !important;  text-align: center !important; }
+    table:not(.report-header-table) th:nth-child(9),  table:not(.report-header-table) td:nth-child(9)  { width: 82px !important;  text-align: right !important; font-weight: 700 !important; }
+    table:not(.report-header-table) th:nth-child(10), table:not(.report-header-table) td:nth-child(10) { width: 52px !important; }
 
-    /* ── Dòng chẵn lẻ xen kẽ ── */
     table:not(.report-header-table) tbody tr:nth-child(even) td {
       background-color: #f8fafc !important;
       -webkit-print-color-adjust: exact !important;
     }
 
-    /* ── Bảng key-value ── */
     table.kv { border: none !important; margin-top: 10px !important; }
     table.kv th, table.kv td { border: none !important; padding: 2px 0 !important; }
     table.kv th { background: none !important; width: 7rem !important; font-size: 12px !important; font-weight: 700 !important; color: #1e293b !important; text-align: left !important; text-transform: uppercase !important; }
     table.kv td { font-size: 13px !important; font-weight: 500 !important; }
 
-    /* ── Tổng cuối bảng (tfoot) ── */
     tfoot tr td { font-weight: 700 !important; background-color: #f1f5f9 !important; -webkit-print-color-adjust: exact !important; }
     tfoot tr:last-child td { background-color: #dbeafe !important; color: #1e3a5f !important; font-size: 13.5px !important; }
     .total-row td { padding: 8px 4px !important; }
-  </style></head><body><div class="print-root">
+`;
+
+/**
+ * Khung HTML tối ưu cho html2canvas / html2pdf.
+ * Khác buildPrintShell: width cố định 794px (A4 @96dpi), ép màu để canvas chụp đúng.
+ */
+export function buildDownloadShell(title: string, innerBodyHtml: string): string {
+  const t = escapeHtml(title);
+  return `<!DOCTYPE html><html lang="vi"><head><meta charset="utf-8"/><title>${t}</title><style>${HTML2CANVAS_SHELL_CSS}</style></head><body><div class="print-root">
     <table class="report-header-table">
       <tr>
         <td class="company-box">
@@ -191,6 +183,22 @@ export function buildDownloadShell(title: string, innerBodyHtml: string): string
     </table>
     ${innerBodyHtml}
   </div></body></html>`;
+}
+
+/**
+ * Từ tài liệu `buildPrintShell` (đã có .print-root + header + nội dung): bọc lại bằng CSS html2canvas.
+ * Giữ nguyên một lần header — không nhân đôi.
+ */
+export function wrapPrintHtmlForCanvasPdf(fullHtml: string): string {
+  const titleMatch = fullHtml.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+  const rawTitle = titleMatch?.[1]?.replace(/<[^>]+>/g, "").trim() ?? "Document";
+  const t = escapeHtml(rawTitle || "Document");
+  const rootMatch = fullHtml.match(/<div\s+class="print-root"[^>]*>([\s\S]*?)<\/div>\s*<\/body>/i);
+  if (!rootMatch) {
+    return fullHtml;
+  }
+  const inner = rootMatch[1].trim();
+  return `<!DOCTYPE html><html lang="vi"><head><meta charset="utf-8"/><title>${t}</title><style>${HTML2CANVAS_SHELL_CSS}</style></head><body><div class="print-root">${inner}</div></body></html>`;
 }
 
 /** Ghi toàn bộ tài liệu HTML vào tab đã mở (không gọi in). */
