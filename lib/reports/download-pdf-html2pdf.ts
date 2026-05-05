@@ -1,5 +1,3 @@
-"use client";
-
 /**
  * Tạo PDF trong trình duyệt (html2pdf.js) và gọi lưu tải xuống — không qua hộp thoại in.
  * Dùng khi `/api/pdf` không dùng được (vd Hostinger không có Chromium).
