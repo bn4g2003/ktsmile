@@ -4,6 +4,10 @@ import { htmlHoaDonPhongNhaCustomerBlock } from "@/lib/reports/partner-kv-html";
 
 /** Chân phiếu giao tháng: cộng tiền hàng, CK, nợ, thu, nợ cuối kỳ. */
 export type DeliveryNoteMonthlyFooter = {
+  /** SL × giá niêm yết SP (hoặc đơn giá dòng nếu không có NY). */
+  subtotal_list_catalog: number;
+  /** Chênh NY − tiền hàng thực (đã gồm CK ẩn trong giá / CK dòng). */
+  line_discount_from_list: number;
   subtotal_goods: number;
   discount_label: string;
   discount_amount: number;
@@ -85,13 +89,11 @@ function noteCell(lineNotes: string | null | undefined, orderNotes: string | nul
   return parts.join(" · ");
 }
 
-function monthlyDisplayUnitPrice(line: DeliveryNoteLine): number {
-  const qty = Number(line.quantity ?? 0);
-  const amount = Number(line.line_amount ?? 0);
-  if (qty > 0 && Number.isFinite(amount)) {
-    return amount / qty;
-  }
-  return Number(line.unit_price ?? 0);
+/** Đơn giá niêm yết hiển thị trên phiếu (giá SP; không có thì đơn giá dòng). */
+function monthlyListCatalogUnitPrice(line: DeliveryNoteLine): number {
+  const b = Number(line.base_unit_price ?? 0);
+  const u = Number(line.unit_price ?? 0);
+  return b > 0 ? b : u;
 }
 
 export function deliveryNotePartnerDisplayName(p: Pick<DeliveryNotePayload, "partner_code" | "partner_name">): string {
@@ -115,22 +117,39 @@ function htmlDeliveryNotePartnerBlock(p: DeliveryNotePayload): string {
 }
 
 function htmlMonthlyDeliveryFooter(f: DeliveryNoteMonthlyFooter): string {
-  const row = (label: string, value: string, opts?: { strong?: boolean; highlight?: boolean }) => {
+  const row = (
+    label: string,
+    value: string,
+    opts?: { strong?: boolean; highlight?: boolean; valueStyle?: string },
+  ) => {
     const bg = opts?.highlight ? "background:#a9c4eb !important;" : "";
     const fw = opts?.strong ? "font-weight:800;" : "font-weight:600;";
+    const vs = opts?.valueStyle ?? "";
     return `<tr>
       <td class="dn-sum-lbl" style="${fw}${bg}">${escapeHtml(label)}</td>
-      <td class="dn-sum-val" style="${fw}${bg}">${value}</td>
+      <td class="dn-sum-val" style="${fw}${bg}${vs}">${value}</td>
     </tr>`;
   };
 
   const fmtInt = (n: number) =>
     new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 0 }).format(Math.round(n));
 
-  const lines: string[] = [
+  const showLineDisc =
+    f.line_discount_from_list != null && f.line_discount_from_list > 0.005;
+
+  const lines: string[] = [];
+  if (showLineDisc) {
+    lines.push(row("CỘNG GIÁ NIÊM YẾT :", escapeHtml(fmtInt(f.subtotal_list_catalog))));
+    lines.push(
+      row("CHIẾT KHẤU / GIẢM GIÁ (dòng) :", "−" + escapeHtml(fmtInt(f.line_discount_from_list)), {
+        valueStyle: "color:#b91c1c;font-weight:700;",
+      }),
+    );
+  }
+  lines.push(
     row("CỘNG TIỀN HÀNG :", escapeHtml(fmtInt(f.subtotal_goods))),
     row(`${f.discount_label} :`, escapeHtml(fmtInt(f.discount_amount))),
-  ];
+  );
   if (f.other_fees > 0.005) {
     lines.push(row("PHÍ KHÁC (GBTT) :", escapeHtml(fmtInt(f.other_fees))));
   }
@@ -226,7 +245,7 @@ function buildMonthlyFlatDeliveryNoteHtml(p: DeliveryNotePayload): string {
       const toothRaw = [l.tooth_positions?.trim(), l.shade?.trim()].filter(Boolean).join(" · ") || "—";
       const tooth = escapeHtml(toothRaw);
       const gc = escapeHtml(noteCell(l.notes, o.notes));
-      const up = monthlyDisplayUnitPrice(l);
+      const up = monthlyListCatalogUnitPrice(l);
       const amt = l.line_amount ?? 0;
       rowHtml.push(
         `<tr>
@@ -267,7 +286,7 @@ function buildMonthlyFlatDeliveryNoteHtml(p: DeliveryNotePayload): string {
           <th style="min-width:120px;">SẢN PHẨM</th>
           <th class="cen" style="width:100px;">VỊ TRÍ RĂNG</th>
           <th class="num" style="width:44px;">SL</th>
-          <th class="num" style="width:72px;">ĐƠN GIÁ (VNĐ)</th>
+          <th class="num" style="width:72px;">GIÁ NIÊM YẾT (VNĐ)</th>
           <th class="num" style="width:80px;">THÀNH TIỀN (VNĐ)</th>
           <th style="min-width:72px;">GHI CHÚ</th>
         </tr>

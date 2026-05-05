@@ -12,6 +12,9 @@ export type PaymentNoticeLine = {
   tooth_count: number | null;
   work_type: string;
   quantity: number;
+  /** Giá niêm yết (bảng giá SP). */
+  list_unit_price: number;
+  /** Đơn giá áp dụng trên đơn. */
   unit_price: number;
   discount_percent: number;
   discount_amount: number;
@@ -51,6 +54,15 @@ function lineDiscountLabel(discountPercent: number, discountAmount: number): str
   return parts.join(" + ") || "—";
 }
 
+function roundMoney2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+function lineListUnitForGbtt(l: PaymentNoticeLine): number {
+  const list = Number(l.list_unit_price ?? 0);
+  return list > 0 ? list : l.unit_price;
+}
+
 export function paymentNoticePrintTitle(p: PaymentNoticePrintPayload): string {
   const n = p.payment_notice_doc_number ?? p.order_number;
   return `Giấy báo thanh toán · ${n} — KT Smile Lab`;
@@ -70,6 +82,7 @@ export function buildPaymentNoticeBodyHtml(p: PaymentNoticePrintPayload): string
           <td class="pn-c-name">${escapeHtml(l.product_name)}</td>
           <td class="pn-c-tooth">${escapeHtml(l.tooth_positions)}${l.shade ? ` · ${escapeHtml(l.shade)}` : ""}</td>
           <td class="num pn-c-qty">${escapeHtml(fmtQty(l.quantity))}</td>
+          <td class="num pn-c-list">${escapeHtml(formatVnd(lineListUnitForGbtt(l)))}</td>
           <td class="num pn-c-price">${escapeHtml(formatVnd(l.unit_price))}</td>
           <td class="num pn-c-disc">${escapeHtml(lineDiscountLabel(l.discount_percent, l.discount_amount))}</td>
           <td class="num pn-c-amt"><strong>${escapeHtml(formatVnd(l.line_amount))}</strong></td>
@@ -77,6 +90,13 @@ export function buildPaymentNoticeBodyHtml(p: PaymentNoticePrintPayload): string
         </tr>`,
     )
     .join("");
+
+  const subtotalListCatalog = p.lines.reduce(
+    (s, l) => s + roundMoney2(l.quantity * lineListUnitForGbtt(l)),
+    0,
+  );
+  const lineDiscountFromList = roundMoney2(Math.max(0, subtotalListCatalog - p.subtotal_lines));
+  const showListBreakdown = lineDiscountFromList > 0.005;
 
   const docLine = p.payment_notice_doc_number
     ? escapeHtml(p.payment_notice_doc_number)
@@ -116,6 +136,7 @@ export function buildPaymentNoticeBodyHtml(p: PaymentNoticePrintPayload): string
         <col class="pn-col-name" />
         <col class="pn-col-tooth" />
         <col class="pn-col-qty" />
+        <col class="pn-col-list" />
         <col class="pn-col-price" />
         <col class="pn-col-disc" />
         <col class="pn-col-amt" />
@@ -128,42 +149,56 @@ export function buildPaymentNoticeBodyHtml(p: PaymentNoticePrintPayload): string
           <th>Tên sản phẩm</th>
           <th>Răng / màu</th>
           <th class="num">SL</th>
+          <th class="num">Giá niêm yết</th>
           <th class="num">Đơn giá</th>
           <th class="num">CK dòng</th>
           <th class="num">Thành tiền</th>
           <th>Ghi chú</th>
         </tr>
       </thead>
-      <tbody>${rows || `<tr><td colspan="9">Chưa có dòng.</td></tr>`}</tbody>
+      <tbody>${rows || `<tr><td colspan="10">Chưa có dòng.</td></tr>`}</tbody>
       <tfoot>
+        ${showListBreakdown
+          ? `
         <tr class="total-row">
-          <td colspan="7" class="num" style="border:none;">CỘNG CHI TIẾT:</td>
+          <td colspan="8" class="num" style="border:none;">CỘNG GIÁ NIÊM YẾT:</td>
+          <td class="num" style="background:#f8fafc;">${escapeHtml(formatVnd(subtotalListCatalog))}</td>
+          <td style="border:none;"></td>
+        </tr>
+        <tr class="total-row">
+          <td colspan="8" class="num" style="border:none;color:#b91c1c;">TRỪ CHIẾT KHẤU / GIẢM GIÁ (dòng):</td>
+          <td class="num" style="color:#b91c1c;">−${escapeHtml(formatVnd(lineDiscountFromList))}</td>
+          <td style="border:none;"></td>
+        </tr>`
+          : ""}
+        <tr class="total-row">
+          <td colspan="8" class="num" style="border:none;">${showListBreakdown ? "CỘNG CHI TIẾT (sau CK dòng):" : "CỘNG CHI TIẾT:"}</td>
           <td class="num" style="background:#f1f5f9;">${escapeHtml(formatVnd(p.subtotal_lines))}</td>
           <td style="border:none;"></td>
         </tr>
         ${p.billing_order_discount_percent > 0 ? `
         <tr class="total-row">
-          <td colspan="7" class="num" style="border:none;">CHIẾT KHẤU TỔNG (${escapeHtml(String(p.billing_order_discount_percent))}%):</td>
+          <td colspan="8" class="num" style="border:none;">CHIẾT KHẤU TỔNG (${escapeHtml(String(p.billing_order_discount_percent))}%):</td>
           <td class="num" style="color:#b91c1c;">−${escapeHtml(formatVnd(p.subtotal_lines * (p.billing_order_discount_percent / 100)))}</td>
           <td style="border:none;"></td>
         </tr>
         ` : ""}
         ${p.billing_order_discount_amount > 0 ? `
         <tr class="total-row">
-          <td colspan="7" class="num" style="border:none;">GIẢM GIÁ VNĐ:</td>
+          <td colspan="8" class="num" style="border:none;">GIẢM GIÁ VNĐ:</td>
           <td class="num" style="color:#b91c1c;">−${escapeHtml(formatVnd(p.billing_order_discount_amount))}</td>
           <td style="border:none;"></td>
         </tr>
         ` : ""}
         ${p.billing_other_fees !== 0 ? `
         <tr class="total-row">
-          <td colspan="7" class="num" style="border:none;">CHI PHÍ KHÁC:</td>
+          <td colspan="8" class="num" style="border:none;">CHI PHÍ KHÁC:</td>
           <td class="num">${escapeHtml(formatVnd(p.billing_other_fees))}</td>
           <td style="border:none;"></td>
         </tr>
         ` : ""}
         <tr class="total-row">
-          <td colspan="7" class="num" style="border:none;font-weight:800;font-size:13px;">TỔNG THANH TOÁN:</td>
+          <td colspan="8" class="num" style="border:none;font-weight:800;font-size:13px;">TỔNG THANH TOÁN:</td>
           <td class="num" style="background:#2563eb;color:#fff;font-weight:800;font-size:14px;">${escapeHtml(formatVnd(p.grand_total))}</td>
           <td style="border:none;"></td>
         </tr>
@@ -214,11 +249,12 @@ export function buildPaymentNoticeBodyHtml(p: PaymentNoticePrintPayload): string
       .pn-lines .pn-col-code { width: 10%; }
       .pn-lines .pn-col-name { width: 26%; }
       .pn-lines .pn-col-tooth { width: 14%; }
-      .pn-lines .pn-col-qty { width: 6%; }
-      .pn-lines .pn-col-price { width: 10%; }
-      .pn-lines .pn-col-disc { width: 10%; }
-      .pn-lines .pn-col-amt { width: 12%; }
-      .pn-lines .pn-col-note { width: 13%; }
+      .pn-lines .pn-col-qty { width: 5%; }
+      .pn-lines .pn-col-list { width: 8%; }
+      .pn-lines .pn-col-price { width: 8%; }
+      .pn-lines .pn-col-disc { width: 9%; }
+      .pn-lines .pn-col-amt { width: 11%; }
+      .pn-lines .pn-col-note { width: 11%; }
       .pn-lines thead .pn-head th {
         background: #2563eb !important;
         color: #fff !important;

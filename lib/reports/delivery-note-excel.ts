@@ -6,11 +6,13 @@ function noteCell(lineNotes: string | null | undefined, orderNotes: string | nul
   return parts.join(" · ");
 }
 
-function monthlyDisplayUnitPrice(qtyRaw: number, amountRaw: number, fallbackRaw: number): number {
-  const qty = Number(qtyRaw ?? 0);
-  const amount = Number(amountRaw ?? 0);
-  if (qty > 0 && Number.isFinite(amount)) return amount / qty;
-  return Number(fallbackRaw ?? 0);
+function monthlyListCatalogUnitPrice(line: {
+  base_unit_price?: number;
+  unit_price?: number;
+}): number {
+  const b = Number(line.base_unit_price ?? 0);
+  const u = Number(line.unit_price ?? 0);
+  return b > 0 ? b : u;
 }
 
 function appendPartnerDetailRows(aoa: (string | number | null)[][], p: DeliveryNotePayload) {
@@ -44,7 +46,7 @@ export function buildDeliveryNoteExcelAoa(p: DeliveryNotePayload): (string | num
       "Sản phẩm",
       "Vị trí răng",
       "SL",
-      "Đơn giá (VNĐ)",
+      "Giá niêm yết (VNĐ)",
       "Thành tiền (VNĐ)",
       "Ghi chú",
     ]);
@@ -67,7 +69,7 @@ export function buildDeliveryNoteExcelAoa(p: DeliveryNotePayload): (string | num
           l.product_name || l.product_code || "—",
           tooth,
           l.quantity,
-          monthlyDisplayUnitPrice(l.quantity, l.line_amount ?? 0, l.unit_price ?? 0),
+          monthlyListCatalogUnitPrice(l),
           l.line_amount ?? 0,
           noteCell(l.notes, o.notes),
         ]);
@@ -77,6 +79,10 @@ export function buildDeliveryNoteExcelAoa(p: DeliveryNotePayload): (string | num
     if (foot) {
       const fmt = (n: number) => Math.round(n);
       aoa.push([]);
+      if (foot.line_discount_from_list > 0.005) {
+        aoa.push(["CỘNG GIÁ NIÊM YẾT", fmt(foot.subtotal_list_catalog)]);
+        aoa.push(["CHIẾT KHẤU / GIẢM GIÁ (dòng)", fmt(foot.line_discount_from_list)]);
+      }
       aoa.push(["CỘNG TIỀN HÀNG", fmt(foot.subtotal_goods)]);
       aoa.push([foot.discount_label, fmt(foot.discount_amount)]);
       if (foot.other_fees > 0.005) {

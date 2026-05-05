@@ -14,7 +14,10 @@ export type LabOrderPrintLine = {
   work_type: string;
   arch_connection: string;
   quantity: number;
+  /** Đơn giá áp dụng trên đơn (sau thỏa thuận / giá riêng). */
   unit_price: number;
+  /** Giá niêm yết SP (bảng giá); dùng để hiện “giá gốc” trên phiếu. */
+  list_unit_price: number;
   discount_percent: number;
   discount_amount: number;
   line_amount: number;
@@ -57,6 +60,16 @@ function lineDiscountLabel(discountPercent: number, discountAmount: number): str
   return parts.join(" + ") || "—";
 }
 
+function roundMoney2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+/** Giá gốc hiển thị trên phiếu: ưu tiên giá niêm yết SP, không có thì đơn giá dòng. */
+function lineListUnitPrice(l: LabOrderPrintLine): number {
+  const list = Number(l.list_unit_price ?? 0);
+  return list > 0 ? list : l.unit_price;
+}
+
 export function buildLabOrderBodyHtml(p: LabOrderPrintPayload): string {
   const partnerInner =
     p.partner_code || p.partner_name
@@ -80,13 +93,16 @@ export function buildLabOrderBodyHtml(p: LabOrderPrintPayload): string {
             ${l.shade ? `<br/><span class="shade">Màu: ${escapeHtml(l.shade)}</span>` : ""}
           </td>
           <td class="r">${escapeHtml(fmtQty(l.quantity))}</td>
-          <td class="r">${escapeHtml(formatVnd(l.unit_price))}</td>
+          <td class="r">${escapeHtml(formatVnd(lineListUnitPrice(l)))}</td>
           <td class="c">${escapeHtml(lineDiscountLabel(l.discount_percent, l.discount_amount))}</td>
           <td class="r"><strong>${escapeHtml(formatVnd(l.line_amount))}</strong></td>
         </tr>`,
     )
     .join("");
   const total = p.lines.reduce((s, l) => s + l.line_amount, 0);
+  const subtotalList = p.lines.reduce((s, l) => s + roundMoney2(l.quantity * lineListUnitPrice(l)), 0);
+  const lineDiscountFromList = roundMoney2(Math.max(0, subtotalList - total));
+  const showListBreakdown = lineDiscountFromList > 0.005;
   const words = amountInWordsVietnamese(Math.round(total));
   const now = new Date();
   const dayLine = `TP. HCM, ngày ${String(now.getDate()).padStart(2, "0")} tháng ${String(now.getMonth() + 1).padStart(2, "0")} năm ${now.getFullYear()}`;
@@ -136,15 +152,26 @@ export function buildLabOrderBodyHtml(p: LabOrderPrintPayload): string {
             <th>Tên sản phẩm</th>
             <th style="width:135px;">Răng/Màu</th>
             <th class="r" style="width:50px;">SL</th>
-            <th class="r" style="width:90px;">Đơn giá</th>
+            <th class="r" style="width:96px;">Đơn giá niêm yết</th>
             <th class="c" style="width:86px;">CK</th>
             <th class="r" style="width:105px;">Thành tiền</th>
           </tr>
         </thead>
         <tbody>${rows || `<tr><td colspan="8" class="c">Chưa có dòng sản phẩm.</td></tr>`}</tbody>
         <tfoot>
+          ${showListBreakdown
+            ? `
           <tr>
-            <td colspan="7" class="r lbl">Tổng cộng (VND):</td>
+            <td colspan="7" class="r lbl">Cộng giá niêm yết (VND):</td>
+            <td class="r val">${escapeHtml(formatVnd(subtotalList))}</td>
+          </tr>
+          <tr>
+            <td colspan="7" class="r lbl ocf-disc-lbl">Trừ chiết khấu / giảm giá (dòng):</td>
+            <td class="r val ocf-disc-val">−${escapeHtml(formatVnd(lineDiscountFromList))}</td>
+          </tr>`
+            : ""}
+          <tr>
+            <td colspan="7" class="r lbl">Tổng thanh toán (VND):</td>
             <td class="r val">${escapeHtml(formatVnd(total))}</td>
           </tr>
         </tfoot>
@@ -188,6 +215,7 @@ export function buildLabOrderBodyHtml(p: LabOrderPrintPayload): string {
       .ocf-table tfoot td{border-top:2px solid #111827;background:#f9fafb;}
       .ocf-table tfoot td.lbl{font-weight:700;text-transform:uppercase;}
       .ocf-table tfoot td.val{font-weight:800;font-size:16px;}
+      .ocf-table tfoot td.ocf-disc-lbl,.ocf-table tfoot td.ocf-disc-val{font-size:12px;font-weight:700;color:#991b1b;}
       .ocf-foot-note{margin-top:12px;font-size:12px;color:#374151;line-height:1.5;}
       .ocf-foot-note p{margin:3px 0;}
       .ocf-sign-wrap{margin-top:22px;border-top:1px solid #d1d5db;padding-top:14px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center;}

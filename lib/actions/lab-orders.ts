@@ -936,14 +936,17 @@ export async function getLabOrderPrintPayload(orderId: string): Promise<LabOrder
   const { data: lineRows, error: le } = await supabase
     .from("lab_order_lines")
     .select(
-      "tooth_positions, shade, tooth_count, work_type, arch_connection, quantity, unit_price, discount_percent, discount_amount, line_amount, notes, products!lab_order_lines_product_id_fkey(code,name,unit)",
+      "tooth_positions, shade, tooth_count, work_type, arch_connection, quantity, unit_price, discount_percent, discount_amount, line_amount, notes, products!lab_order_lines_product_id_fkey(code,name,unit,unit_price)",
     )
     .eq("order_id", orderId)
     .order("created_at", { ascending: true });
   if (le) throw new Error(le.message);
 
   const lines: LabOrderPrintLine[] = (lineRows ?? []).map((r: Record<string, unknown>) => {
-    const pr = r["products"] as { code?: string; name?: string; unit?: string } | null;
+    const pr = r["products"] as { code?: string; name?: string; unit?: string; unit_price?: number | string } | null;
+    const catalog = pr?.unit_price != null ? Number(pr.unit_price) : 0;
+    const unitPrice = Number(r["unit_price"]);
+    const listUnit = catalog > 0 ? catalog : unitPrice;
     return {
       product_code: pr?.code ?? "",
       product_name: pr?.name ?? "",
@@ -957,7 +960,8 @@ export async function getLabOrderPrintPayload(orderId: string): Promise<LabOrder
       work_type: (r["work_type"] as "new_work" | "warranty") ?? "new_work",
       arch_connection: (r["arch_connection"] as string) ?? "unit",
       quantity: Number(r["quantity"]),
-      unit_price: Number(r["unit_price"]),
+      unit_price: unitPrice,
+      list_unit_price: listUnit,
       discount_percent: Number(r["discount_percent"]),
       discount_amount: Number(r["discount_amount"] ?? 0),
       line_amount: Number(r["line_amount"]),
@@ -1216,6 +1220,7 @@ export async function getMonthlyDeliveryNotePayload(
   const periodHeading = `THÁNG ${String(month).padStart(2, "0")} ${year}`;
 
   let subtotalGoods = 0;
+  let subtotalListCatalog = 0;
   let otherFeesSum = 0;
   /** Tổng phải thu trong kỳ (đã trừ CK cấp đơn + phí khác) — khớp GBTT / v_orders_by_partner_month. */
   let monthSalesGrandTotal = 0;
@@ -1225,6 +1230,11 @@ export async function getMonthlyDeliveryNotePayload(
   for (const o of orders ?? []) {
     const oid = o["id"] as string;
     const oLines = linesByOrder.get(oid) ?? [];
+
+    for (const l of oLines) {
+      const listUp = l.base_unit_price > 0 ? l.base_unit_price : l.unit_price;
+      subtotalListCatalog += roundMoney2(l.quantity * listUp);
+    }
 
     // Cộng dồn tiền thực tế của từng dòng (đã gồm CK dòng & đơn giá đã nhập)
     const orderNet = oLines.reduce((sum, l) => sum + l.line_amount, 0);
@@ -1247,6 +1257,8 @@ export async function getMonthlyDeliveryNotePayload(
   const finalDiscountAmount = roundMoney2(orderLevelDiscountSum);
 
   subtotalGoods = roundMoney2(subtotalGoods);
+  subtotalListCatalog = roundMoney2(subtotalListCatalog);
+  const lineDiscountFromList = roundMoney2(Math.max(0, subtotalListCatalog - subtotalGoods));
   otherFeesSum = roundMoney2(otherFeesSum);
   monthSalesGrandTotal = roundMoney2(monthSalesGrandTotal);
 
@@ -1265,6 +1277,8 @@ export async function getMonthlyDeliveryNotePayload(
     layout: "monthly_flat",
     generated_at: new Date().toLocaleString("vi-VN"),
     monthly_footer: {
+      subtotal_list_catalog: subtotalListCatalog,
+      line_discount_from_list: lineDiscountFromList,
       subtotal_goods: subtotalGoods,
       discount_label: "CHIẾT KHẤU / GIẢM GIÁ (cấp đơn GBTT)",
       discount_amount: finalDiscountAmount,
