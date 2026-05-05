@@ -43,26 +43,24 @@ export async function POST(req: NextRequest) {
   try {
     let executablePath: string;
     let launchArgs: string[];
+    /** Cờ tối ưu Lambda — không dùng trên VPS (dễ crash / treo Chrome). */
+    let useServerlessChromeFlags: boolean;
 
     if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
-      // Môi trường Serverless (Vercel, Lambda)
       const chromium = (await import("@sparticuz/chromium")).default;
       executablePath = await chromium.executablePath();
       launchArgs = chromium.args;
+      useServerlessChromeFlags = true;
     } else {
-      // VPS / Hostinger / local: ưu tiên biến môi trường, rồi đường dẫn phổ biến
       const fromEnv =
         process.env.PUPPETEER_EXECUTABLE_PATH?.trim() ||
         process.env.CHROME_PATH?.trim() ||
         "";
       const possiblePaths = [
         ...(fromEnv && fs.existsSync(fromEnv) ? [fromEnv] : []),
-        // Windows
         "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
         "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
-        // macOS
         "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-        // Linux: .deb Google Chrome thường ở /opt; Chromium apt ở /usr/bin
         "/opt/google/chrome/chrome",
         "/usr/bin/google-chrome",
         "/usr/bin/google-chrome-stable",
@@ -73,22 +71,32 @@ export async function POST(req: NextRequest) {
         "/var/lib/snapd/snap/bin/chromium",
       ];
       const found = possiblePaths.find((p) => fs.existsSync(p));
-      // Không dùng fromEnv khi file không tồn tại (đã lọc ở possiblePaths).
-      executablePath = found ?? "google-chrome";
+      if (!found) {
+        console.warn(
+          "[PDF API] Không có binary Chrome/Chromium — không gọi Puppeteer (tránh treo/OOM trên Hostinger). Đặt CHROME_PATH.",
+        );
+        return NextResponse.json(
+          {
+            error: "PDF unavailable on this server",
+            detail:
+              "No Chrome/Chromium found. Set CHROME_PATH or PUPPETEER_EXECUTABLE_PATH, or use client PDF fallback.",
+          },
+          { status: 503 },
+        );
+      }
+      executablePath = found;
       launchArgs = ["--no-sandbox", "--disable-setuid-sandbox"];
+      useServerlessChromeFlags = false;
     }
 
     const puppeteer = (await import("puppeteer-core")).default;
+    const extraArgs = useServerlessChromeFlags
+      ? ["--disable-dev-shm-usage", "--disable-gpu", "--no-first-run", "--no-zygote", "--single-process"]
+      : ["--disable-dev-shm-usage", "--disable-gpu", "--no-first-run"];
+
     browser = await puppeteer.launch({
       executablePath,
-      args: [
-        ...launchArgs,
-        "--disable-dev-shm-usage",
-        "--disable-gpu",
-        "--no-first-run",
-        "--no-zygote",
-        "--single-process",
-      ],
+      args: [...launchArgs, ...extraArgs],
       headless: true,
     });
 
