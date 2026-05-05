@@ -33,7 +33,7 @@ export async function getLabOrderBillingTotals(orderId: string): Promise<LabOrde
   const { data: ord, error: oe } = await supabase
     .from("lab_orders")
     .select(
-      "billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, lab_order_lines!lab_order_lines_order_id_fkey(line_amount)",
+      "billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, partners!lab_orders_partner_id_fkey(default_discount_percent), lab_order_lines!lab_order_lines_order_id_fkey(line_amount)",
     )
     .eq("id", orderId)
     .single();
@@ -41,9 +41,16 @@ export async function getLabOrderBillingTotals(orderId: string): Promise<LabOrde
   const lines = ord["lab_order_lines"] as { line_amount?: string | number }[] | null;
   let subtotal = 0;
   for (const ln of lines ?? []) subtotal += finiteNumber(ln.line_amount);
-  const billing_order_discount_percent = Number(ord.billing_order_discount_percent ?? 0);
+  const rawDiscountPercent = Number(ord.billing_order_discount_percent ?? 0);
   const billing_order_discount_amount = Number(ord.billing_order_discount_amount ?? 0);
   const billing_other_fees = Number(ord.billing_other_fees ?? 0);
+  const partner = ord["partners"] as { default_discount_percent?: number | null } | null;
+  const partnerDefaultDiscountPercent = Number(partner?.default_discount_percent ?? 0);
+  // Tự động liên kết CK mặc định của khách nếu đơn chưa có CK tổng riêng.
+  const billing_order_discount_percent =
+    rawDiscountPercent > 0 || billing_order_discount_amount > 0
+      ? rawDiscountPercent
+      : partnerDefaultDiscountPercent;
   const subtotal_lines = round2(subtotal);
   return {
     subtotal_lines,
@@ -175,7 +182,7 @@ export async function getPaymentNoticePrintPayload(orderId: string): Promise<Pay
   const { data: row, error } = await supabase
     .from("lab_orders")
     .select(
-      "order_number, received_at, patient_name, clinic_name, notes, payment_notice_doc_number, payment_notice_issued_at, billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, partners!lab_orders_partner_id_fkey(code,name,address,phone,tax_id)",
+      "order_number, received_at, patient_name, clinic_name, notes, payment_notice_doc_number, payment_notice_issued_at, billing_order_discount_percent, billing_order_discount_amount, billing_other_fees, partners!lab_orders_partner_id_fkey(code,name,address,phone,tax_id,default_discount_percent)",
     )
     .eq("id", orderId)
     .single();

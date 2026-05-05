@@ -1180,11 +1180,24 @@ export async function getMonthlyDeliveryNotePayload(
   if (oErr) throw new Error(oErr.message);
   const orderIds = (orders ?? []).map((o) => o.id as string);
   let lines: Record<string, unknown>[] = [];
+  const partnerPriceByProductId = new Map<string, number>();
+
+  const { data: partnerPriceRows, error: ppErr } = await supabase
+    .from("partner_product_prices")
+    .select("product_id,unit_price")
+    .eq("partner_id", partnerId);
+  if (ppErr) throw new Error(ppErr.message);
+  for (const row of partnerPriceRows ?? []) {
+    const pid = row.product_id as string | null;
+    if (!pid) continue;
+    partnerPriceByProductId.set(pid, Number(row.unit_price ?? 0));
+  }
+
   if (orderIds.length > 0) {
     const { data: lineData, error: lErr } = await supabase
       .from("lab_order_lines")
       .select(
-        "order_id,tooth_positions,quantity,shade,unit_price,line_amount,notes,products:product_id(code,name,unit_price)",
+        "order_id,product_id,tooth_positions,quantity,shade,unit_price,line_amount,notes,products:product_id(code,name,unit_price)",
       )
       .in("order_id", orderIds)
       .order("created_at", { ascending: true })
@@ -1208,7 +1221,12 @@ export async function getMonthlyDeliveryNotePayload(
   >();
   for (const row of lines) {
     const oid = row["order_id"] as string;
+    const productId = row["product_id"] as string | null;
     const pr = row["products"] as { code?: string; name?: string; unit_price?: number } | null;
+    const partnerUnitPrice =
+      productId && partnerPriceByProductId.has(productId)
+        ? Number(partnerPriceByProductId.get(productId))
+        : null;
     const arr = linesByOrder.get(oid) ?? [];
     arr.push({
       product_code: pr?.code ?? "",
@@ -1216,7 +1234,8 @@ export async function getMonthlyDeliveryNotePayload(
       tooth_positions: (row["tooth_positions"] as string) ?? "",
       quantity: Number(row["quantity"] ?? 0),
       shade: (row["shade"] as string | null) ?? null,
-      unit_price: Number(row["unit_price"] ?? 0),
+      // Cột "Đơn giá" trên hóa đơn tháng chỉ lấy từ "Giá riêng" theo khách.
+      unit_price: partnerUnitPrice ?? 0,
       base_unit_price: Number(pr?.unit_price ?? 0),
       line_amount: Number(row["line_amount"] ?? 0),
       notes: (row["notes"] as string | null) ?? null,

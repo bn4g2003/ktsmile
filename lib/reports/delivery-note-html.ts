@@ -86,11 +86,7 @@ function noteCell(lineNotes: string | null | undefined, orderNotes: string | nul
 }
 
 function monthlyDisplayUnitPrice(line: DeliveryNoteLine): number {
-  const qty = Number(line.quantity ?? 0);
-  const amount = Number(line.line_amount ?? 0);
-  if (qty > 0 && Number.isFinite(amount)) {
-    return amount / qty;
-  }
+  // Đơn giá trên phiếu tháng phải bám đúng đơn giá lưu ở dòng đơn hàng.
   return Number(line.unit_price ?? 0);
 }
 

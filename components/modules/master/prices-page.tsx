@@ -137,6 +137,25 @@ export function PricesPage() {
     setTimeout(() => setSelectedPartnerId(currentId), 0);
   };
 
+  const fillAllOverridesWithBasePrice = () => {
+    if (!selectedPartnerId || !data) return;
+    setPendingChanges((prev) => {
+      const next = new Map(prev);
+      for (const product of data.products) {
+        const override = data.overrides.find(
+          (o) => o.partner_id === selectedPartnerId && o.product_id === product.id,
+        );
+        const key = `${selectedPartnerId}-${product.id}`;
+        next.set(key, {
+          productId: product.id,
+          newPrice: String(product.unit_price),
+          existingId: override?.id,
+        });
+      }
+      return next;
+    });
+  };
+
   if (loading && !data) return <div className="p-8 text-center text-[var(--on-surface-muted)]">Đang tải dữ liệu...</div>;
   if (error) return <div className="p-8 text-rose-600">{error}</div>;
   if (!data) return null;
@@ -223,6 +242,15 @@ export function PricesPage() {
                 </div>
               </div>
               <div className="flex items-center gap-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={fillAllOverridesWithBasePrice}
+                  disabled={saving}
+                  className="h-8 px-2 sm:px-3 text-xs"
+                >
+                  Điền giá riêng tất cả = giá gốc
+                </Button>
                 {pendingChanges.size > 0 && (
                   <>
                     <span className="text-xs text-amber-600 font-semibold hidden sm:inline">
@@ -283,10 +311,19 @@ export function PricesPage() {
                       const changeKey = `${selectedPartner.id}-${product.id}`;
                       const pendingChange = pendingChanges.get(changeKey);
                       const hasChanges = pendingChange !== undefined;
-                      
-                      const currentDiscount = override 
-                        ? Math.round((1 - override.unit_price / product.unit_price) * 100) 
-                        : 0;
+
+                      const displayedOverridePriceRaw = pendingChange
+                        ? pendingChange.newPrice
+                        : override
+                          ? String(override.unit_price)
+                          : "";
+                      const displayedOverridePriceNum = Number(displayedOverridePriceRaw);
+                      const currentDiscount =
+                        displayedOverridePriceRaw !== "" &&
+                          Number.isFinite(displayedOverridePriceNum) &&
+                          product.unit_price > 0
+                          ? Math.round((1 - displayedOverridePriceNum / product.unit_price) * 100)
+                          : "";
 
                       return (
                         <tr key={product.id} className={cn(
@@ -307,7 +344,7 @@ export function PricesPage() {
                                 type="number"
                                 placeholder="0"
                                 className="h-7 text-xs text-center border-none bg-transparent focus:ring-0 tabular-nums font-semibold text-[var(--accent-purple)] placeholder:text-[var(--on-surface-faint)] px-1"
-                                defaultValue={override ? currentDiscount : ""}
+                                value={currentDiscount}
                                 onChange={(e) => {
                                   const pct = parseFloat(e.target.value);
                                   if (!isNaN(pct)) {
@@ -323,21 +360,23 @@ export function PricesPage() {
                           </td>
 
                           <td className="px-3 py-2">
-                            <CurrencyInput
-                              value={override ? override.unit_price.toString() : ""}
-                              placeholder={product.unit_price.toString()}
-                              className={cn(
-                                "h-7 text-xs text-center tabular-nums transition-all border-dashed px-1",
-                                override 
-                                  ? "border-[var(--primary)] font-bold text-[var(--primary)] bg-[color-mix(in_srgb,var(--primary)_5%,transparent)]" 
-                                  : "border-[var(--border-ghost)]",
-                                hasChanges && "ring-2 ring-amber-400"
-                              )}
-                              onChange={(val) => {
-                                handlePriceInputChange(product.id, val, override?.id);
-                              }}
-                              allowDecimal={false}
-                            />
+                            <div className="space-y-1">
+                              <CurrencyInput
+                                value={displayedOverridePriceRaw}
+                                placeholder={product.unit_price.toString()}
+                                className={cn(
+                                  "h-7 text-xs text-center tabular-nums transition-all border-dashed px-1",
+                                  displayedOverridePriceRaw !== ""
+                                    ? "border-[var(--primary)] font-bold text-[var(--primary)] bg-[color-mix(in_srgb,var(--primary)_5%,transparent)]"
+                                    : "border-[var(--border-ghost)]",
+                                  hasChanges && "ring-2 ring-amber-400"
+                                )}
+                                onChange={(val) => {
+                                  handlePriceInputChange(product.id, val, override?.id);
+                                }}
+                                allowDecimal={false}
+                              />
+                            </div>
                           </td>
 
                           <td className="px-3 py-2 text-center">

@@ -38,7 +38,7 @@ export function buildLabOrderListReportHtml(p: LabOrderListReportPayload): strin
       <td class="lol-td" style="width:100px;">${escapeHtml(r.order_number)}</td>
       <td class="lol-td">${escapeHtml(r.products_summary ?? "") || "—"}</td>
       <td class="lol-td" style="width:80px;">${escapeHtml(r.tooth_positions_summary || "") || "—"}</td>
-      <td class="num lol-td" style="width:36px;">${escapeHtml(formatQuantityCell(r))}</td>
+      <td class="num lol-td lol-col-qty" style="width:28px;">${escapeHtml(formatQuantityCell(r))}</td>
       <td class="num lol-td" style="width:88px;"><strong>${r.grand_total.toLocaleString("vi-VN")}</strong></td>
       <td class="lol-td">${escapeHtml(r.notes || "")}</td>
     </tr>
@@ -71,7 +71,7 @@ export function buildLabOrderListReportHtml(p: LabOrderListReportPayload): strin
           <th class="lol-th">Số đơn</th>
           <th class="lol-th">Sản phẩm</th>
           <th class="lol-th">Vị trí răng</th>
-          <th class="lol-th num">SL</th>
+          <th class="lol-th num lol-col-qty" style="width:28px;">SL</th>
           <th class="lol-th num">Thành tiền</th>
           <th class="lol-th">Ghi chú</th>
         </tr>
@@ -126,11 +126,11 @@ export function buildLabOrderListReportHtml(p: LabOrderListReportPayload): strin
         color: #ffffff !important;
         font-weight: 700 !important;
         text-transform: uppercase !important;
-        font-size: 10px !important;
+        font-size: 9px !important;
         text-align: center !important;
         vertical-align: middle !important;
         border: 1px solid #1e3a5f !important;
-        padding: 6px 4px !important;
+        padding: 5px 3px !important;
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
       }
@@ -139,9 +139,9 @@ export function buildLabOrderListReportHtml(p: LabOrderListReportPayload): strin
       .lol-table .lol-td {
         border: 1px solid #64748b !important;
         color: #0f172a !important;
-        font-size: 11px !important;
+        font-size: 10px !important;
         vertical-align: top !important;
-        padding: 5px 4px !important;
+        padding: 4px 3px !important;
         word-wrap: break-word !important;
       }
 
@@ -161,6 +161,11 @@ export function buildLabOrderListReportHtml(p: LabOrderListReportPayload): strin
 
       table.dn-kv th { color: #0f172a !important; background: none !important; }
       .lol-foot td { font-size: 11px !important; }
+      .lol-col-qty {
+        width: 28px !important;
+        max-width: 28px !important;
+        white-space: nowrap !important;
+      }
 
       @media print {
         .lol-table .lol-th {

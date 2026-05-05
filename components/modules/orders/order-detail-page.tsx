@@ -41,6 +41,7 @@ import {
 import { listProductPicker } from "@/lib/actions/products";
 import {
   createLabOrderLine,
+  deleteLabOrder,
   deleteLabOrderLine,
   getLabOrder,
   getSuggestedLinePricing,
@@ -98,6 +99,7 @@ export function OrderDetailPage() {
   const [quickStatus, setQuickStatus] = React.useState<LabOrderRow["status"]>("draft");
   const [quickPending, setQuickPending] = React.useState(false);
   const [quickErr, setQuickErr] = React.useState<string | null>(null);
+  const [orderDeleteBusy, setOrderDeleteBusy] = React.useState(false);
 
   const [rxList, setRxList] = React.useState<{ id: string; slip_code: string | null; slip_date: string; patient_name: string }[]>([]);
   const [rxSelect, setRxSelect] = React.useState("");
@@ -113,6 +115,16 @@ export function OrderDetailPage() {
   const [billBusy, setBillBusy] = React.useState(false);
   const [issueBusy, setIssueBusy] = React.useState(false);
   const [linkedCashRows, setLinkedCashRows] = React.useState<CashTransactionReferenceRow[]>([]);
+
+  const calcDiscountAmountFromPercent = React.useCallback(
+    (pctText: string) => {
+      const pct = Number(pctText) || 0;
+      const subtotal = Number(billTotals?.subtotal_lines ?? 0);
+      if (!(pct > 0) || !(subtotal > 0)) return 0;
+      return Math.round(subtotal * (pct / 100));
+    },
+    [billTotals?.subtotal_lines],
+  );
 
   const loadHeader = React.useCallback(async () => {
     const h = await getLabOrder(id);
@@ -147,7 +159,20 @@ export function OrderDetailPage() {
     setBFees(String(header.billing_other_fees ?? 0));
     setRxSelect(String(header.doctor_prescription_id ?? ""));
     void getLabOrderBillingTotals(id)
-      .then((t) => (t ? setBillTotals({ subtotal_lines: t.subtotal_lines, grand_total: t.grand_total }) : setBillTotals(null)))
+      .then((t) => {
+        if (!t) {
+          setBillTotals(null);
+          return;
+        }
+        // Đồng bộ UI CK tổng theo CK hiệu lực (ưu tiên CK riêng đơn, fallback CK mặc định của KH).
+        const effectivePct = String(t.billing_order_discount_percent ?? 0);
+        setBPct(effectivePct);
+        const savedAmt = Number(header.billing_order_discount_amount ?? 0);
+        // Nếu đơn chưa có CK VNĐ lưu riêng thì tự tính từ % để người dùng khỏi nhập tay.
+        if (savedAmt > 0) setBAmt(String(savedAmt));
+        else setBAmt(String(Math.round(t.subtotal_lines * ((Number(effectivePct) || 0) / 100))));
+        setBillTotals({ subtotal_lines: t.subtotal_lines, grand_total: t.grand_total });
+      })
       .catch(() => setBillTotals(null));
   }, [header, id, gridReload]);
 
@@ -380,6 +405,22 @@ export function OrderDetailPage() {
     }
   };
 
+  const onDeleteOrder = async () => {
+    if (!header || orderDeleteBusy) return;
+    const orderNo = String(header.order_number ?? "");
+    if (!confirm(`Xóa đơn ${orderNo}? (xóa cả dòng chi tiết)`)) return;
+    setOrderDeleteBusy(true);
+    try {
+      await deleteLabOrder(id);
+      router.push("/orders");
+      router.refresh();
+    } catch (e2) {
+      alert(e2 instanceof Error ? e2.message : "Không xóa được đơn.");
+    } finally {
+      setOrderDeleteBusy(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-3">
@@ -436,6 +477,18 @@ export function OrderDetailPage() {
               ) : null}
             </div>
             <div className="flex flex-wrap gap-2">
+              <Button variant="secondary" asChild>
+                <Link href="/orders">Sửa đơn</Link>
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                className="text-rose-700 hover:text-rose-800"
+                disabled={orderDeleteBusy}
+                onClick={() => void onDeleteOrder()}
+              >
+                {orderDeleteBusy ? "Đang xóa…" : "Xóa đơn"}
+              </Button>
               <LabOrderPrintButton orderId={id} label="In / lưu PDF (trình duyệt)" />
               <PaymentNoticePrintButton orderId={id} label="In GBTT" />
             </div>
@@ -563,7 +616,16 @@ export function OrderDetailPage() {
             <div className="grid gap-2 sm:grid-cols-3">
               <div className="grid gap-1">
                 <Label htmlFor="bill-pct">CK tổng %</Label>
-                <Input id="bill-pct" value={bPct} onChange={(e) => setBPct(e.target.value)} inputMode="decimal" />
+                <Input
+                  id="bill-pct"
+                  value={bPct}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setBPct(v);
+                    setBAmt(String(calcDiscountAmountFromPercent(v)));
+                  }}
+                  inputMode="decimal"
+                />
               </div>
               <div className="grid gap-1">
                 <Label htmlFor="bill-amt">CK tổng VNĐ</Label>
@@ -582,9 +644,12 @@ export function OrderDetailPage() {
                 disabled={billBusy}
                 onClick={() => {
                   setBillBusy(true);
+                  const autoDiscountAmount = calcDiscountAmountFromPercent(bPct);
+                  const manualDiscountAmount = Number(bAmt) || 0;
                   void updateLabOrderBilling(id, {
                     billing_order_discount_percent: Number(bPct) || 0,
-                    billing_order_discount_amount: Number(bAmt) || 0,
+                    billing_order_discount_amount:
+                      manualDiscountAmount > 0 ? manualDiscountAmount : autoDiscountAmount,
                     billing_other_fees: Number(bFees) || 0,
                   })
                     .then(() => {

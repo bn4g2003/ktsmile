@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { DetailPreview } from "@/components/ui/detail-preview";
 import { DetailTabStrip } from "@/components/ui/detail-tab-strip";
 import { cn } from "@/lib/utils/cn";
@@ -12,7 +13,7 @@ import {
   orderStatusBadgeClassName,
 } from "@/lib/format/labels";
 import { formatDate } from "@/lib/format/date";
-import { listLabOrderLines, type LabOrderLineRow, type LabOrderRow } from "@/lib/actions/lab-orders";
+import { deleteLabOrder, listLabOrderLines, type LabOrderLineRow, type LabOrderRow } from "@/lib/actions/lab-orders";
 
 function OrderLinesBlock({ orderId }: { orderId: string }) {
   const [rows, setRows] = React.useState<LabOrderLineRow[] | null>(null);
@@ -91,14 +92,46 @@ const IconUser = <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke
 const IconStatus = <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>;
 
 export function LabOrderRowDetailPanel({ row }: { row: LabOrderRow }) {
+  const router = useRouter();
   const [tab, setTab] = React.useState<"info" | "lines">("info");
+  const [deleting, setDeleting] = React.useState(false);
 
   React.useEffect(() => {
     setTab("info");
   }, [row.id]);
 
+  const onDeleteOrder = async () => {
+    if (deleting) return;
+    if (!confirm(`Xóa đơn ${row.order_number}? (xóa cả dòng chi tiết)`)) return;
+    setDeleting(true);
+    try {
+      await deleteLabOrder(row.id);
+      router.refresh();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Không xóa được đơn.");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
     <div className="flex min-h-0 flex-col gap-3">
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <Link
+          href={"/orders/" + row.id}
+          className="inline-flex items-center gap-1.5 rounded border border-[var(--border-ghost)] px-2 py-1 text-xs font-bold text-[var(--primary)] hover:bg-[var(--surface-muted)]"
+        >
+          Sửa đơn
+        </Link>
+        <button
+          type="button"
+          disabled={deleting}
+          onClick={() => void onDeleteOrder()}
+          className="inline-flex items-center gap-1.5 rounded border border-rose-200 px-2 py-1 text-xs font-bold text-rose-700 hover:bg-rose-50 disabled:opacity-60"
+        >
+          {deleting ? "Đang xóa..." : "Xóa đơn"}
+        </button>
+      </div>
       <DetailTabStrip
         items={[
           { id: "info", label: "Thông tin" },
@@ -159,9 +192,25 @@ export function LabOrderRowDetailPanel({ row }: { row: LabOrderRow }) {
                 {
                   label: "THAO TÁC NHANH:",
                   value: (
-                    <Link href={"/orders/" + row.id} className="inline-flex items-center gap-1.5 font-bold text-[var(--primary)] text-xs hover:underline">
-                      Sửa chi tiết & In PDF →
-                    </Link>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Link
+                        href={"/orders/" + row.id}
+                        className="inline-flex items-center gap-1.5 rounded border border-[var(--border-ghost)] px-2 py-1 text-xs font-bold text-[var(--primary)] hover:bg-[var(--surface-muted)]"
+                      >
+                        Sửa đơn
+                      </Link>
+                      <button
+                        type="button"
+                        disabled={deleting}
+                        onClick={() => void onDeleteOrder()}
+                        className="inline-flex items-center gap-1.5 rounded border border-rose-200 px-2 py-1 text-xs font-bold text-rose-700 hover:bg-rose-50 disabled:opacity-60"
+                      >
+                        {deleting ? "Đang xóa..." : "Xóa đơn"}
+                      </button>
+                      <Link href={"/orders/" + row.id} className="inline-flex items-center gap-1.5 font-bold text-[var(--primary)] text-xs hover:underline">
+                        Mở chi tiết & In PDF →
+                      </Link>
+                    </div>
                   ),
                   span: "full",
                 },
