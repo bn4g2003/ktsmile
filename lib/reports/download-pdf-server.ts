@@ -1,15 +1,17 @@
+"use client";
+
 /**
  * Tải PDF: ưu tiên POST `/api/pdf` (Puppeteer). Không được thì dùng html2pdf.js trong trình duyệt
  * (tự lưu file, không hộp thoại in). Cuối cùng mới fallback in (Save as PDF thủ công).
  */
 import { openPrintableHtml } from "@/lib/reports/print-html";
-import { downloadPdfViaHtml2Pdf } from "@/lib/reports/download-pdf-html2pdf";
 
 export const PDF_CLIENT_FALLBACK_HINT =
   "Máy chủ không tạo được PDF. Đã thử tải bằng trình duyệt — nếu vẫn lỗi, cửa sổ in sẽ mở: chọn \"Lưu thành PDF\".";
 
 async function tryHtml2PdfSave(fullHtml: string, filename: string): Promise<boolean> {
   try {
+    const { downloadPdfViaHtml2Pdf } = await import("@/lib/reports/download-pdf-html2pdf");
     await downloadPdfViaHtml2Pdf(fullHtml, filename);
     return true;
   } catch (e) {

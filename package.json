@@ -9,6 +9,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "node server.js",
+    "start:next": "next start --hostname 0.0.0.0",
     "lint": "eslint",
     "db:seed": "node scripts/seed.mjs",
     "db:seed-admin": "node scripts/seed-admin.mjs"
