@@ -1,9 +1,11 @@
 /**
- * Hostinger / reverse-proxy: thường inject PORT (khác 3000). Nginx forward tới đúng PORT đó.
- * Nếu hPanel có "Application startup file", đặt: server.js
- * Hoặc giữ "npm run start" — script start đã gọi file này.
+ * Hostinger / reverse-proxy: inject PORT (thường khác 3000). Nginx forward tới đúng PORT đó.
+ *
+ * Quan trọng: chạy Next trong **cùng process** (không spawn child). Một số panel chỉ health-check
+ * PID chính — nếu chỉ process con `next` listen port thì proxy vẫn trả 503.
+ *
+ * hPanel: "Application startup file" = server.js hoặc "npm run start".
  */
-const { spawn } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 
@@ -12,13 +14,13 @@ process.chdir(root);
 
 const raw = process.env.PORT ?? process.env.NODE_PORT ?? "3000";
 const portNum = parseInt(String(raw), 10);
-const port = String(Number.isFinite(portNum) && portNum > 0 ? portNum : 3000);
-process.env.PORT = port;
+const port = Number.isFinite(portNum) && portNum > 0 ? portNum : 3000;
+process.env.PORT = String(port);
 
-const nextBin = path.join(root, "node_modules", "next", "dist", "bin", "next");
+const nextPkg = path.join(root, "node_modules", "next", "dist", "server", "next.js");
 const buildId = path.join(root, ".next", "BUILD_ID");
 
-if (!fs.existsSync(nextBin)) {
+if (!fs.existsSync(nextPkg)) {
   console.error("[start] Thiếu node_modules/next — chạy npm install trên server.");
   process.exit(1);
 }
@@ -27,16 +29,20 @@ if (!fs.existsSync(buildId)) {
   process.exit(1);
 }
 
-// stderr: nhiều panel chỉ gom log lỗi — dễ thấy khi debug 503
-console.error(`[start] ktsmile cwd=${root} PORT=${port} NODE_ENV=${process.env.NODE_ENV || "production"}`);
+console.error(
+  `[start] ktsmile cwd=${root} PORT=${port} NODE_ENV=${process.env.NODE_ENV || "production"} (main process listener)`
+);
 
-const child = spawn(process.execPath, [nextBin, "start", "--hostname", "0.0.0.0", "--port", port], {
-  stdio: "inherit",
-  cwd: root,
-  env: { ...process.env, PORT: port },
+const next = require("next");
+
+const app = next({
+  dev: false,
+  hostname: "0.0.0.0",
+  port,
+  dir: root,
 });
 
-child.on("exit", (code, signal) => {
-  if (signal) process.exit(1);
-  process.exit(code === null || code === undefined ? 1 : code);
+app.prepare().catch((err) => {
+  console.error("[start] prepare() failed:", err);
+  process.exit(1);
 });
