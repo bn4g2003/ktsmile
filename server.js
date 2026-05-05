@@ -1,74 +1,40 @@
 /**
- * Hostinger / reverse-proxy: inject PORT (thường khác 3000).
- *
- * Next 16: `next().prepare()` không tự bind TCP — cần `http.createServer` + `getRequestHandler`.
- * Chạy trong **process chính** (không spawn child) để panel health-check / proxy nhận đúng PID listen.
- *
- * hPanel: "Application startup file" = server.js hoặc `npm run start`.
+ * Tùy chọn: chỉ dùng khi hPanel bắt "Application startup file" = file .js.
+ * Khuyến nghị: để lệnh chạy = `npm start` (gọi thẳng `next start`, một process).
  */
+const { spawn } = require("child_process");
 const fs = require("fs");
-const http = require("http");
 const path = require("path");
-const { parse } = require("url");
 
 const root = path.resolve(__dirname);
 process.chdir(root);
 
 const raw = process.env.PORT ?? process.env.NODE_PORT ?? "3000";
 const portNum = parseInt(String(raw), 10);
-const port = Number.isFinite(portNum) && portNum > 0 ? portNum : 3000;
-process.env.PORT = String(port);
+const port = String(Number.isFinite(portNum) && portNum > 0 ? portNum : 3000);
+process.env.PORT = port;
 
-const nextPkg = path.join(root, "node_modules", "next", "dist", "server", "next.js");
+const nextBin = path.join(root, "node_modules", "next", "dist", "bin", "next");
 const buildId = path.join(root, ".next", "BUILD_ID");
 
-if (!fs.existsSync(nextPkg)) {
-  console.error("[start] Thiếu node_modules/next — chạy npm install trên server.");
+if (!fs.existsSync(nextBin)) {
+  console.error("[start] Thiếu node_modules/next — chạy npm install.");
   process.exit(1);
 }
 if (!fs.existsSync(buildId)) {
-  console.error("[start] Thiếu .next — chạy npm run build trên server trước khi start.");
+  console.error("[start] Thiếu .next — chạy npm run build trước.");
   process.exit(1);
 }
 
-console.error(
-  `[start] ktsmile cwd=${root} PORT=${port} NODE_ENV=${process.env.NODE_ENV || "production"}`
-);
+console.error(`[start] cwd=${root} PORT=${port} NODE_ENV=${process.env.NODE_ENV || "production"}`);
 
-const next = require("next");
-
-const hostname = "0.0.0.0";
-const app = next({
-  dev: false,
-  hostname,
-  port,
-  dir: root,
+const child = spawn(process.execPath, [nextBin, "start", "--hostname", "0.0.0.0", "--port", port], {
+  stdio: "inherit",
+  cwd: root,
+  env: { ...process.env, PORT: port },
 });
 
-app
-  .prepare()
-  .then(() => {
-    const handle = app.getRequestHandler();
-    const server = http.createServer((req, res) => {
-      handle(req, res, parse(req.url, true));
-    });
-
-    server.listen(port, hostname, () => {
-      console.error(`[start] listening http://${hostname}:${port}`);
-    });
-
-    server.on("error", (err) => {
-      console.error("[start] HTTP server error:", err);
-      process.exit(1);
-    });
-
-    const shutdown = () => {
-      server.close(() => process.exit(0));
-    };
-    process.on("SIGTERM", shutdown);
-    process.on("SIGINT", shutdown);
-  })
-  .catch((err) => {
-    console.error("[start] prepare() failed:", err);
-    process.exit(1);
-  });
+child.on("exit", (code, signal) => {
+  if (signal) process.exit(1);
+  process.exit(code === null || code === undefined ? 1 : code);
+});
