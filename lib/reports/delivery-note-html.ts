@@ -277,7 +277,7 @@ function buildMonthlyFlatDeliveryNoteHtml(p: DeliveryNotePayload): string {
 
     <div class="hd-sign">
       <div class="hd-sign-box">
-        <div class="hd-sign-title">NGƯỜI NHẬN HÀNG</div>
+        <div class="hd-sign-title">NGƯỜI LẬP PHIẾU</div>
         <div class="hd-sign-hint">(Ký và ghi rõ họ tên)</div>
       </div>
       <div class="hd-sign-box">
@@ -476,7 +476,7 @@ export function buildDeliveryNoteBodyHtml(p: DeliveryNotePayload): string {
 
     <div style="margin-top:40px;display:grid;grid-template-columns:1fr 1fr;text-align:center;">
       <div>
-        <div style="font-weight:700;">NGƯỜI NHẬN HÀNG</div>
+        <div style="font-weight:700;">NGƯỜI LẬP PHIẾU</div>
         <div style="font-size:10px;margin-top:40px;color:#475569;">(Ký và ghi rõ họ tên)</div>
       </div>
       <div>

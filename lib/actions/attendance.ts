@@ -88,13 +88,13 @@ export async function listAttendanceByMonth(year: number, month: number): Promis
   if (access.scope === "self") empQuery = empQuery.eq("id", access.employee_id);
 
   let rowQuery = supabase
-      .from("attendance_records")
-      .select("id, employee_id, work_date, status, overtime_hours, note, created_at")
-      .gte("work_date", start)
-      .lte("work_date", end)
-      .order("work_date", { ascending: false })
-      .order("created_at", { ascending: false })
-      .limit(3000);
+    .from("attendance_records")
+    .select("id, employee_id, work_date, status, overtime_hours, note, created_at")
+    .gte("work_date", start)
+    .lte("work_date", end)
+    .order("work_date", { ascending: false })
+    .order("created_at", { ascending: false })
+    .limit(3000);
   if (access.scope === "self") rowQuery = rowQuery.eq("employee_id", access.employee_id);
 
   const [{ data: emps, error: empErr }, { data: rows, error: rowErr }] = await Promise.all([

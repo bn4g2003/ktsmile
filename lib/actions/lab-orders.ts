@@ -250,13 +250,33 @@ export async function listLabOrders(args: ListArgs): Promise<ListResult<LabOrder
     if (filters.received_to?.trim()) q = q.lte("received_at", filters.received_to.trim());
     if (filters.received_day?.trim()) q = q.eq("received_at", filters.received_day.trim());
     // Lọc theo tên bệnh nhân, nha khoa (cột trực tiếp trên lab_orders)
-    const patientVals = decodeMultiFilter(filters.patient_name);
-    if (patientVals.length === 1) q = q.eq("patient_name", patientVals[0]!);
-    else if (patientVals.length > 1) q = q.in("patient_name", patientVals);
+    const patientFilter = filters.patient_name?.trim();
+    if (patientFilter) {
+      if (patientFilter.includes(",") || patientFilter.includes("|")) {
+        const patientVals = decodeMultiFilter(patientFilter);
+        if (patientVals.length === 1) q = q.eq("patient_name", patientVals[0]!);
+        else if (patientVals.length > 1) q = q.in("patient_name", patientVals);
+      } else {
+        q = q.ilike("patient_name", "%" + patientFilter + "%");
+      }
+    }
 
-    const clinicVals = decodeMultiFilter(filters.clinic_name);
-    if (clinicVals.length === 1) q = q.eq("clinic_name", clinicVals[0]!);
-    else if (clinicVals.length > 1) q = q.in("clinic_name", clinicVals);
+    const clinicFilter = filters.clinic_name?.trim();
+    if (clinicFilter) {
+      if (clinicFilter.includes(",") || clinicFilter.includes("|")) {
+        const clinicVals = decodeMultiFilter(clinicFilter);
+        if (clinicVals.length === 1) q = q.eq("clinic_name", clinicVals[0]!);
+        else if (clinicVals.length > 1) q = q.in("clinic_name", clinicVals);
+      } else {
+        q = q.ilike("clinic_name", "%" + clinicFilter + "%");
+      }
+    }
+    const pcSearch = filters.patient_clinic?.trim();
+    if (pcSearch) {
+      const p = "%" + pcSearch + "%";
+      q = q.or("patient_name.ilike." + p + ",clinic_name.ilike." + p);
+    }
+
     if (filters.contact_phone?.trim())
       q = q.ilike("contact_phone", "%" + filters.contact_phone.trim() + "%");
     const orderCategory = filters.order_category?.trim();
@@ -1385,10 +1405,10 @@ export async function getMonthlyDeliveryNotePayload(
   for (const o of orders ?? []) {
     const oid = o["id"] as string;
     const oLines = linesByOrder.get(oid) ?? [];
-    
+
     // Cộng dồn tiền thực tế của từng dòng (đã bao gồm giá riêng)
     const orderNet = oLines.reduce((sum, l) => sum + l.line_amount, 0);
-    
+
     subtotalGoods += orderNet;
     otherFeesSum += Number(o["billing_other_fees"] ?? 0);
   }

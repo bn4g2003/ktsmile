@@ -99,16 +99,15 @@ export function OrdersPrintHub({ partners }: { partners: Partner[] }) {
         m,
         gbttPartnerId.trim() || null,
       );
-      // Mở khóa UI ngay tại đây để không phải đợi tab in tải xong
-      setGbttBusy(false);
       writeAndPrintToWindow(
         win,
         buildPrintShell(`${title} (${count} đơn)`, innerHtml),
       );
     } catch (e) {
       win.close();
-      setGbttBusy(false);
       window.alert(e instanceof Error ? e.message : "Không in được.");
+    } finally {
+      setGbttBusy(false);
     }
   };
 
@@ -149,18 +148,16 @@ export function OrdersPrintHub({ partners }: { partners: Partner[] }) {
       const payload = await getMonthlyDeliveryNotePayload(shipPartnerId.trim(), y, m);
       if (!payload.orders.length) {
         win.close();
-        setShipBusy(false);
         window.alert("Không có đơn nào của lab này trong tháng đã chọn (theo ngày nhận).");
         return;
       }
-      // Mở khóa UI ngay sau khi lấy xong dữ liệu đơn hàng
-      setShipBusy(false);
       const title = deliveryNotePrintTitle(payload);
       writeAndPrintToWindow(win, buildPrintShell(title, buildDeliveryNoteBodyHtml(payload)));
     } catch (e) {
       win.close();
-      setShipBusy(false);
       window.alert(e instanceof Error ? e.message : "Không in được hóa đơn.");
+    } finally {
+      setShipBusy(false);
     }
   };
 
@@ -239,18 +236,16 @@ export function OrdersPrintHub({ partners }: { partners: Partner[] }) {
       const id = await resolveOrderId();
       if (!id) {
         win.close();
-        setOneGbttBusy(false);
         return;
       }
       const payload = await getPaymentNoticePrintPayload(id);
-      // Mở khóa ngay sau khi chuẩn bị xong GBTT
-      setOneGbttBusy(false);
       const title = paymentNoticePrintTitle(payload);
       writeAndPrintToWindow(win, buildPrintShell(title, buildPaymentNoticeBodyHtml(payload)));
     } catch (e) {
       win.close();
-      setOneGbttBusy(false);
       window.alert(e instanceof Error ? e.message : "Không in được GBTT.");
+    } finally {
+      setOneGbttBusy(false);
     }
   };
 
@@ -298,18 +293,16 @@ export function OrdersPrintHub({ partners }: { partners: Partner[] }) {
       const id = await resolveOrderId();
       if (!id) {
         win.close();
-        setOneShipBusy(false);
         return;
       }
       const payload = await getSingleOrderDeliveryNotePayload(id);
-      // Mở khóa ngay sau khi chuẩn bị xong phiếu giao
-      setOneShipBusy(false);
       const title = deliveryNotePrintTitle(payload);
       writeAndPrintToWindow(win, buildPrintShell(title, buildDeliveryNoteBodyHtml(payload)));
     } catch (e) {
       win.close();
-      setOneShipBusy(false);
       window.alert(e instanceof Error ? e.message : "Không in được phiếu giao.");
+    } finally {
+      setOneShipBusy(false);
     }
   };
 

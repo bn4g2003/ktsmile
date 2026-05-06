@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import * as React from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { bulkVerifyCoordReview } from "@/lib/actions/coord-review";
 import { compareDoctorPrescriptionToLabOrder } from "@/lib/actions/doctor-prescriptions";
 import { listLabOrders, type LabOrderRow } from "@/lib/actions/lab-orders";
@@ -21,16 +21,49 @@ function dayKey(isoDate: string): string {
 
 export function OrderReviewPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
+
   const [rows, setRows] = React.useState<LabOrderRow[]>([]);
   const [total, setTotal] = React.useState(0);
   const [loading, setLoading] = React.useState(true);
   const [err, setErr] = React.useState<string | null>(null);
   const [selected, setSelected] = React.useState<Set<string>>(() => new Set());
   const [bulkPending, setBulkPending] = React.useState(false);
-  const [receivedFrom, setReceivedFrom] = React.useState("");
-  const [receivedTo, setReceivedTo] = React.useState("");
-  const [reviewFilter, setReviewFilter] = React.useState<"pending" | "verified" | "all">("pending");
+  const [receivedFrom, setReceivedFrom] = React.useState(searchParams.get("from") || "");
+  const [receivedTo, setReceivedTo] = React.useState(searchParams.get("to") || "");
+  const [reviewFilter, setReviewFilter] = React.useState<"pending" | "verified" | "all">(
+    (searchParams.get("status") as any) || "pending",
+  );
   const [compareHint, setCompareHint] = React.useState<string | null>(null);
+
+  // Filters with debounce
+  const [orderFilter, setOrderFilter] = React.useState(searchParams.get("q_order") || "");
+  const [partnerFilter, setPartnerFilter] = React.useState(searchParams.get("q_partner") || "");
+  const [pcFilter, setPcFilter] = React.useState(searchParams.get("q_pc") || "");
+
+  const [debouncedOrder, setDebouncedOrder] = React.useState(orderFilter);
+  const [debouncedPartner, setDebouncedPartner] = React.useState(partnerFilter);
+  const [debouncedPc, setDebouncedPc] = React.useState(pcFilter);
+
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedOrder(orderFilter);
+      setDebouncedPartner(partnerFilter);
+      setDebouncedPc(pcFilter);
+
+      const params = new URLSearchParams(searchParams.toString());
+      if (orderFilter) params.set("q_order", orderFilter); else params.delete("q_order");
+      if (partnerFilter) params.set("q_partner", partnerFilter); else params.delete("q_partner");
+      if (pcFilter) params.set("q_pc", pcFilter); else params.delete("q_pc");
+      if (receivedFrom) params.set("from", receivedFrom); else params.delete("from");
+      if (receivedTo) params.set("to", receivedTo); else params.delete("to");
+      if (reviewFilter !== "pending") params.set("status", reviewFilter); else params.delete("status");
+
+      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [orderFilter, partnerFilter, pcFilter, receivedFrom, receivedTo, reviewFilter, searchParams, pathname, router]);
 
   const load = React.useCallback(async () => {
     setLoading(true);
@@ -47,6 +80,9 @@ export function OrderReviewPage() {
           received_to: receivedTo.trim(),
           coord_review_status: coord,
           received_sort: "asc",
+          order_number: debouncedOrder,
+          partner_name: debouncedPartner,
+          patient_clinic: debouncedPc,
         },
       });
       setRows(res.rows);
@@ -59,7 +95,7 @@ export function OrderReviewPage() {
     } finally {
       setLoading(false);
     }
-  }, [receivedFrom, receivedTo, reviewFilter]);
+  }, [receivedFrom, receivedTo, reviewFilter, debouncedOrder, debouncedPartner, debouncedPc]);
 
   React.useEffect(() => {
     void load();
@@ -192,6 +228,39 @@ export function OrderReviewPage() {
                 <th className="px-2 py-2">Đối chiếu</th>
                 <th className="px-2 py-2 text-right">Tổng</th>
                 <th className="px-2 py-2">Thao tác</th>
+              </tr>
+              <tr className="border-b border-[var(--border-ghost)] bg-[var(--surface-muted)]">
+                <th className="px-2 py-1.5"></th>
+                <th className="px-2 py-1.5"></th>
+                <th className="px-2 py-1.5">
+                  <Input
+                    value={orderFilter}
+                    onChange={(e) => setOrderFilter(e.target.value)}
+                    placeholder="Lọc..."
+                    className="h-7 bg-white text-xs"
+                  />
+                </th>
+                <th className="px-2 py-1.5">
+                  <Input
+                    value={partnerFilter}
+                    onChange={(e) => setPartnerFilter(e.target.value)}
+                    placeholder="Lọc..."
+                    className="h-7 bg-white text-xs"
+                  />
+                </th>
+                <th className="px-2 py-1.5">
+                  <Input
+                    value={pcFilter}
+                    onChange={(e) => setPcFilter(e.target.value)}
+                    placeholder="Lọc..."
+                    className="h-7 bg-white text-xs"
+                  />
+                </th>
+                <th className="px-2 py-1.5"></th>
+                <th className="px-2 py-1.5"></th>
+                <th className="px-2 py-1.5"></th>
+                <th className="px-2 py-1.5"></th>
+                <th className="px-2 py-1.5"></th>
               </tr>
             </thead>
             <tbody>

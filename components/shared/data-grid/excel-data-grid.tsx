@@ -926,50 +926,109 @@ export function ExcelDataGrid<T>({
         </div>
       </div>
 
-      <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <p className="min-w-0 text-xs text-[var(--on-surface-muted)] sm:text-sm">
-          {total === 0
-            ? "0"
-            : String((page - 1) * pageSize + 1) +
-            "–" +
-            String(Math.min(page * pageSize, total))}{" "}
-          / {total} dòng
-        </p>
-        <div className="flex flex-wrap items-center gap-1.5">
+      <div className="flex flex-col items-center justify-between gap-4 border-t border-[var(--border-ghost)] pt-6 lg:flex-row">
+        {/* Left: Page Size Selector */}
+        <div className="flex items-center gap-2 order-2 lg:order-1">
+          <span className="text-xs text-[var(--on-surface-muted)]">Số lượng bản ghi hiển thị</span>
           <Select
             value={String(pageSize)}
             onChange={(e) => setPageSize(Number(e.target.value))}
-            className="h-8 min-h-8 w-auto min-w-[4.5rem] py-0 text-xs"
+            className="h-8 min-h-8 w-auto min-w-[4.5rem] py-0 text-xs rounded-[4px]"
             aria-label="Số dòng mỗi trang"
           >
             {[10, 25, 50, 100].map((n) => (
               <option key={n} value={n}>
-                {n}/trang
+                {n} / trang
               </option>
             ))}
           </Select>
+        </div>
+
+        {/* Center: Page Navigation */}
+        <div className="flex items-center gap-1 order-1 lg:order-2">
           <Button
             variant="secondary"
-            type="button"
             size="sm"
+            className="h-8 w-8 rounded-[4px] px-0"
+            disabled={page <= 1}
+            onClick={() => setPage(1)}
+            title="Về đầu"
+          >
+            «
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            className="h-8 w-8 rounded-[4px] px-0"
             disabled={page <= 1}
             onClick={() => setPage((p) => Math.max(1, p - 1))}
+            title="Trang trước"
           >
-            Trước
+            ‹
           </Button>
-          <span className="text-xs text-[var(--on-surface-muted)] sm:text-sm">
-            Trang {page} / {pageCount}
-          </span>
+
+          {(() => {
+            const rangeSize = 5;
+            let start = Math.max(1, page - Math.floor(rangeSize / 2));
+            let end = start + rangeSize - 1;
+            if (end > pageCount) {
+              end = pageCount;
+              start = Math.max(1, end - rangeSize + 1);
+            }
+            const pages = [];
+            for (let i = start; i <= end; i++) pages.push(i);
+
+            return pages.map((p) => (
+              <Button
+                key={p}
+                variant={p === page ? "primary" : "secondary"}
+                size="sm"
+                className={cn(
+                  "h-8 min-w-[2rem] rounded-[4px] px-2",
+                  p === page ? "bg-[#0f172a]" : "bg-white",
+                )}
+                onClick={() => setPage(p)}
+              >
+                {p}
+              </Button>
+            ));
+          })()}
+
           <Button
             variant="secondary"
-            type="button"
             size="sm"
+            className="h-8 w-8 rounded-[4px] px-0"
             disabled={page >= pageCount || total === 0}
-            onClick={() => setPage((p) => p + 1)}
+            onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
+            title="Trang sau"
           >
-            Sau
+            ›
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            className="h-8 w-8 rounded-[4px] px-0"
+            disabled={page >= pageCount || total === 0}
+            onClick={() => setPage(pageCount)}
+            title="Về cuối"
+          >
+            »
           </Button>
         </div>
+
+        {/* Right: Status Text */}
+        <p className="text-xs text-[var(--on-surface-muted)] order-3">
+          Bản ghi{" "}
+          <span className="font-semibold text-[var(--on-surface)]">
+            {total === 0 ? "0" : (page - 1) * pageSize + 1}
+          </span>
+          {" - "}
+          <span className="font-semibold text-[var(--on-surface)]">
+            {Math.min(page * pageSize, total)}
+          </span>{" "}
+          trong số{" "}
+          <span className="font-semibold text-[var(--on-surface)]">{total}</span>
+        </p>
       </div>
 
       {renderRowDetail ? (
