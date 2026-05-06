@@ -46,6 +46,7 @@ export type DashboardDueSummary = {
 export type DashboardChartsData = {
   year: number;
   orderByStatus: OrderStatusCount[];
+  waitingReviewCount: number;
   topStock: TopStockRow[];
   topSold: TopSoldRow[];
   monthlyFinance: MonthFinanceRow[];
@@ -85,7 +86,7 @@ async function computeDashboardCharts(year: number, month: number): Promise<Dash
       soldRes,
       ledgerSummary,
     ] = await Promise.all([
-      supabase.from("lab_orders").select("status"),
+      supabase.from("lab_orders").select("status, coord_review_status"),
       supabase
         .from("v_material_stock")
         .select("material_id, product_id, material_code, material_name, quantity_on_hand")
@@ -156,9 +157,14 @@ async function computeDashboardCharts(year: number, month: number): Promise<Dash
   if (soldRes.error) throw new Error(soldRes.error.message);
 
   const statusMap = new Map<string, number>();
+  let waitingReviewCount = 0;
   for (const r of ordersRes.data ?? []) {
-    const s = String((r as { status: string }).status);
+    const row = r as { status: string; coord_review_status: string };
+    const s = String(row.status || "").toLowerCase();
     statusMap.set(s, (statusMap.get(s) ?? 0) + 1);
+    if (row.coord_review_status === "pending") {
+      waitingReviewCount++;
+    }
   }
   const orderByStatus = Array.from(statusMap.entries())
     .map(([status, count]) => ({ status, count }))
@@ -283,6 +289,7 @@ async function computeDashboardCharts(year: number, month: number): Promise<Dash
   return {
     year,
     orderByStatus,
+    waitingReviewCount,
     topStock,
     topSold,
     monthlyFinance,

@@ -70,9 +70,8 @@ export default async function HomePage({
     chartData = null;
   }
   const monthNames = ["tháng 1", "tháng 2", "tháng 3", "tháng 4", "tháng 5", "tháng 6", "tháng 7", "tháng 8", "tháng 9", "tháng 10", "tháng 11", "tháng 12"];
-  const waitingInvoiceCount = chartData
-    ? chartData.orderByStatus.filter((s) => s.status === "draft" || s.status === "in_progress").reduce((sum, s) => sum + s.count, 0)
-    : 0;
+  const draftCount = chartData?.orderByStatus.find((s) => s.status === "draft")?.count ?? 0;
+  const waitingInvoiceCount = draftCount + (chartData?.waitingReviewCount ?? 0);
   const processingOrderCount = chartData
     ? chartData.orderByStatus.filter((s) => s.status === "in_progress").reduce((sum, s) => sum + s.count, 0)
     : 0;
