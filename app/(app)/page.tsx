@@ -117,14 +117,14 @@ export default async function HomePage({
           </div>
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             <div className="space-y-3 rounded-lg border border-[#e3e9f5] bg-[#fbfcff] p-3 text-sm">
-              <p className="flex items-center justify-between"><span className="text-[#64748b]">Tồn đầu</span><span className="font-semibold text-[#1e293b]">{formatMoney(chartData?.financial.total_money ?? 0)}</span></p>
+              <p className="flex items-center justify-between"><span className="text-[#64748b]">Nợ đầu kỳ của khách</span><span className="font-semibold text-[#1e293b]">{formatMoney(chartData?.financial.total_money ?? 0)}</span></p>
               <p className="flex items-center justify-between"><span className="text-[#64748b]">Tổng giá trị nhập</span><span className="font-semibold text-[#0ea5a4]">{formatMoney(chartData?.financial.revenue_year ?? 0)}</span></p>
               <p className="flex items-center justify-between"><span className="text-[#64748b]">Phải thu khách hàng</span><span className="font-semibold text-[#0284c7]">{formatMoney(Math.max(0, chartData?.financial.receivable ?? 0))}</span></p>
             </div>
             <div className="space-y-3 rounded-lg border border-[#e3e9f5] bg-[#fbfcff] p-3 text-sm">
               <p className="flex items-center justify-between"><span className="text-[#64748b]">Lợi nhuận gộp</span><span className="font-semibold text-[#1e293b]">{formatMoney(profitThisMonth)}</span></p>
               <p className="flex items-center justify-between"><span className="text-[#64748b]">Chi phí hoạt động</span><span className="font-semibold text-[#f97316]">{formatMoney(expenseThisMonth)}</span></p>
-              <p className="flex items-center justify-between"><span className="text-[#64748b]">Chi phí lương</span><span className="font-semibold text-[#ef4444]">{formatMoney(Math.max(0, chartData?.financial.payable ?? 0))}</span></p>
+              <p className="flex items-center justify-between"><span className="text-[#64748b]">Phải trả khách hàng</span><span className="font-semibold text-[#ef4444]">{formatMoney(Math.max(0, chartData?.financial.payable ?? 0))}</span></p>
             </div>
           </div>
         </div>
