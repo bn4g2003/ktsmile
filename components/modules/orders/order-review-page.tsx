@@ -79,7 +79,7 @@ export function OrderReviewPage() {
           received_from: receivedFrom.trim(),
           received_to: receivedTo.trim(),
           coord_review_status: coord,
-          received_sort: "asc",
+          received_sort: "desc",
           order_number: debouncedOrder,
           partner_name: debouncedPartner,
           patient_clinic: debouncedPc,
