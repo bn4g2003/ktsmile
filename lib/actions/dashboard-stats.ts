@@ -2,6 +2,7 @@
 
 import { unstable_cache } from "next/cache";
 import { createSupabaseAdmin } from "@/lib/supabase/server";
+import { getCashLedgerSummary } from "@/lib/actions/cash";
 
 export type OrderStatusCount = { status: string; count: number };
 export type TopStockRow = {
@@ -66,84 +67,86 @@ async function computeDashboardCharts(year: number, month: number): Promise<Dash
     if (!Number.isFinite(mm) || mm < 1 || mm > 12) return 0;
     return mm - 1;
   };
+  const lastDay = new Date(year, month, 0).getDate();
+  const dateTo = `${year}-${String(month).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
 
-  const [
-    ordersRes,
-    stockRes,
-    receiptRes,
-    expenseRes,
-    cashRes,
-    debtOpenRes,
-    ordMonthRes,
-    recMonthRes,
-    supOpenRes,
-    inboundRes,
-    payRes,
-    soldRes,
-  ] = await Promise.all([
-    supabase.from("lab_orders").select("status"),
-    supabase
-      .from("v_material_stock")
-      .select("material_id, product_id, material_code, material_name, quantity_on_hand")
-      .order("quantity_on_hand", { ascending: false })
-      .limit(12),
-    supabase
-      .from("cash_transactions")
-      .select("transaction_date, amount")
-      .eq("direction", "receipt")
-      .gte("transaction_date", yearStart)
-      .lt("transaction_date", yearEnd),
-    supabase
-      .from("cash_transactions")
-      .select("transaction_date, amount")
-      .eq("direction", "payment")
-      .gte("transaction_date", yearStart)
-      .lt("transaction_date", yearEnd),
-    supabase.from("cash_transactions").select("payment_channel, direction, amount"),
-    supabase
-      .from("partner_opening_balances")
-      .select("partner_id, opening_balance")
-      .eq("year", year)
-      .eq("month", month),
-    supabase
-      .from("v_orders_by_partner_month")
-      .select("partner_id, order_amount")
-      .gte("month", monthStart)
-      .lt("month", monthEnd),
-    supabase
-      .from("v_cash_by_partner_month")
-      .select("partner_id, total_amount")
-      .eq("direction", "receipt")
-      .gte("month", monthStart)
-      .lt("month", monthEnd),
-    supabase
-      .from("supplier_opening_balances")
-      .select("supplier_id, opening_balance")
-      .eq("year", year)
-      .eq("month", month),
-    supabase
-      .from("v_supplier_inbound_by_month")
-      .select("supplier_id, inbound_amount")
-      .gte("month", monthStart)
-      .lt("month", monthEnd),
-    supabase
-      .from("v_supplier_payments_by_month")
-      .select("supplier_id, payment_amount")
-      .gte("month", monthStart)
-      .lt("month", monthEnd),
-    supabase
-      .from("lab_order_lines")
-      .select("quantity, line_amount, products:product_id(code,name), lab_orders!inner(status,received_at)")
-      .neq("lab_orders.status", "cancelled")
-      .gte("lab_orders.received_at", yearStart)
-      .lt("lab_orders.received_at", yearEnd),
-  ]);
+    const dateFrom = `${year}-${String(month).padStart(2, "0")}-01`;
+    const [
+      ordersRes,
+      stockRes,
+      receiptRes,
+      expenseRes,
+      debtOpenRes,
+      ordMonthRes,
+      recMonthRes,
+      supOpenRes,
+      inboundRes,
+      payRes,
+      soldRes,
+      ledgerSummary,
+    ] = await Promise.all([
+      supabase.from("lab_orders").select("status"),
+      supabase
+        .from("v_material_stock")
+        .select("material_id, product_id, material_code, material_name, quantity_on_hand")
+        .order("quantity_on_hand", { ascending: false })
+        .limit(12),
+      supabase
+        .from("cash_transactions")
+        .select("transaction_date, amount")
+        .eq("direction", "receipt")
+        .gte("transaction_date", yearStart)
+        .lt("transaction_date", yearEnd),
+      supabase
+        .from("cash_transactions")
+        .select("transaction_date, amount")
+        .eq("direction", "payment")
+        .gte("transaction_date", yearStart)
+        .lt("transaction_date", yearEnd),
+      supabase
+        .from("partner_opening_balances")
+        .select("partner_id, opening_balance")
+        .eq("year", year)
+        .eq("month", month),
+      supabase
+        .from("v_orders_by_partner_month")
+        .select("partner_id, order_amount")
+        .gte("month", monthStart)
+        .lt("month", monthEnd),
+      supabase
+        .from("v_cash_by_partner_month")
+        .select("partner_id, total_amount")
+        .eq("direction", "receipt")
+        .gte("month", monthStart)
+        .lt("month", monthEnd),
+      supabase
+        .from("supplier_opening_balances")
+        .select("supplier_id, opening_balance")
+        .eq("year", year)
+        .eq("month", month),
+      supabase
+        .from("v_supplier_inbound_by_month")
+        .select("supplier_id, inbound_amount")
+        .gte("month", monthStart)
+        .lt("month", monthEnd),
+      supabase
+        .from("v_supplier_payments_by_month")
+        .select("supplier_id, payment_amount")
+        .gte("month", monthStart)
+        .lt("month", monthEnd),
+      supabase
+        .from("lab_order_lines")
+        .select("quantity, line_amount, products:product_id(code,name), lab_orders!inner(status,received_at)")
+        .neq("lab_orders.status", "cancelled")
+        .gte("lab_orders.received_at", yearStart)
+        .lt("lab_orders.received_at", yearEnd),
+      getCashLedgerSummary(dateFrom, dateTo),
+    ]);
 
   if (ordersRes.error) throw new Error(ordersRes.error.message);
   if (stockRes.error) throw new Error(stockRes.error.message);
   if (receiptRes.error) throw new Error(receiptRes.error.message);
   if (expenseRes.error) throw new Error(expenseRes.error.message);
-  if (cashRes.error) throw new Error(cashRes.error.message);
   if (debtOpenRes.error) throw new Error(debtOpenRes.error.message);
   if (ordMonthRes.error) throw new Error(ordMonthRes.error.message);
   if (recMonthRes.error) throw new Error(recMonthRes.error.message);
@@ -216,16 +219,9 @@ async function computeDashboardCharts(year: number, month: number): Promise<Dash
   const expense_year = monthlyFinance.reduce((s, r) => s + r.expense, 0);
   const profit_year = revenue_year - expense_year;
 
-  let cash_on_hand = 0;
-  let bank_deposit = 0;
-  for (const row of cashRes.data ?? []) {
-    const r = row as { payment_channel?: string; direction?: string; amount?: number };
-    const amount = Number(r.amount ?? 0);
-    const sign = r.direction === "payment" ? -1 : 1;
-    const ch = String(r.payment_channel ?? "").toLowerCase();
-    if (ch === "cash") cash_on_hand += sign * amount;
-    else bank_deposit += sign * amount;
-  }
+  const cash_on_hand = ledgerSummary.rows.find(r => r.channelKey === "cash")?.closing ?? 0;
+  const bank_deposit = ledgerSummary.totals.closing - cash_on_hand;
+  const total_money = ledgerSummary.totals.closing;
 
   const openDebtMap = new Map<string, number>();
   for (const r of debtOpenRes.data ?? []) {
@@ -252,7 +248,6 @@ async function computeDashboardCharts(year: number, month: number): Promise<Dash
   }
 
   const inventory_value = topStock.reduce((s, r) => s + r.stock_value, 0);
-  const total_money = cash_on_hand + bank_deposit;
 
   const soldMap = new Map<string, TopSoldRow>();
   for (const row of soldRes.data ?? []) {
@@ -307,11 +302,12 @@ async function computeDashboardCharts(year: number, month: number): Promise<Dash
   };
 }
 
-const getDashboardChartsCached = unstable_cache(
-  async (year: number, month: number) => computeDashboardCharts(year, month),
-  ["dashboard-charts-v1"],
-  { revalidate: 45 },
-);
+const getDashboardChartsCached = (year: number, month: number) =>
+  unstable_cache(
+    async () => computeDashboardCharts(year, month),
+    ["dashboard-charts-v1", String(year), String(month)],
+    { revalidate: 45 },
+  )();
 
 export async function getDashboardCharts(input?: { year?: number; month?: number }): Promise<DashboardChartsData> {
   const now = new Date();
