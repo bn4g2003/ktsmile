@@ -82,7 +82,7 @@ export function DebtPage({ initialTab = "receivables" }: { initialTab?: DebtTab 
       { accessorKey: "partner_code", header: "Mã KH", meta: { filterKey: "partner_code", filterType: "text" } },
       { accessorKey: "partner_name", header: "Tên KH", meta: { filterKey: "partner_name", filterType: "text" } },
       { accessorKey: "opening", header: "Nợ đầu kỳ", cell: ({ getValue }) => Number(getValue()).toLocaleString("vi-VN") },
-      { accessorKey: "orders_month", header: "PS bán (tháng)", cell: ({ getValue }) => Number(getValue()).toLocaleString("vi-VN") },
+      { accessorKey: "orders_month", header: "Tổng PS đã bán (Tháng)", cell: ({ getValue }) => Number(getValue()).toLocaleString("vi-VN") },
       { accessorKey: "receipts_month", header: "Đã thu (tháng)", cell: ({ getValue }) => Number(getValue()).toLocaleString("vi-VN") },
       { accessorKey: "closing", header: "Nợ cuối kỳ", cell: ({ getValue }) => Number(getValue()).toLocaleString("vi-VN") },
       {

@@ -104,7 +104,7 @@ export default async function HomePage({
         <KpiCard title="Doanh thu tháng này" value={formatMoney(revenueThisMonth)} hint={monthNames[(monthRow?.month ?? selectedMonth) - 1] ?? ""} />
         <KpiCard title="Chứng từ chờ duyệt" value={waitingInvoiceCount.toLocaleString("vi-VN")} hint="Draft + đang xử lý" />
         <KpiCard title="Đơn hàng chờ" value={processingOrderCount.toLocaleString("vi-VN")} hint="Đơn trạng thái in_progress" />
-        <KpiCard title="Dòng tiền hiện có" value={formatMoney(chartData?.financial.total_money ?? 0)} hint="Tiền mặt + ngân hàng" tone="dark" />
+        <KpiCard title="Dòng tiền hiện có" value={formatMoney(chartData?.financial.total_money ?? 0)} hint="Tiền mặt + Quỹ" tone="dark" />
       </section>
 
       <section className="grid gap-3 lg:grid-cols-3">
