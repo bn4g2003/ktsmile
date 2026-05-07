@@ -76,7 +76,7 @@ async function computeDashboardCharts(year: number, month: number): Promise<Dash
   const [
     ordersRes,
     stockRes,
-    receiptRes,
+    yearlyOrdersRes,
     expenseRes,
     debtOpenRes,
     ordMonthRes,
@@ -94,11 +94,10 @@ async function computeDashboardCharts(year: number, month: number): Promise<Dash
       .order("quantity_on_hand", { ascending: false })
       .limit(12),
     supabase
-      .from("cash_transactions")
-      .select("transaction_date, amount")
-      .eq("direction", "receipt")
-      .gte("transaction_date", yearStart)
-      .lt("transaction_date", yearEnd),
+      .from("v_orders_by_partner_month")
+      .select("month, order_amount")
+      .gte("month", yearStart)
+      .lt("month", yearEnd),
     supabase
       .from("cash_transactions")
       .select("transaction_date, amount")
@@ -147,7 +146,7 @@ async function computeDashboardCharts(year: number, month: number): Promise<Dash
 
   if (ordersRes.error) throw new Error(ordersRes.error.message);
   if (stockRes.error) throw new Error(stockRes.error.message);
-  if (receiptRes.error) throw new Error(receiptRes.error.message);
+  if (yearlyOrdersRes.error) throw new Error(yearlyOrdersRes.error.message);
   if (expenseRes.error) throw new Error(expenseRes.error.message);
   if (debtOpenRes.error) throw new Error(debtOpenRes.error.message);
   if (ordMonthRes.error) throw new Error(ordMonthRes.error.message);
@@ -205,9 +204,9 @@ async function computeDashboardCharts(year: number, month: number): Promise<Dash
 
   const revByMonth = Array.from({ length: 12 }, () => 0);
   const expByMonth = Array.from({ length: 12 }, () => 0);
-  for (const r of receiptRes.data ?? []) {
-    const m = monthIndexFromDate(String((r as { transaction_date: string }).transaction_date));
-    revByMonth[m] += Number((r as { amount: number }).amount ?? 0);
+  for (const r of yearlyOrdersRes.data ?? []) {
+    const m = monthIndexFromDate(String((r as { month: string }).month));
+    revByMonth[m] += Number((r as { order_amount: number }).order_amount ?? 0);
   }
   for (const r of expenseRes.data ?? []) {
     const m = monthIndexFromDate(String((r as { transaction_date: string }).transaction_date));
