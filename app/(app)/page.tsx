@@ -79,7 +79,7 @@ export default async function HomePage({
   const monthRow = monthlyRows.find((row) => row.month === selectedMonth) ?? monthlyRows[monthlyRows.length - 1];
   const revenueThisMonth = monthRow?.revenue ?? 0;
   const expenseThisMonth = monthRow?.expense ?? 0;
-  const profitThisMonth = monthRow?.profit ?? 0;
+  const profitThisMonth = (chartData?.financial.cash_receipt_in_period ?? 0) - expenseThisMonth;
   const soldRows = chartData?.topSold?.slice(0, 6) ?? [];
 
   return (
