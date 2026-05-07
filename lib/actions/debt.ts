@@ -161,7 +161,7 @@ export async function listDebtReport(args: ListArgs): Promise<ListResult<DebtRow
     total,
     summary: [
       { label: "Nợ đầu kỳ", value: round2(sumOpening) },
-      { label: "Tổng PS đã bán (Tháng)", value: round2(sumOrders) },
+      { label: "PS(Tháng)", value: round2(sumOrders) },
       { label: "Đã thu (tháng)", value: round2(sumReceipts) },
       { label: "Nợ cuối kỳ", value: round2(sumClosing) },
     ],
