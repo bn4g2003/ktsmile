@@ -36,6 +36,7 @@ export type DashboardFinancialSummary = {
   expense_year: number;
   profit_year: number;
   inventory_value: number;
+  cash_receipt_in_period: number;
 };
 
 export type DashboardDueSummary = {
@@ -307,6 +308,7 @@ async function computeDashboardCharts(year: number, month: number): Promise<Dash
       expense_year,
       profit_year,
       inventory_value,
+      cash_receipt_in_period: ledgerSummary.totals.receiptInPeriod,
     },
     receivableDue,
     payableDue,
